@@ -41,15 +41,17 @@ import { Bladeburner } from "../../Bladeburner/Bladeburner";
 import { Skills } from "../../PersonObjects/Skills";
 import { calculateSkillProgress } from "../../PersonObjects/formulas/skill";
 import { EventEmitter } from "../../utils/EventEmitter";
+import numeral from "numeral";
 
 type SkillRowName = "Hack" | "Str" | "Def" | "Dex" | "Agi" | "Cha" | "Int";
-type RowName = SkillRowName | "HP" | "Money";
+type RowName = SkillRowName | "HP" | "Money" | "Karma";
 const OverviewEventEmitter = new EventEmitter();
 
 // These values aren't displayed, they're just used for comparison to check if state has changed
 const valUpdaters: Record<RowName, () => any> = {
   HP: () => Player.hp.current + "|" + Player.hp.max, // This isn't displayed, it's just compared for updates.
   Money: () => Player.money,
+  Karma: () => Player.karma,
   Hack: () => Player.skills.hacking,
   Str: () => Player.skills.strength,
   Def: () => Player.skills.defense,
@@ -63,6 +65,7 @@ const valUpdaters: Record<RowName, () => any> = {
 const formattedVals: Record<RowName, () => string> = {
   HP: () => `${numeralWrapper.formatHp(Player.hp.current)} / ${numeralWrapper.formatHp(Player.hp.max)}`,
   Money: () => numeralWrapper.formatMoney(Player.money),
+  Karma: () => numeralWrapper.formatSkill(Player.karma),
   Hack: () => numeralWrapper.formatSkill(Player.skills.hacking),
   Str: () => numeralWrapper.formatSkill(Player.skills.strength),
   Def: () => numeralWrapper.formatSkill(Player.skills.defense),
@@ -186,6 +189,7 @@ export function CharacterOverview({ parentOpen, save, killScripts }: OverviewPro
           <DataRow name="HP" showBar={false} color={theme.colors.hp} cellType={"cellNone"} />
           <DataRow name="Money" showBar={false} color={theme.colors.money} cellType={"cell"} />
           <DataRow name="Hack" showBar={showBars} color={theme.colors.hack} cellType={"cell"} />
+          <DataRow name="Karma" showBar={false} color={theme.colors.combat} cellType={"cell"} />
           <DataRow name="Str" showBar={showBars} color={theme.colors.combat} cellType={"cellNone"} />
           <DataRow name="Def" showBar={showBars} color={theme.colors.combat} cellType={"cellNone"} />
           <DataRow name="Dex" showBar={showBars} color={theme.colors.combat} cellType={"cellNone"} />
