@@ -1,13 +1,10 @@
 import { Player } from "@player";
 import { NSFull } from "../NetscriptFunctions";
 
-/** This type assumes any value that isn't an API layer or a function has been omitted (enum) */
-type RamCostTree<API> = Omit<
-  {
-    [Property in keyof API]: API[Property] extends () => unknown ? number | (() => number) : RamCostTree<API[Property]>;
-  },
-  "enums"
->;
+/** The API does not include enums, args, or pid. */
+export type RamCostTree<API> = {
+  [key in keyof API]: API[key] extends () => unknown ? number | (() => number) : RamCostTree<API[key]>;
+};
 
 /** Constants for assigning costs to ns functions */
 export const RamCostConstants = {
@@ -544,6 +541,7 @@ export const RamCosts: RamCostTree<NSFull> = {
   rainbow: 0,
   heart: { break: 0 },
   iKnowWhatImDoing: 0,
+  printRaw: 0,
 
   formulas: {
     mockServer: 0,
