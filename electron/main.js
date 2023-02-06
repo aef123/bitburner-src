@@ -27,6 +27,7 @@ process.on("uncaughtException", function () {
 });
 
 // We want to fail gracefully if we cannot connect to Steam
+/*
 try {
   if (greenworks && greenworks.init()) {
     log.info("Steam API has been initialized.");
@@ -38,7 +39,9 @@ try {
 } catch (ex) {
   log.warn(ex.message);
   global.greenworksError = ex.message;
-}
+}*/
+log.warn("Steam Disabled");
+global.greenworksError = "Steam Disabled";
 
 let isRestoreDisabled = false;
 
