@@ -3535,7 +3535,7 @@ export type Gang = {
    *
    * “Bonus time” is accumulated when the game is offline or if the game is inactive in the browser.
    *
-   * “Bonus time” makes the game progress faster, up to 10x the normal speed.
+   * “Bonus time” makes the game progress faster, up to 25x the normal speed.
    *
    * @returns Bonus time for the Gang mechanic in milliseconds.
    */
@@ -6854,7 +6854,7 @@ export type NS = {
    * @remarks
    * RAM cost: 2.4 GB
    *
-   * Increases your rep gain of hacking contracts while share is called.
+   * Increases your rep gain of all faction work types while share is called.
    * Scales with thread count.
    */
   share(): Promise<void>;
@@ -7604,7 +7604,7 @@ interface CorporationInfo {
   dividendTax: number;
   /** Your earnings as a shareholder per second this cycle */
   dividendEarnings: number;
-  /** State of the corporation. Possible states are START, PURCHASE, PRODUCTION, SALE, EXPORT. */
+  /** State of the corporation. Possible states are START, PURCHASE, PRODUCTION, EXPORT, SALE. */
   state: string;
   /** Array of all division names */
   divisions: string[];
@@ -7662,7 +7662,7 @@ interface CorpConstants {
   minEmployeeDecay: number;
 }
 /** @public */
-type CorpStateName = "START" | "PURCHASE" | "PRODUCTION" | "SALE" | "EXPORT";
+type CorpStateName = "START" | "PURCHASE" | "PRODUCTION" | "EXPORT" | "SALE";
 
 /** @public */
 type CorpMaterialName =

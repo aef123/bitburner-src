@@ -29,7 +29,6 @@ import {
   SellProduct,
   SetSmartSupply,
   BuyMaterial,
-  AutoAssignJob,
   UpgradeOfficeSize,
   PurchaseWarehouse,
   UpgradeWarehouse,
@@ -616,12 +615,15 @@ export function NetscriptCorporation(): InternalAPI<NSCorporation> {
         );
 
       const office = getOffice(divisionName, cityName);
-      if (office.employeeJobs[EmployeePositions.Unassigned] < amount)
+
+      const totalNewEmployees = amount - office.employeeNextJobs[job];
+
+      if (office.employeeNextJobs[EmployeePositions.Unassigned] < totalNewEmployees)
         throw helpers.makeRuntimeErrorMsg(
           ctx,
-          `Tried to assign more Employees to '${job}' than are unassigned. Amount:'${amount}'`,
+          `Unable to bring '${job} employees to ${amount}. Requires ${totalNewEmployees} unassigned employees`,
         );
-      return AutoAssignJob(office, job, amount);
+      return office.autoAssignJob(job, amount);
     },
     hireEmployee: (ctx) => (_divisionName, _cityName, _position?) => {
       checkAccess(ctx, 8);
