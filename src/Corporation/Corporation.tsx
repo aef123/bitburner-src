@@ -166,7 +166,7 @@ export class Corporation {
     const totalDividends = this.dividendRate * cycleProfit;
     const dividendsPerShare = totalDividends / this.totalShares;
     const dividends = this.numShares * dividendsPerShare;
-    return Math.pow(dividends, 1 - this.dividendTax);
+    return dividends * (1 - this.dividendTax);
   }
 
   determineCycleValuation(): number {
