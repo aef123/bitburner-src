@@ -3,7 +3,7 @@ import { WorkerScript } from "./WorkerScript";
 import { GetAllServers, GetServer } from "../Server/AllServers";
 import { Player } from "@player";
 import { ScriptDeath } from "./ScriptDeath";
-import { numeralWrapper } from "../ui/numeralFormat";
+import { formatExp, formatMoney, formatRam, formatThreads } from "../ui/formatNumber";
 import { ScriptArg } from "./ScriptArg";
 import { CityName } from "../Enums";
 import { BasicHGWOptions, RunningScript as IRunningScript, Person as IPerson } from "@nsdefs";
@@ -19,8 +19,7 @@ import { convertTimeMsToTimeElapsedString } from "../utils/StringHelperFunctions
 import { BitNodeMultipliers } from "../BitNode/BitNodeMultipliers";
 import { CONSTANTS } from "../Constants";
 import { influenceStockThroughServerHack } from "../StockMarket/PlayerInfluencing";
-import { IPort, NetscriptPort } from "../NetscriptPort";
-import { NetscriptPorts } from "../NetscriptWorker";
+import { PortNumber } from "../NetscriptPort";
 import { FormulaGang } from "../Gang/formulas/formulas";
 import { GangMember } from "../Gang/GangMember";
 import { GangMemberTask } from "../Gang/GangMemberTask";
@@ -34,10 +33,13 @@ import { BaseServer } from "../Server/BaseServer";
 import { dialogBoxCreate } from "../ui/React/DialogBox";
 import { checkEnum } from "../utils/helpers/enum";
 import { RamCostConstants } from "./RamCostGenerator";
+import { isPositiveInteger, PositiveInteger } from "../types";
+import { Engine } from "../engine";
 
 export const helpers = {
   string,
   number,
+  positiveInteger,
   scriptArgs,
   argsToString,
   makeBasicErrorMsg,
@@ -51,7 +53,7 @@ export const helpers = {
   getServer,
   scriptIdentifier,
   hack,
-  getValidPort,
+  portNumber,
   person,
   server,
   gang,
@@ -155,6 +157,15 @@ function number(ctx: NetscriptContext, argName: string, v: unknown): number {
     return v;
   }
   throw makeRuntimeErrorMsg(ctx, `'${argName}' should be a number. ${debugType(v)}`, "TYPE");
+}
+
+/** Convert provided value v for argument argName to a positive integer, throwing if it looks like something else. */
+function positiveInteger(ctx: NetscriptContext, argName: string, v: unknown): PositiveInteger {
+  const n = number(ctx, argName, v);
+  if (!isPositiveInteger(n)) {
+    throw makeRuntimeErrorMsg(ctx, `${argName} should be a positive integer, was ${n}`, "TYPE");
+  }
+  return n;
 }
 
 /** Returns args back if it is a ScriptArg[]. Throws an error if it is not. */
@@ -339,11 +350,6 @@ function updateDynamicRam(ctx: NetscriptContext, ramCost: number): void {
   if (ws.dynamicLoadedFns[fnName]) return;
   ws.dynamicLoadedFns[fnName] = true;
 
-  let threads = ws.scriptRef.threads;
-  if (typeof threads !== "number") {
-    console.warn(`WorkerScript detected NaN for thread count for ${ws.name} on ${ws.hostname}`);
-    threads = 1;
-  }
   ws.dynamicRamUsage = Math.min(ws.dynamicRamUsage + ramCost, RamCostConstants.Max);
   if (ws.dynamicRamUsage > 1.01 * ws.ramUsage) {
     log(ctx, () => "Insufficient static ram available.");
@@ -353,9 +359,9 @@ function updateDynamicRam(ctx: NetscriptContext, ramCost: number): void {
       `Dynamic RAM usage calculated to be greater than initial RAM usage.
       This is probably because you somehow circumvented the static RAM calculation.
 
-      Threads: ${threads}
-      Dynamic RAM Usage: ${numeralWrapper.formatRAM(ws.dynamicRamUsage)} per thread
-      Static RAM Usage: ${numeralWrapper.formatRAM(ws.ramUsage)} per thread
+      Threads: ${ws.scriptRef.threads}
+      Dynamic RAM Usage: ${formatRam(ws.dynamicRamUsage)} per thread
+      Static RAM Usage: ${formatRam(ws.ramUsage)} per thread
 
       One of these could be the reason:
       * Using eval() to get a reference to a ns function
@@ -424,17 +430,22 @@ function hack(
   ctx: NetscriptContext,
   hostname: string,
   manual: boolean,
-  { threads: requestedThreads, stock }: BasicHGWOptions = {},
+  { threads: requestedThreads, stock, additionalMsec: requestedSec }: BasicHGWOptions = {},
 ): Promise<number> {
   const ws = ctx.workerScript;
   const threads = helpers.resolveNetscriptRequestedThreads(ctx, requestedThreads);
+  const additionalMsec = number(ctx, "opts.additionalMsec", requestedSec ?? 0);
+  if (additionalMsec < 0) {
+    throw makeRuntimeErrorMsg(ctx, `additionalMsec must be non-negative, got ${additionalMsec}`);
+  }
   const server = getServer(ctx, hostname);
   if (!(server instanceof Server)) {
     throw makeRuntimeErrorMsg(ctx, "Cannot be executed on this server.");
   }
 
   // Calculate the hacking time
-  const hackingTime = calculateHackingTime(server, Player); // This is in seconds
+  // This is in seconds
+  const hackingTime = calculateHackingTime(server, Player) + additionalMsec / 1000.0;
 
   // No root access or skill level too low
   const canHack = netscriptCanHack(server);
@@ -448,7 +459,7 @@ function hack(
       `Executing on '${server.hostname}' in ${convertTimeMsToTimeElapsedString(
         hackingTime * 1000,
         true,
-      )} (t=${numeralWrapper.formatThreads(threads)})`,
+      )} (t=${formatThreads(threads)})`,
   );
 
   return helpers.netscriptDelay(ctx, hackingTime * 1000).then(function () {
@@ -495,9 +506,9 @@ function hack(
       log(
         ctx,
         () =>
-          `Successfully hacked '${server.hostname}' for ${numeralWrapper.formatMoney(
-            moneyGained,
-          )} and ${numeralWrapper.formatExp(expGainedOnSuccess)} exp (t=${numeralWrapper.formatThreads(threads)})`,
+          `Successfully hacked '${server.hostname}' for ${formatMoney(moneyGained)} and ${formatExp(
+            expGainedOnSuccess,
+          )} exp (t=${formatThreads(threads)})`,
       );
       server.fortify(CONSTANTS.ServerFortifyAmount * Math.min(threads, maxThreadNeeded));
       if (stock) {
@@ -505,6 +516,9 @@ function hack(
       }
       if (manual) {
         server.backdoorInstalled = true;
+        // Manunally check for faction invites
+        Engine.Counters.checkFactionInvitations = 0;
+        Engine.checkCounters();
       }
       return moneyGained;
     } else {
@@ -514,35 +528,24 @@ function hack(
       log(
         ctx,
         () =>
-          `Failed to hack '${server.hostname}'. Gained ${numeralWrapper.formatExp(
-            expGainedOnFailure,
-          )} exp (t=${numeralWrapper.formatThreads(threads)})`,
+          `Failed to hack '${server.hostname}'. Gained ${formatExp(expGainedOnFailure)} exp (t=${formatThreads(
+            threads,
+          )})`,
       );
       return 0;
     }
   });
 }
 
-function getValidPort(ctx: NetscriptContext, port: number): IPort {
-  if (isNaN(port)) {
+function portNumber(ctx: NetscriptContext, _n: unknown): PortNumber {
+  const n = positiveInteger(ctx, "portNumber", _n);
+  if (n > CONSTANTS.NumNetscriptPorts) {
     throw makeRuntimeErrorMsg(
       ctx,
-      `Invalid argument. Must be a port number between 1 and ${CONSTANTS.NumNetscriptPorts}, is ${port}`,
+      `Trying to use an invalid port: ${n}. Must be less or equal to ${CONSTANTS.NumNetscriptPorts}.`,
     );
   }
-  port = Math.round(port);
-  if (port < 1 || port > CONSTANTS.NumNetscriptPorts) {
-    throw makeRuntimeErrorMsg(
-      ctx,
-      `Trying to use an invalid port: ${port}. Only ports 1-${CONSTANTS.NumNetscriptPorts} are valid.`,
-    );
-  }
-  let iport = NetscriptPorts.get(port);
-  if (!iport) {
-    iport = NetscriptPort();
-    NetscriptPorts.set(port, iport);
-  }
-  return iport;
+  return n as PortNumber;
 }
 
 function person(ctx: NetscriptContext, p: unknown): IPerson {
@@ -552,7 +555,8 @@ function person(ctx: NetscriptContext, p: unknown): IPerson {
     mults: undefined,
     city: undefined,
   };
-  if (!roughlyIs(fakePerson, p)) throw makeRuntimeErrorMsg(ctx, `person should be a Person.`, "TYPE");
+  const error = missingKey(fakePerson, p);
+  if (error) throw makeRuntimeErrorMsg(ctx, `person should be a Person.\n${error}`, "TYPE");
   return p as IPerson;
 }
 
@@ -583,36 +587,36 @@ function server(ctx: NetscriptContext, s: unknown): Server {
     requiredHackingSkill: undefined,
     serverGrowth: undefined,
   };
-  if (!roughlyIs(fakeServer, s)) throw makeRuntimeErrorMsg(ctx, `server should be a Server.`, "TYPE");
+  const error = missingKey(fakeServer, s);
+  if (error) throw makeRuntimeErrorMsg(ctx, `server should be a hackable Server.\n${error}`, "TYPE");
   return s as Server;
 }
 
-function roughlyIs(expect: object, actual: unknown): boolean {
-  if (typeof actual !== "object" || actual == null) return false;
-
-  const expects = Object.keys(expect);
-  const actuals = Object.keys(actual);
-  for (const expect of expects)
-    if (!actuals.includes(expect)) {
-      return false;
-    }
-  return true;
+function missingKey(expect: object, actual: unknown): string | false {
+  if (typeof actual !== "object" || actual === null) {
+    return `Expected to be an object, was ${actual === null ? "null" : typeof actual}.`;
+  }
+  for (const key in expect) {
+    if (!(key in actual)) return `Property ${key} was expected but not present.`;
+  }
+  return false;
 }
 
 function gang(ctx: NetscriptContext, g: unknown): FormulaGang {
-  if (!roughlyIs({ respect: 0, territory: 0, wantedLevel: 0 }, g))
-    throw makeRuntimeErrorMsg(ctx, `gang should be a Gang.`, "TYPE");
+  const error = missingKey({ respect: 0, territory: 0, wantedLevel: 0 }, g);
+  if (error) throw makeRuntimeErrorMsg(ctx, `gang should be a Gang.\n${error}`, "TYPE");
   return g as FormulaGang;
 }
 
 function gangMember(ctx: NetscriptContext, m: unknown): GangMember {
-  if (!roughlyIs(new GangMember(), m)) throw makeRuntimeErrorMsg(ctx, `member should be a GangMember.`, "TYPE");
+  const error = missingKey(new GangMember(), m);
+  if (error) throw makeRuntimeErrorMsg(ctx, `member should be a GangMember.\n${error}`, "TYPE");
   return m as GangMember;
 }
 
 function gangTask(ctx: NetscriptContext, t: unknown): GangMemberTask {
-  if (!roughlyIs(new GangMemberTask("", "", false, false, { hackWeight: 100 }), t))
-    throw makeRuntimeErrorMsg(ctx, `task should be a GangMemberTask.`, "TYPE");
+  const error = missingKey(new GangMemberTask("", "", false, false, { hackWeight: 100 }), t);
+  if (error) throw makeRuntimeErrorMsg(ctx, `task should be a GangMemberTask.\n${error}`, "TYPE");
   return t as GangMemberTask;
 }
 

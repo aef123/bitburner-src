@@ -4,12 +4,9 @@
 
 ## NS.getServerBaseSecurityLevel() method
 
-> Warning: This API is now obsolete.
-> 
-> useless
-> 
+Get the base security level of a server.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 getServerBaseSecurityLevel(host: string): number;
@@ -21,7 +18,7 @@ getServerBaseSecurityLevel(host: string): number;
 |  --- | --- | --- |
 |  host | string | Host of target server. |
 
-<b>Returns:</b>
+**Returns:**
 
 number
 
@@ -29,5 +26,5 @@ Base security level of the target server.
 
 ## Remarks
 
-RAM cost: 0.1 GB Returns the base security level of the target server. This is the security level that the server starts out with. This is different than getServerSecurityLevel because getServerSecurityLevel returns the current security level of a server, which can constantly change due to hack, grow, and weaken, calls on that server. The base security level will stay the same until you reset by installing an Augmentation(s).
+RAM cost: 0.1 GB Returns the base security level of the target server. For the server's actual security level, use [ns.getServerSecurityLevel](./bitburner.ns.getserversecuritylevel.md)<!-- -->.
 

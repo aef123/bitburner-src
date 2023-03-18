@@ -248,13 +248,21 @@ export function prestigeSourceFile(flume: boolean): void {
     homeComp.programs.push(Programs.Formulas.name);
   }
 
+  console.log(Player.bitNodeN);
+  dialogBoxCreate("hello");
   // BitNode 3: Corporatocracy
   if (Player.bitNodeN === 3) {
+    console.log("why isn't the dialogbox happening?");
     homeComp.messages.push(LiteratureNames.CorporationManagementHandbook);
     dialogBoxCreate(
       "You received a copy of the Corporation Management Handbook on your home computer. " +
         "Read it if you need help getting started with Corporations!",
     );
+  }
+
+  // BitNode 6: Bladeburners and BitNode 7: Bladeburners 2079
+  if (Player.bitNodeN === 6 || Player.bitNodeN === 7) {
+    dialogBoxCreate("NSA would like to have a word with you once you're ready.");
   }
 
   // BitNode 8: Ghost of Wall Street
@@ -266,9 +274,16 @@ export function prestigeSourceFile(flume: boolean): void {
     Player.hasTixApiAccess = true;
   }
 
-  // Bit Node 10: Digital Carbon
+  // BitNode 10: Digital Carbon
   if (Player.bitNodeN === 10) {
-    dialogBoxCreate("Visit VitaLife in New Tokyo if you'd like to purchase a new sleeve!");
+    dialogBoxCreate(
+      "Seek out The Covenant if you'd like to purchase a new sleeve or two! And see what VitaLife in New Tokyo has to offer for you",
+    );
+  }
+
+  // BitNode 12: Digital Carbon
+  if (Player.bitNodeN === 12 && Player.sourceFileLvl(10) > 100) {
+    dialogBoxCreate("Saynt_Garmo is watching you");
   }
 
   if (Player.bitNodeN === 13) {
@@ -285,7 +300,8 @@ export function prestigeSourceFile(flume: boolean): void {
   resetIndustryResearchTrees();
 
   // Source-File 9 (level 3) effect
-  if (Player.sourceFileLvl(9) >= 3) {
+  // also now applies when entering bn9 until install
+  if (Player.sourceFileLvl(9) >= 3 || Player.bitNodeN === 9) {
     const hserver = Player.createHacknetServer();
 
     hserver.level = 100;

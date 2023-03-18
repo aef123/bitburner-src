@@ -87,11 +87,6 @@ async function writeToast(window, message, type = "info", duration = 2000) {
   await window.webContents.executeJavaScript(`window.appNotifier.toast("${message}", "${type}", ${duration});`, true);
 }
 
-function openExternal(url) {
-  shell.openExternal(url);
-  global.app_playerOpenedExternalLink = true;
-}
-
 function getZoomFactor() {
   const configZoom = config.get("zoom", 1);
   return configZoom;
@@ -112,7 +107,6 @@ module.exports = {
   exportSave,
   attachUnresponsiveAppHandler,
   detachUnresponsiveAppHandler,
-  openExternal,
   writeTerminal,
   writeToast,
   getZoomFactor,

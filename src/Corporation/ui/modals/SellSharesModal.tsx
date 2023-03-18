@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { numeralWrapper } from "../../../ui/numeralFormat";
+import { formatMoney } from "../../../ui/formatNumber";
 import { dialogBoxCreate } from "../../../ui/React/DialogBox";
 import { Modal } from "../../../ui/React/Modal";
 import { useCorporation } from "../Context";
@@ -10,6 +10,7 @@ import { Money } from "../../../ui/React/Money";
 import { SellShares } from "../../Actions";
 import { KEY } from "../../../utils/helpers/keyCodes";
 import { NumberInput } from "../../../ui/React/NumberInput";
+import { isInteger } from "lodash";
 interface IProps {
   open: boolean;
   onClose: () => void;
@@ -22,19 +23,23 @@ export function SellSharesModal(props: IProps): React.ReactElement {
   const corp = useCorporation();
   const [shares, setShares] = useState<number>(NaN);
 
-  const disabled = isNaN(shares) || shares <= 0 || shares > corp.numShares;
+  const disabled = isNaN(shares) || shares <= 0 || shares >= corp.numShares;
 
   function ProfitIndicator(props: { shares: number | null; corp: Corporation }): React.ReactElement {
     if (props.shares === null) return <></>;
     let text = "";
-    if (isNaN(props.shares) || props.shares <= 0) {
+    if (isNaN(props.shares) || props.shares <= 0 || !isInteger(props.shares)) {
       text = `ERROR: Invalid value entered for number of shares to sell`;
     } else if (props.shares > corp.numShares) {
       text = `You don't have this many shares to sell!`;
+    } else if (props.shares === corp.numShares) {
+      text = `You can not sell all your shares!`;
+    } else if (props.shares > 1e14) {
+      text = `You can't sell more than 100t shares at once!`;
     } else {
       const stockSaleResults = corp.calculateShareSale(props.shares);
       const profit = stockSaleResults[0];
-      text = `Sell ${props.shares} shares for a total of ${numeralWrapper.formatMoney(profit)}`;
+      text = `Sell ${props.shares} shares for a total of ${formatMoney(profit)}`;
     }
 
     return (
@@ -51,7 +56,7 @@ export function SellSharesModal(props: IProps): React.ReactElement {
       props.onClose();
       dialogBoxCreate(
         <>
-          Sold {numeralWrapper.formatMoney(shares)} shares for
+          Sold {formatMoney(shares)} shares for
           <Money money={profit} />. The corporation's stock price fell to&nbsp; <Money money={corp.sharePrice} />
           as a result of dilution.
         </>,
@@ -74,11 +79,14 @@ export function SellSharesModal(props: IProps): React.ReactElement {
         (NOT your Corporation).
         <br />
         <br />
+        The amount sold must be an integer between 1 and 100t.
+        <br />
+        <br />
         Selling your shares will cause your corporation's stock price to fall due to dilution. Furthermore, selling a
         large number of shares all at once will have an immediate effect in reducing your stock price.
         <br />
         <br />
-        The current price of your company's stock is {numeralWrapper.formatMoney(corp.sharePrice)}
+        The current price of your company's stock is {formatMoney(corp.sharePrice)}
       </Typography>
       <br />
       <NumberInput

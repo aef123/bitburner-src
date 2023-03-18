@@ -1,8 +1,9 @@
 import { Terminal } from "../../Terminal";
-import { numeralWrapper } from "../../ui/numeralFormat";
+import { formatRam } from "../../ui/formatNumber";
 import { Settings } from "../../Settings/Settings";
+import { BaseServer } from "../../Server/BaseServer";
 
-export function mem(args: (string | number | boolean)[]): void {
+export function mem(args: (string | number | boolean)[], server: BaseServer): void {
   try {
     if (args.length !== 1 && args.length !== 3) {
       Terminal.error("Incorrect usage of mem command. usage: mem [scriptname] [-t] [number threads]");
@@ -25,18 +26,17 @@ export function mem(args: (string | number | boolean)[]): void {
       return;
     }
 
-    const ramUsage = script.ramUsage * numThreads;
+    const singleRamUsage = script.getRamUsage(server.scripts);
+    if (!singleRamUsage) return Terminal.error(`Could not calculate ram usage for ${scriptName}`);
 
-    Terminal.print(
-      `This script requires ${numeralWrapper.formatRAM(ramUsage)} of RAM to run for ${numThreads} thread(s)`,
-    );
+    const ramUsage = singleRamUsage * numThreads;
+
+    Terminal.print(`This script requires ${formatRam(ramUsage)} of RAM to run for ${numThreads} thread(s)`);
 
     const verboseEntries = script.ramUsageEntries?.sort((a, b) => b.cost - a.cost) ?? [];
     const padding = Settings.UseIEC60027_2 ? 9 : 8;
     for (const entry of verboseEntries) {
-      Terminal.print(
-        `${numeralWrapper.formatRAM(entry.cost * numThreads).padStart(padding)} | ${entry.name} (${entry.type})`,
-      );
+      Terminal.print(`${formatRam(entry.cost * numThreads).padStart(padding)} | ${entry.name} (${entry.type})`);
     }
 
     if (ramUsage > 0 && verboseEntries.length === 0) {

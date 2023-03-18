@@ -6,7 +6,7 @@
 
 Buyback Shares
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 buyBackShares(amount: number): void;
@@ -16,9 +16,9 @@ buyBackShares(amount: number): void;
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  amount | number | Amount of shares to buy back. |
+|  amount | number | Amount of shares to buy back, must be integer and larger than 0 |
 
-<b>Returns:</b>
+**Returns:**
 
 void
 

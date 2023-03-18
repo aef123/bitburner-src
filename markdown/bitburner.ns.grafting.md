@@ -4,9 +4,9 @@
 
 ## NS.grafting property
 
-Namespace for grafting functions.
+Namespace for grafting functions. Contains spoilers.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 readonly grafting: Grafting;

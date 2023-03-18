@@ -30,7 +30,7 @@ export function CreateCorporationModal(props: IProps): React.ReactElement {
     if (!canSelfFund) return;
     if (name == "") return;
 
-    Player.startCorporation(name);
+    Player.startCorporation(name, false);
     Player.loseMoney(150e9, "corporation");
 
     props.onClose();
@@ -42,7 +42,7 @@ export function CreateCorporationModal(props: IProps): React.ReactElement {
       return;
     }
 
-    Player.startCorporation(name, 500e6);
+    Player.startCorporation(name, true);
 
     props.onClose();
     Router.toPage(Page.Corporation);

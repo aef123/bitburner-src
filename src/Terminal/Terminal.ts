@@ -30,7 +30,7 @@ import {
   calculateGrowTime,
   calculateWeakenTime,
 } from "../Hacking";
-import { numeralWrapper } from "../ui/numeralFormat";
+import { formatExp, formatMoney, formatPercent, formatRam, formatSecurity } from "../ui/formatNumber";
 import { convertTimeMsToTimeElapsedString } from "../utils/StringHelperFunctions";
 
 // TODO: Does every terminal function really need its own file...?
@@ -76,6 +76,7 @@ import { hash } from "../hash/hash";
 import { apr1 } from "./commands/apr1";
 import { changelog } from "./commands/changelog";
 import { BitNodeMultipliers } from "../BitNode/BitNodeMultipliers";
+import { Engine } from "../engine";
 
 export class Terminal {
   // Flags to determine whether the player is currently running a hack or an analyze
@@ -97,7 +98,7 @@ export class Terminal {
 
   process(cycles: number): void {
     if (this.action === null) return;
-    this.action.timeLeft -= (CONSTANTS._idleSpeed * cycles) / 1000;
+    this.action.timeLeft -= (CONSTANTS.MilliPerCycle * cycles) / 1000;
     if (this.action.timeLeft < 0.01) this.finishAction(false);
     TerminalEvents.emit();
   }
@@ -207,6 +208,10 @@ export class Terminal {
         Router.toBitVerse(false, false);
         return;
       }
+      // Manunally check for faction invites
+      Engine.Counters.checkFactionInvitations = 0;
+      Engine.checkCounters();
+
       let moneyGained = calculatePercentMoneyHacked(server, Player) * BitNodeMultipliers.ManualHackMoney;
       moneyGained = Math.floor(server.moneyAvailable * moneyGained);
 
@@ -224,21 +229,17 @@ export class Terminal {
       const newSec = server.hackDifficulty;
 
       this.print(
-        `Hack successful on '${server.hostname}'! Gained ${numeralWrapper.formatMoney(
-          moneyGained,
-        )} and ${numeralWrapper.formatExp(expGainedOnSuccess)} hacking exp`,
+        `Hack successful on '${server.hostname}'! Gained ${formatMoney(moneyGained)} and ${formatExp(
+          expGainedOnSuccess,
+        )} hacking exp`,
       );
       this.print(
-        `Security increased on '${server.hostname}' from ${numeralWrapper.formatSecurity(
-          oldSec,
-        )} to ${numeralWrapper.formatSecurity(newSec)}`,
+        `Security increased on '${server.hostname}' from ${formatSecurity(oldSec)} to ${formatSecurity(newSec)}`,
       );
     } else {
       // Failure
       Player.gainHackingExp(expGainedOnFailure);
-      this.print(
-        `Failed to hack '${server.hostname}'. Gained ${numeralWrapper.formatExp(expGainedOnFailure)} hacking exp`,
-      );
+      this.print(`Failed to hack '${server.hostname}'. Gained ${formatExp(expGainedOnFailure)} hacking exp`);
     }
   }
 
@@ -257,15 +258,12 @@ export class Terminal {
 
     Player.gainHackingExp(expGain);
     this.print(
-      `Available money on '${server.hostname}' grown by ${numeralWrapper.formatPercentage(
-        growth,
-        6,
-      )}. Gained ${numeralWrapper.formatExp(expGain)} hacking exp.`,
+      `Available money on '${server.hostname}' grown by ${formatPercent(growth, 6)}. Gained ${formatExp(
+        expGain,
+      )} hacking exp.`,
     );
     this.print(
-      `Security increased on '${server.hostname}' from ${numeralWrapper.formatSecurity(
-        oldSec,
-      )} to ${numeralWrapper.formatSecurity(newSec)}`,
+      `Security increased on '${server.hostname}' from ${formatSecurity(oldSec)} to ${formatSecurity(newSec)}`,
     );
   }
 
@@ -284,10 +282,9 @@ export class Terminal {
 
     Player.gainHackingExp(expGain);
     this.print(
-      `Security decreased on '${server.hostname}' from ${numeralWrapper.formatSecurity(
-        oldSec,
-      )} to ${numeralWrapper.formatSecurity(newSec)} (min: ${numeralWrapper.formatSecurity(server.minDifficulty)})` +
-        ` and Gained ${numeralWrapper.formatExp(expGain)} hacking exp.`,
+      `Security decreased on '${server.hostname}' from ${formatSecurity(oldSec)} to ${formatSecurity(
+        newSec,
+      )} (min: ${formatSecurity(server.minDifficulty)})` + ` and Gained ${formatExp(expGain)} hacking exp.`,
     );
   }
 
@@ -306,6 +303,10 @@ export class Terminal {
         Router.toBitVerse(false, false);
         return;
       }
+      // Manunally check for faction invites
+      Engine.Counters.checkFactionInvitations = 0;
+      Engine.checkCounters();
+
       this.print(`Backdoor on '${server.hostname}' successful!`);
     }
   }
@@ -320,22 +321,20 @@ export class Terminal {
       this.print("Root Access: " + (hasAdminRights ? "YES" : "NO"));
       const canRunScripts = hasAdminRights && currServ.maxRam > 0;
       this.print("Can run scripts on this host: " + (canRunScripts ? "YES" : "NO"));
-      this.print("RAM: " + numeralWrapper.formatRAM(currServ.maxRam));
+      this.print("RAM: " + formatRam(currServ.maxRam));
       if (currServ instanceof Server) {
         this.print("Backdoor: " + (currServ.backdoorInstalled ? "YES" : "NO"));
         const hackingSkill = currServ.requiredHackingSkill;
         this.print("Required hacking skill for hack() and backdoor: " + (!isHacknet ? hackingSkill : "N/A"));
         const security = currServ.hackDifficulty;
-        this.print("Server security level: " + (!isHacknet ? numeralWrapper.formatServerSecurity(security) : "N/A"));
+        this.print("Server security level: " + (!isHacknet ? formatSecurity(security) : "N/A"));
         const hackingChance = calculateHackingChance(currServ, Player);
-        this.print("Chance to hack: " + (!isHacknet ? numeralWrapper.formatPercentage(hackingChance) : "N/A"));
+        this.print("Chance to hack: " + (!isHacknet ? formatPercent(hackingChance) : "N/A"));
         const hackingTime = calculateHackingTime(currServ, Player) * 1000;
         this.print("Time to hack: " + (!isHacknet ? convertTimeMsToTimeElapsedString(hackingTime, true) : "N/A"));
       }
       this.print(
-        `Total money available on server: ${
-          currServ instanceof Server ? numeralWrapper.formatMoney(currServ.moneyAvailable) : "N/A"
-        }`,
+        `Total money available on server: ${currServ instanceof Server ? formatMoney(currServ.moneyAvailable) : "N/A"}`,
       );
       if (currServ instanceof Server) {
         const numPort = currServ.numOpenPortsRequired;
@@ -559,7 +558,7 @@ export class Terminal {
           this.print(dashes + "Number of open ports required to NUKE: " + s.numOpenPortsRequired);
         }
       }
-      this.print(dashes + "RAM: " + numeralWrapper.formatRAM(s.maxRam));
+      this.print(dashes + "RAM: " + formatRam(s.maxRam));
       this.print(" ");
     }
   }

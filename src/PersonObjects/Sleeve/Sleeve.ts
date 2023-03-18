@@ -23,9 +23,9 @@ import { CityName, CrimeType, GymType, LocationName, UniversityClassType } from 
 import { Factions } from "../../Faction/Factions";
 
 import { Generic_fromJSON, Generic_toJSON, IReviverValue, Reviver } from "../../utils/JSONReviver";
-import { numeralWrapper } from "../../ui/numeralFormat";
+import { formatPercent } from "../../ui/formatNumber";
 import { FactionWorkType } from "../../Enums";
-import { Work } from "./Work/Work";
+import { SleeveWork } from "./Work/Work";
 import { SleeveClassWork } from "./Work/SleeveClassWork";
 import { ClassType } from "../../Work/ClassWork";
 import { SleeveSynchroWork } from "./Work/SleeveSynchroWork";
@@ -38,9 +38,10 @@ import { SleeveBladeburnerWork } from "./Work/SleeveBladeburnerWork";
 import { SleeveCrimeWork } from "./Work/SleeveCrimeWork";
 import * as sleeveMethods from "./SleeveMethods";
 import { SleevePerson } from "@nsdefs";
+import { calculateIntelligenceBonus } from "../formulas/intelligence";
 
 export class Sleeve extends Person implements SleevePerson {
-  currentWork: Work | null = null;
+  currentWork: SleeveWork | null = null;
 
   /** Clone retains 'memory' synchronization (and maybe exp?) upon prestige/installing Augs */
   memory = 1;
@@ -80,7 +81,7 @@ export class Sleeve extends Person implements SleevePerson {
     return this.sync / 100;
   }
 
-  startWork(w: Work): void {
+  startWork(w: SleeveWork): void {
     if (this.currentWork) this.currentWork.finish();
     this.currentWork = w;
   }
@@ -171,7 +172,10 @@ export class Sleeve extends Person implements SleevePerson {
     this.storedCycles += numCycles;
     if (this.storedCycles < CyclesPerSecond || !this.currentWork) return;
     const cyclesUsed = Math.min(this.storedCycles, 15);
-    this.shock = Math.max(0, this.shock - 0.0001 * cyclesUsed);
+    this.shock = Math.max(
+      0,
+      this.shock - 0.0001 * calculateIntelligenceBonus(this.skills.intelligence, 0.75) * cyclesUsed,
+    );
     this.currentWork.process(this, cyclesUsed);
     this.storedCycles -= cyclesUsed;
   }
@@ -282,7 +286,7 @@ export class Sleeve extends Person implements SleevePerson {
     if (company == null) return false;
     if (companyPosition == null) return false;
 
-    this.startWork(new SleeveCompanyWork({ companyName: companyName }));
+    this.startWork(new SleeveCompanyWork(companyName));
 
     return true;
   }
@@ -394,6 +398,7 @@ export class Sleeve extends Person implements SleevePerson {
     if (!Player.bladeburner) return false;
     switch (action) {
       case "Field analysis":
+      case "Field Analysis":
         this.startWork(new SleeveBladeburnerWork({ type: "General", name: "Field Analysis" }));
         return true;
       case "Recruitment":
@@ -406,6 +411,7 @@ export class Sleeve extends Person implements SleevePerson {
         this.startWork(new SleeveBladeburnerWork({ type: "General", name: "Hyperbolic Regeneration Chamber" }));
         return true;
       case "Infiltrate synthoids":
+      case "Infiltrate Synthoids":
         this.startWork(new SleeveInfiltrateWork());
         return true;
       case "Support main sleeve":
@@ -438,7 +444,7 @@ export class Sleeve extends Person implements SleevePerson {
     if (chances[0] >= 1) {
       return "100%";
     } else {
-      return `${numeralWrapper.formatPercentage(chances[0])} - ${numeralWrapper.formatPercentage(chances[1])}`;
+      return `${formatPercent(chances[0])} - ${formatPercent(chances[1])}`;
     }
   }
 

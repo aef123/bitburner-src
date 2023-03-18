@@ -19,6 +19,9 @@ import { debounce } from "lodash";
 import { Settings } from "../../Settings/Settings";
 import { ANSIITypography } from "./ANSIITypography";
 import { ScriptArg } from "../../Netscript/ScriptArg";
+import { useRerender } from "./hooks";
+import { areFilesEqual } from "../../Terminal/DirectoryHelpers";
+import { dialogBoxCreate } from "./DialogBox";
 
 let layerCounter = 0;
 
@@ -53,10 +56,7 @@ interface Log {
 let logs: Log[] = [];
 
 export function LogBoxManager(): React.ReactElement {
-  const setRerender = useState(true)[1];
-  function rerender(): void {
-    setRerender((o) => !o);
-  }
+  const rerender = useRerender();
   useEffect(
     () =>
       LogBoxEvents.subscribe((script: RunningScript) => {
@@ -140,12 +140,9 @@ function LogWindow(props: IProps): React.ReactElement {
   const classes = useStyles();
   const container = useRef<HTMLDivElement>(null);
   const textArea = useRef<HTMLDivElement>(null);
-  const setRerender = useState(false)[1];
+  const rerender = useRerender(1000);
   const [size, setSize] = useState<[number, number]>([500, 500]);
   const [minimized, setMinimized] = useState(false);
-  function rerender(): void {
-    setRerender((old) => !old);
-  }
 
   const textAreaKeyDown = (e: React.KeyboardEvent) => {
     if (e.ctrlKey && e.key === "a") {
@@ -214,8 +211,6 @@ function LogWindow(props: IProps): React.ReactElement {
 
   useEffect(() => {
     updateLayer();
-    const id = setInterval(rerender, 1000);
-    return () => clearInterval(id);
   }, []);
 
   function kill(): void {
@@ -227,7 +222,17 @@ function LogWindow(props: IProps): React.ReactElement {
     if (server === null) return;
     const s = findRunningScript(script.filename, script.args, server);
     if (s === null) {
-      script.ramUsage = 0;
+      const baseScript = server.scripts.find((serverScript) => areFilesEqual(serverScript.filename, script.filename));
+      if (!baseScript) {
+        return dialogBoxCreate(
+          `Could not launch script. The script ${script.filename} no longer exists on the server ${server.hostname}.`,
+        );
+      }
+      const ramUsage = baseScript.getRamUsage(server.scripts);
+      if (!ramUsage) {
+        return dialogBoxCreate(`Could not calculate ram usage for ${script.filename} on ${server.hostname}.`);
+      }
+      script.ramUsage = ramUsage;
       startWorkerScript(script, server);
     } else {
       setScript(s);

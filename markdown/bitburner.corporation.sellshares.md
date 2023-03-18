@@ -6,7 +6,7 @@
 
 Sell Shares
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 sellShares(amount: number): void;
@@ -16,9 +16,9 @@ sellShares(amount: number): void;
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  amount | number | Amount of shares to sell. |
+|  amount | number | Amount of shares to sell, must be integer between 1 and 100t |
 
-<b>Returns:</b>
+**Returns:**
 
 void
 

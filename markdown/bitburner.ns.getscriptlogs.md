@@ -6,7 +6,7 @@
 
 Get all the logs of a script.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 getScriptLogs(fn?: string, host?: string, ...args: (string | number | boolean)[]): string[];
@@ -16,11 +16,11 @@ getScriptLogs(fn?: string, host?: string, ...args: (string | number | boolean)[]
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  fn | string | Optional. Filename of script to get logs from. |
-|  host | string | Optional. Hostname of the server that the script is on. |
+|  fn | string | _(Optional)_ Optional. Filename of script to get logs from. |
+|  host | string | _(Optional)_ Optional. Hostname of the server that the script is on. |
 |  args | (string \| number \| boolean)\[\] | Arguments to identify which scripts to get logs for. |
 
-<b>Returns:</b>
+**Returns:**
 
 string\[\]
 
@@ -34,33 +34,17 @@ Returns a script’s logs. The logs are returned as an array, where each line is
 
 Otherwise, the fn, hostname/ip, and args… arguments can be used to get the logs from another script. Remember that scripts are uniquely identified by both their names and arguments.
 
-## Example 1
+## Example
 
 
-```ts
-// NS1:
-//Get logs from foo.script on the current server that was run with no args
-getScriptLogs("foo.script");
+```js
+//Get logs from foo.js on the current server that was run with no args
+ns.getScriptLogs("foo.js");
 
-//Open logs from foo.script on the foodnstuff server that was run with no args
-getScriptLogs("foo.script", "foodnstuff");
+//Open logs from foo.js on the foodnstuff server that was run with no args
+ns.getScriptLogs("foo.js", "foodnstuff");
 
-//Open logs from foo.script on the foodnstuff server that was run with the arguments [1, "test"]
-getScriptLogs("foo.script", "foodnstuff", 1, "test");
-```
-
-## Example 2
-
-
-```ts
-// NS2:
-//Get logs from foo.script on the current server that was run with no args
-ns.getScriptLogs("foo.script");
-
-//Open logs from foo.script on the foodnstuff server that was run with no args
-ns.getScriptLogs("foo.script", "foodnstuff");
-
-//Open logs from foo.script on the foodnstuff server that was run with the arguments [1, "test"]
-ns.getScriptLogs("foo.script", "foodnstuff", 1, "test");
+//Open logs from foo.js on the foodnstuff server that was run with the arguments [1, "test"]
+ns.getScriptLogs("foo.js", "foodnstuff", 1, "test");
 ```
 

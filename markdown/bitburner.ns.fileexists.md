@@ -6,7 +6,7 @@
 
 Check if a file exists.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 fileExists(filename: string, host?: string): boolean;
@@ -17,9 +17,9 @@ fileExists(filename: string, host?: string): boolean;
 |  Parameter | Type | Description |
 |  --- | --- | --- |
 |  filename | string | Filename of file to check. |
-|  host | string | Host of target server. This is optional. If it is not specified then the function will use the current server as the target server. |
+|  host | string | _(Optional)_ Host of target server. This is optional. If it is not specified then the function will use the current server as the target server. |
 
-<b>Returns:</b>
+**Returns:**
 
 boolean
 
@@ -33,26 +33,14 @@ Returns a boolean indicating whether the specified file exists on the target ser
 
 If the hostname/ip argument is omitted, then the function will search through the current server (the server running the script that calls this function) for the file.
 
-## Example 1
-
-
-```ts
-// NS1:
-//The function call will return true if the script named foo.script exists on the foodnstuff server, and false otherwise.
-fileExists("foo.script", "foodnstuff");
-
-//The function call will return true if the current server contains the FTPCrack.exe program, and false otherwise.
-fileExists("ftpcrack.exe");
-```
 \*
 
-## Example 2
+## Example
 
 
-```ts
-// NS2:
-// The function call will return true if the script named foo.script exists on the foodnstuff server, and false otherwise.
-ns.fileExists("foo.script", "foodnstuff");
+```js
+// The function call will return true if the script named foo.js exists on the foodnstuff server, and false otherwise.
+ns.fileExists("foo.js", "foodnstuff");
 
 // The function call will return true if the current server contains the FTPCrack.exe program, and false otherwise.
 ns.fileExists("ftpcrack.exe");

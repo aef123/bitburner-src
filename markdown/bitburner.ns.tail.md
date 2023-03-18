@@ -6,7 +6,7 @@
 
 Open the tail window of a script.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 tail(fn?: FilenameOrPID, host?: string, ...args: (string | number | boolean)[]): void;
@@ -16,11 +16,11 @@ tail(fn?: FilenameOrPID, host?: string, ...args: (string | number | boolean)[]):
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  fn | [FilenameOrPID](./bitburner.filenameorpid.md) | Optional. Filename or PID of the script being tailed. If omitted, the current script is tailed. |
-|  host | string | Optional. Hostname of the script being tailed. Defaults to the server this script is running on. If args are specified, this is not optional. |
+|  fn | [FilenameOrPID](./bitburner.filenameorpid.md) | _(Optional)_ Optional. Filename or PID of the script being tailed. If omitted, the current script is tailed. |
+|  host | string | _(Optional)_ Optional. Hostname of the script being tailed. Defaults to the server this script is running on. If args are specified, this is not optional. |
 |  args | (string \| number \| boolean)\[\] | Arguments for the script being tailed. |
 
-<b>Returns:</b>
+**Returns:**
 
 void
 
@@ -34,33 +34,17 @@ If the function is called with no arguments, it will open the current script’s
 
 Otherwise, the fn, hostname/ip, and args… arguments can be used to get the logs from another script. Remember that scripts are uniquely identified by both their names and arguments.
 
-## Example 1
+## Example
 
 
-```ts
-// NS1:
-//Open logs from foo.script on the current server that was run with no args
-tail("foo.script");
+```js
+//Open logs from foo.js on the current server that was run with no args
+ns.tail("foo.js");
 
-//Get logs from foo.script on the foodnstuff server that was run with no args
-tail("foo.script", "foodnstuff");
+//Get logs from foo.js on the foodnstuff server that was run with no args
+ns.tail("foo.js", "foodnstuff");
 
-//Get logs from foo.script on the foodnstuff server that was run with the arguments [1, "test"]
-tail("foo.script", "foodnstuff", 1, "test");
-```
-
-## Example 2
-
-
-```ts
-// NS2:
-//Open logs from foo.script on the current server that was run with no args
-ns.tail("foo.script");
-
-//Get logs from foo.script on the foodnstuff server that was run with no args
-ns.tail("foo.script", "foodnstuff");
-
-//Get logs from foo.script on the foodnstuff server that was run with the arguments [1, "test"]
-ns.tail("foo.script", "foodnstuff", 1, "test");
+//Get logs from foo.js on the foodnstuff server that was run with the arguments [1, "test"]
+ns.tail("foo.js", "foodnstuff", 1, "test");
 ```
 

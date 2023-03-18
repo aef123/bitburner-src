@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Theme, useTheme } from "@mui/material/styles";
 import makeStyles from "@mui/styles/makeStyles";
 import createStyles from "@mui/styles/createStyles";
-import { numeralWrapper } from "../numeralFormat";
+import { formatHp, formatMoney, formatSkill } from "../formatNumber";
 import { Reputation } from "./Reputation";
 import { KillScriptsModal } from "./KillScriptsModal";
 import { convertTimeMsToTimeElapsedString } from "../../utils/StringHelperFunctions";
@@ -64,17 +64,17 @@ const valUpdaters: Record<RowName, () => any> = {
 
 //These formattedVals functions don't take in a value because of the weirdness around HP.
 const formattedVals: Record<RowName, () => string> = {
-  HP: () => `${numeralWrapper.formatHp(Player.hp.current)} / ${numeralWrapper.formatHp(Player.hp.max)}`,
-  Money: () => numeralWrapper.formatMoney(Player.money),
-  Karma: () => numeralWrapper.formatSkill(Player.karma),
-  Killed: () => numeralWrapper.formatSkill(Player.numPeopleKilled),
-  Hack: () => numeralWrapper.formatSkill(Player.skills.hacking),
-  Str: () => numeralWrapper.formatSkill(Player.skills.strength),
-  Def: () => numeralWrapper.formatSkill(Player.skills.defense),
-  Dex: () => numeralWrapper.formatSkill(Player.skills.dexterity),
-  Agi: () => numeralWrapper.formatSkill(Player.skills.agility),
-  Cha: () => numeralWrapper.formatSkill(Player.skills.charisma),
-  Int: () => numeralWrapper.formatSkill(Player.skills.intelligence),
+  HP: () => `${formatHp(Player.hp.current)} / ${formatHp(Player.hp.max)}`,
+  Money: () => formatMoney(Player.money),
+  Karma: () => formatSkill(Player.karma),
+  Killed: () => formatSkill(Player.numPeopleKilled),
+  Hack: () => formatSkill(Player.skills.hacking),
+  Str: () => formatSkill(Player.skills.strength),
+  Def: () => formatSkill(Player.skills.defense),
+  Dex: () => formatSkill(Player.skills.dexterity),
+  Agi: () => formatSkill(Player.skills.agility),
+  Cha: () => formatSkill(Player.skills.charisma),
+  Int: () => formatSkill(Player.skills.intelligence),
 };
 
 const skillMultUpdaters: Record<SkillRowName, () => number> = {
@@ -355,7 +355,7 @@ function Work(): React.ReactElement {
   if (isClassWork(Player.currentWork)) {
     details = <>{Player.currentWork.getClass().youAreCurrently}</>;
     header = <>You are {Player.currentWork.getClass().youAreCurrently}</>;
-    innerText = <>{convertTimeMsToTimeElapsedString(Player.currentWork.cyclesWorked * CONSTANTS._idleSpeed)}</>;
+    innerText = <>{convertTimeMsToTimeElapsedString(Player.currentWork.cyclesWorked * CONSTANTS.MilliPerCycle)}</>;
   }
   if (isCreateProgramWork(Player.currentWork)) {
     const create = Player.currentWork;
@@ -389,7 +389,7 @@ function Work(): React.ReactElement {
       <>
         <Reputation reputation={factionWork.getFaction().playerReputation} /> rep
         <br />(
-        <ReputationRate reputation={factionWork.getReputationRate() * (1000 / CONSTANTS._idleSpeed)} />)
+        <ReputationRate reputation={factionWork.getReputationRate() * (1000 / CONSTANTS.MilliPerCycle)} />)
       </>
     );
   }
@@ -409,7 +409,7 @@ function Work(): React.ReactElement {
       <>
         <Reputation reputation={companyWork.getCompany().playerReputation} /> rep
         <br />(
-        <ReputationRate reputation={companyWork.getGainRates().reputation * (1000 / CONSTANTS._idleSpeed)} />)
+        <ReputationRate reputation={companyWork.getGainRates().reputation * (1000 / CONSTANTS.MilliPerCycle)} />)
       </>
     );
   }

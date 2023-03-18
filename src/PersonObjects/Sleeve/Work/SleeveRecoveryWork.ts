@@ -1,24 +1,24 @@
 import { Generic_fromJSON, Generic_toJSON, IReviverValue, Reviver } from "../../../utils/JSONReviver";
 import { Sleeve } from "../Sleeve";
 import { Work, WorkType } from "./Work";
+import { calculateIntelligenceBonus } from "../../formulas/intelligence";
 
 export const isSleeveRecoveryWork = (w: Work | null): w is SleeveRecoveryWork =>
   w !== null && w.type === WorkType.RECOVERY;
 
 export class SleeveRecoveryWork extends Work {
-  constructor() {
-    super(WorkType.RECOVERY);
-  }
+  type: WorkType.RECOVERY = WorkType.RECOVERY;
 
   process(sleeve: Sleeve, cycles: number) {
-    sleeve.shock = Math.max(0, sleeve.shock - 0.0002 * cycles);
+    sleeve.shock = Math.max(
+      0,
+      sleeve.shock - 0.0002 * calculateIntelligenceBonus(sleeve.skills.intelligence, 0.75) * cycles,
+    );
     if (sleeve.shock <= 0) sleeve.stopWork();
   }
 
   APICopy() {
-    return {
-      type: WorkType.RECOVERY as "RECOVERY",
-    };
+    return { type: WorkType.RECOVERY as "RECOVERY" };
   }
 
   /** Serialize the current object to a JSON save state. */

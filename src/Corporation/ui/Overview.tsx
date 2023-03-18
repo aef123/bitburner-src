@@ -16,7 +16,7 @@ import { CorporationUnlockUpgrade, CorporationUnlockUpgrades } from "../data/Cor
 import { CorporationUpgrade, CorporationUpgradeIndex, CorporationUpgrades } from "../data/CorporationUpgrades";
 
 import { CONSTANTS } from "../../Constants";
-import { numeralWrapper } from "../../ui/numeralFormat";
+import { formatCorpStat, formatPercent, formatShares } from "../../ui/formatNumber";
 import { convertTimeMsToTimeElapsedString } from "../../utils/StringHelperFunctions";
 import { Money } from "../../ui/React/Money";
 import { MoneyRate } from "../../ui/React/MoneyRate";
@@ -29,10 +29,14 @@ import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid";
+import { MultiplierButtons } from "./MultiplierButtons";
+import { SellCorporationModal } from "./modals/SellCorporationModal";
+import { SellDivisionModal } from "./modals/SellDivisionModal";
 
 interface IProps {
   rerender: () => void;
 }
+
 export function Overview({ rerender }: IProps): React.ReactElement {
   const corp = useCorporation();
   const profit: number = corp.revenue - corp.expenses;
@@ -40,7 +44,7 @@ export function Overview({ rerender }: IProps): React.ReactElement {
   const multRows: string[][] = [];
   function appendMult(name: string, value: number): void {
     if (value === 1) return;
-    multRows.push([name, numeralWrapper.format(value, "0.000")]);
+    multRows.push([name, formatCorpStat(value)]);
   }
   appendMult("Production Multiplier: ", corp.getProductionMultiplier());
   appendMult("Storage Multiplier: ", corp.getStorageMultiplier());
@@ -61,7 +65,7 @@ export function Overview({ rerender }: IProps): React.ReactElement {
           ["Total Expenses:", <MoneyRate money={corp.expenses} />],
           ["Total Profit:", <MoneyRate money={corp.revenue - corp.expenses} />],
           ["Publicly Traded:", corp.public ? "Yes" : "No"],
-          ["Owned Stock Shares:", numeralWrapper.format(corp.numShares, "0.000a")],
+          ["Owned Stock Shares:", formatShares(corp.numShares)],
           ["Stock Price:", corp.public ? <Money money={corp.sharePrice} /> : "N/A"],
         ]}
       />
@@ -71,16 +75,13 @@ export function Overview({ rerender }: IProps): React.ReactElement {
           title={
             <StatsTable
               rows={[
-                ["Outstanding Shares:", numeralWrapper.format(corp.issuedShares, "0.000a")],
-                [
-                  "Private Shares:",
-                  numeralWrapper.format(corp.totalShares - corp.issuedShares - corp.numShares, "0.000a"),
-                ],
+                ["Outstanding Shares:", formatShares(corp.issuedShares)],
+                ["Private Shares:", formatShares(corp.totalShares - corp.issuedShares - corp.numShares)],
               ]}
             />
           }
         >
-          <Typography>Total Stock Shares: {numeralWrapper.format(corp.totalShares, "0.000a")}</Typography>
+          <Typography>Total Stock Shares: {formatShares(corp.totalShares)}</Typography>
         </Tooltip>
       </Box>
       <br />
@@ -103,6 +104,8 @@ export function Overview({ rerender }: IProps): React.ReactElement {
         </Tooltip>
         {corp.public ? <PublicButtons rerender={rerender} /> : <PrivateButtons rerender={rerender} />}
         <BribeButton />
+        {corp.divisions.length != 0 ? <SellDivisionButton /> : <></>}
+        <RestartButton />
       </Box>
       <br />
       <Upgrades rerender={rerender} />
@@ -158,25 +161,40 @@ function Upgrades({ rerender }: IUpgradeProps): React.ReactElement {
     return <Typography variant="h4">Upgrades are unlocked once you create an industry.</Typography>;
   }
 
+  const [purchaseMultiplier, setPurchaseMultiplier] = useState<number | "MAX">(corpConstants.PurchaseMultipliers.x1);
+
+  // onClick event handlers for purchase multiplier buttons
+  const purchaseMultiplierOnClicks = [
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.x1),
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.x5),
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.x10),
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.x50),
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.x100),
+    () => setPurchaseMultiplier(corpConstants.PurchaseMultipliers.MAX),
+  ];
+
   return (
     <>
       <Paper sx={{ p: 1, my: 1 }}>
         <Typography variant="h4">Unlocks</Typography>
         <Grid container>
-          {Object.values(CorporationUnlockUpgrades)
-            .filter((upgrade: CorporationUnlockUpgrade) => !corp.unlockUpgrades[upgrade.index])
-            .map((upgrade: CorporationUnlockUpgrade) => (
-              <UnlockUpgrade rerender={rerender} upgradeData={upgrade} key={upgrade.index} />
-            ))}
+          {Object.values(CorporationUnlockUpgrades).map((upgrade: CorporationUnlockUpgrade) => (
+            <UnlockUpgrade rerender={rerender} upgradeData={upgrade} key={upgrade.index} />
+          ))}
         </Grid>
       </Paper>
       <Paper sx={{ p: 1, my: 1 }}>
         <Typography variant="h4">Upgrades</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={6}>
+            <MultiplierButtons onClicks={purchaseMultiplierOnClicks} purchaseMultiplier={purchaseMultiplier} />
+          </Grid>
+        </Grid>
         <Grid container>
           {corp.upgrades
             .map((level: number, i: number) => CorporationUpgrades[i as CorporationUpgradeIndex])
             .map((upgrade: CorporationUpgrade) => (
-              <LevelableUpgrade rerender={rerender} upgrade={upgrade} key={upgrade.index} />
+              <LevelableUpgrade rerender={rerender} upgrade={upgrade} key={upgrade.index} amount={purchaseMultiplier} />
             ))}
         </Grid>
       </Paper>
@@ -268,6 +286,39 @@ function BribeButton(): React.ReactElement {
   );
 }
 
+function SellDivisionButton(): React.ReactElement {
+  const [open, setOpen] = useState(false);
+
+  function sellDiv(): void {
+    setOpen(true);
+  }
+  return (
+    <>
+      <Tooltip title={"Sell a division to make room for other divisions"}>
+        <Button onClick={sellDiv}>Sell division</Button>
+      </Tooltip>
+      <SellDivisionModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function RestartButton(): React.ReactElement {
+  const [open, setOpen] = useState(false);
+
+  function restart(): void {
+    setOpen(true);
+  }
+
+  return (
+    <>
+      <Tooltip title={"Sell corporation and start over"}>
+        <Button onClick={restart}>Sell CEO position</Button>
+      </Tooltip>
+      <SellCorporationModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
 interface IDividendsStatsProps {
   profit: number;
 }
@@ -282,7 +333,7 @@ function DividendsStats({ profit }: IDividendsStatsProps): React.ReactElement {
     <StatsTable
       rows={[
         ["Retained Profits (after dividends):", <MoneyRate money={retainedEarnings} />],
-        ["Dividend Percentage:", numeralWrapper.format(corp.dividendRate, "0%")],
+        ["Dividend Percentage:", formatPercent(corp.dividendRate, 0)],
         ["Dividends per share:", <MoneyRate money={dividendsPerShare} />],
         ["Your earnings as a shareholder:", <MoneyRate money={playerEarnings} />],
       ]}

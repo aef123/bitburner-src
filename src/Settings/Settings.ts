@@ -78,13 +78,30 @@ export const Settings = {
   PurchaseAugmentationsOrder: PurchaseAugmentationsOrderSetting.Default,
   /** Script editor theme. */
   MonacoTheme: "monokai",
-  MonacoInsertSpaces: false,
+  /** Whether to use spaces instead of tabs for indentation */
+  MonacoInsertSpaces: true,
+  /** Size of indentation */
+  MonacoTabSize: 2,
+  /** Whether to auto detect indentation settings per-file based on contents */
+  MonacoDetectIndentation: false,
+  /** Font Family for script editor. */
+  MonacoFontFamily: "Lucida Console",
   /** Text size for script editor. */
   MonacoFontSize: 20,
+  /** Whether to use font ligatures */
+  MonacoFontLigatures: false,
   /** Whether to use Vim mod by default in the script editor */
   MonacoVim: false,
   /** Word wrap setting for Script Editor. */
   MonacoWordWrap: "off" as WordWrapOptions,
+  /** Whether to hide trailing zeroes on fractional part of decimal */
+  hideTrailingDecimalZeros: false,
+  /** Whether to hide thousands separators. */
+  hideThousandsSeparator: false,
+  /** Whether to use engineering notation instead of scientific for exponentials. */
+  useEngineeringNotation: false,
+  /** Whether to disable suffixes and always use exponential form (scientific or engineering). */
+  disableSuffixes: false,
 
   load(saveString: string) {
     const save = JSON.parse(saveString);

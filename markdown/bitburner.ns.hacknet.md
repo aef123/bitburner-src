@@ -4,9 +4,9 @@
 
 ## NS.hacknet property
 
-Namespace for hacknet functions.
+Namespace for hacknet functions. Some of this API contains spoilers.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 readonly hacknet: Hacknet;

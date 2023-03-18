@@ -14,6 +14,7 @@ import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import { CityName } from "../../../Enums";
+import { useRerender } from "../../../ui/React/hooks";
 
 interface IProps {
   open: boolean;
@@ -32,11 +33,7 @@ export function ExportModal(props: IProps): React.ReactElement {
   const [industry, setIndustry] = useState<string>(defaultDivision.name);
   const [city, setCity] = useState(Object.keys(defaultDivision.warehouses)[0] as CityName);
   const [amt, setAmt] = useState("");
-  const setRerender = useState(false)[1];
-
-  function rerender(): void {
-    setRerender((old) => !old);
-  }
+  const rerender = useRerender();
 
   function onCityChange(event: SelectChangeEvent<string>): void {
     setCity(event.target.value as CityName);
@@ -85,7 +82,25 @@ export function ExportModal(props: IProps): React.ReactElement {
     <Modal open={props.open} onClose={props.onClose}>
       <Typography>
         Select the industry and city to export this material to, as well as how much of this material to export per
-        second. You can set the export amount to 'MAX' to export all of the materials in this warehouse.
+        second.
+        <br />
+        <br />
+        You can use 'MAX', 'EINV', 'IINV', 'EPROD' or 'IPROD' in the amount for:
+        <br />
+        - 'MAX' to export maximum amount possible.
+        <br />
+        - 'EINV' export city's inventory of the material.
+        <br />
+        - 'IINV' import city's inventory of the material.
+        <br />
+        - 'EPROD' export city's per second production of the material
+        <br />
+        - 'IPROD' import city's per second production of the material
+        <br />
+        Note: Consumption is negative production.
+        <br />
+        <br />
+        For example: setting the amount "(EINV-20)/10" would try to export all except 20 of the material.
       </Typography>
       <Select onChange={onIndustryChange} value={industry}>
         {corp.divisions

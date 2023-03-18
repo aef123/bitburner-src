@@ -6,20 +6,20 @@
 
 Attempt to write to a port.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-tryWritePort(port: number, data: string | number): boolean;
+tryWritePort(portNumber: number, data: string | number): boolean;
 ```
 
 ## Parameters
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  port | number | Port or text file that will be written to. |
+|  portNumber | number | Port or text file that will be written to. |
 |  data | string \| number | Data to write. |
 
-<b>Returns:</b>
+**Returns:**
 
 boolean
 

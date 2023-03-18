@@ -22,7 +22,7 @@ import { Page } from "../ui/Router";
 import { Locations } from "../Locations/Locations";
 import { GetServer } from "../Server/AllServers";
 import { Programs } from "../Programs/Programs";
-import { numeralWrapper } from "../ui/numeralFormat";
+import { formatMoney, formatRam, formatReputation } from "../ui/formatNumber";
 import { BitNodeMultipliers } from "../BitNode/BitNodeMultipliers";
 import { Company } from "../Company/Company";
 import { Companies } from "../Company/Companies";
@@ -49,6 +49,8 @@ import { canGetBonus, onExport } from "../ExportBonus";
 import { saveObject } from "../SaveObject";
 import { calculateCrimeWorkStats } from "../Work/Formulas";
 import { findEnumMember } from "../utils/helpers/enum";
+import { areFilesEqual } from "../Terminal/DirectoryHelpers";
+import { Engine } from "../engine";
 
 export function NetscriptSingularity(): InternalAPI<ISingularity> {
   const getAugmentation = function (ctx: NetscriptContext, name: string): Augmentation {
@@ -77,18 +79,17 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
     //Run a script after reset
     if (!cbScript) return;
     const home = Player.getHomeComputer();
-    for (const script of home.scripts) {
-      if (script.filename === cbScript) {
-        const ramUsage = script.ramUsage;
-        const ramAvailable = home.maxRam - home.ramUsed;
-        if (ramUsage > ramAvailable + 0.001) {
-          return; // Not enough RAM
-        }
-        const runningScriptObj = new RunningScript(script, []); // No args
-        runningScriptObj.threads = 1; // Only 1 thread
-        startWorkerScript(runningScriptObj, home);
-      }
+    const script = home.scripts.find((serverScript) => areFilesEqual(serverScript.filename, cbScript));
+    if (!script) return;
+    const ramUsage = script.getRamUsage(home.scripts);
+    if (!ramUsage) {
+      return Terminal.error(`Attempted to launch ${cbScript} after reset but could not calculate ram usage.`);
     }
+    const ramAvailable = home.maxRam - home.ramUsed;
+    if (ramUsage > ramAvailable + 0.001) return;
+    // Start script with no args and 1 thread (default).
+    const runningScriptObj = new RunningScript(script, ramUsage, []);
+    startWorkerScript(runningScriptObj, home);
   };
 
   const singularityAPI: InternalAPI<ISingularity> = {
@@ -458,10 +459,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
       }
 
       if (Player.money < item.price) {
-        helpers.log(
-          ctx,
-          () => `Not enough money to purchase '${item.program}'. Need ${numeralWrapper.formatMoney(item.price)}`,
-        );
+        helpers.log(ctx, () => `Not enough money to purchase '${item.program}'. Need ${formatMoney(item.price)}`);
         return false;
       }
 
@@ -564,13 +562,14 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
 
       return helpers.netscriptDelay(ctx, installTime).then(function () {
         helpers.log(ctx, () => `Successfully installed backdoor on '${server.hostname}'`);
-
         server.backdoorInstalled = true;
 
         if (SpecialServers.WorldDaemon === server.hostname) {
-          Router.toBitVerse(false, false);
+          return Router.toBitVerse(false, false);
         }
-        return Promise.resolve();
+        // Manunally check for faction invites
+        Engine.Counters.checkFactionInvitations = 0;
+        Engine.checkCounters();
       });
     },
     isFocused: (ctx) => () => {
@@ -625,7 +624,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
 
       const cost = Player.getUpgradeHomeCoresCost();
       if (Player.money < cost) {
-        helpers.log(ctx, () => `You don't have enough money. Need ${numeralWrapper.formatMoney(cost)}`);
+        helpers.log(ctx, () => `You don't have enough money. Need ${formatMoney(cost)}`);
         return false;
       }
 
@@ -656,7 +655,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
 
       const cost = Player.getUpgradeHomeRamCost();
       if (Player.money < cost) {
-        helpers.log(ctx, () => `You don't have enough money. Need ${numeralWrapper.formatMoney(cost)}`);
+        helpers.log(ctx, () => `You don't have enough money. Need ${formatMoney(cost)}`);
         return false;
       }
 
@@ -666,10 +665,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
       Player.gainIntelligenceExp(CONSTANTS.IntelligenceSingFnBaseExpGain * 2);
       helpers.log(
         ctx,
-        () =>
-          `Purchased additional RAM for home computer! It now has ${numeralWrapper.formatRAM(
-            homeComputer.maxRam,
-          )} of RAM.`,
+        () => `Purchased additional RAM for home computer! It now has ${formatRam(homeComputer.maxRam)} of RAM.`,
       );
       return true;
     },
@@ -816,6 +812,9 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
     },
     checkFactionInvitations: (ctx) => () => {
       helpers.checkSingularityAccess(ctx);
+      // Manually trigger a check for faction invites
+      Engine.Counters.checkFactionInvitations = 0;
+      Engine.checkCounters();
       // Make a copy of player.factionInvitations
       return Player.factionInvitations.slice();
     },
@@ -979,10 +978,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
         return false;
       }
       if (Player.money < amt) {
-        helpers.log(
-          ctx,
-          () => `You do not have enough money to donate ${numeralWrapper.formatMoney(amt)} to '${facName}'`,
-        );
+        helpers.log(ctx, () => `You do not have enough money to donate ${formatMoney(amt)} to '${facName}'`);
         return false;
       }
       const repNeededToDonate = Math.floor(CONSTANTS.BaseFavorToDonate * BitNodeMultipliers.RepToDonateToFaction);
@@ -997,13 +993,7 @@ export function NetscriptSingularity(): InternalAPI<ISingularity> {
       const repGain = (amt / CONSTANTS.DonateMoneyToRepDivisor) * Player.mults.faction_rep;
       faction.playerReputation += repGain;
       Player.loseMoney(amt, "other");
-      helpers.log(
-        ctx,
-        () =>
-          `${numeralWrapper.formatMoney(amt)} donated to '${facName}' for ${numeralWrapper.formatReputation(
-            repGain,
-          )} reputation`,
-      );
+      helpers.log(ctx, () => `${formatMoney(amt)} donated to '${facName}' for ${formatReputation(repGain)} reputation`);
       return true;
     },
     createProgram:

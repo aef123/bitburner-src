@@ -36,15 +36,24 @@ import {
 } from "./Server/ServerPurchases";
 import { Server } from "./Server/Server";
 import { influenceStockThroughServerGrow } from "./StockMarket/PlayerInfluencing";
-import { isValidFilePath, removeLeadingSlash } from "./Terminal/DirectoryHelpers";
+import { areFilesEqual, isValidFilePath, removeLeadingSlash } from "./Terminal/DirectoryHelpers";
 import { TextFile, getTextFile, createTextFile } from "./TextFile";
 import { runScriptFromScript } from "./NetscriptWorker";
 import { killWorkerScript } from "./Netscript/killWorkerScript";
 import { workerScripts } from "./Netscript/WorkerScripts";
 import { WorkerScript } from "./Netscript/WorkerScript";
 import { helpers, assertObjectType } from "./Netscript/NetscriptHelpers";
-import { numeralWrapper } from "./ui/numeralFormat";
-import { convertTimeMsToTimeElapsedString, formatNumber } from "./utils/StringHelperFunctions";
+import {
+  formatExp,
+  formatNumberNoSuffix,
+  formatMoney,
+  formatPercent,
+  formatRam,
+  formatSecurity,
+  formatThreads,
+  formatNumber,
+} from "./ui/formatNumber";
+import { convertTimeMsToTimeElapsedString } from "./utils/StringHelperFunctions";
 import { LogBoxEvents, LogBoxCloserEvents, LogBoxPositionEvents, LogBoxSizeEvents } from "./ui/React/LogBoxManager";
 import { arrayToString } from "./utils/helpers/arrayToString";
 import { isString } from "./utils/helpers/isString";
@@ -80,6 +89,8 @@ import { assert, arrayAssert, stringAssert, objectAssert } from "./utils/helpers
 import { CityName, JobName, CrimeType, GymType, LocationName, UniversityClassType } from "./Enums";
 import { cloneDeep } from "lodash";
 import { FactionWorkType } from "./Enums";
+import numeral from "numeral";
+import { clearPort, peekPort, portHandle, readPort, tryWritePort, writePort } from "./NetscriptPort";
 
 export const enums: NSEnums = {
   CityName,
@@ -134,7 +145,7 @@ export const ns: InternalAPI<NSFull> = {
       // TODO 2.2: better type safety rework for functions using assertObjectType, then remove function.
       const optsValidator: BasicHGWOptions = {};
       assertObjectType(ctx, "opts", opts, optsValidator);
-      return helpers.hack(ctx, hostname, false, { threads: opts.threads, stock: opts.stock });
+      return helpers.hack(ctx, hostname, false, opts);
     },
   hackAnalyzeThreads: (ctx) => (_hostname, _hackAmount) => {
     const hostname = helpers.string(ctx, "hostname", _hostname);
@@ -165,7 +176,7 @@ export const ns: InternalAPI<NSFull> = {
       return 0; // To prevent returning infinity below
     }
 
-    return hackAmount / Math.floor(server.moneyAvailable * percentHacked);
+    return (hackAmount / server.moneyAvailable) * percentHacked;
   },
   hackAnalyze: (ctx) => (_hostname) => {
     const hostname = helpers.string(ctx, "hostname", _hostname);
@@ -231,11 +242,11 @@ export const ns: InternalAPI<NSFull> = {
       const hostname = helpers.string(ctx, "hostname", _hostname);
       const optsValidator: BasicHGWOptions = {};
       assertObjectType(ctx, "opts", opts, optsValidator);
-      const requestedThreads =
-        opts.threads === undefined
-          ? ctx.workerScript.scriptRef.threads
-          : helpers.number(ctx, "opts.threads", opts.threads);
-      const threads = helpers.resolveNetscriptRequestedThreads(ctx, requestedThreads);
+      const threads = helpers.resolveNetscriptRequestedThreads(ctx, opts.threads);
+      const additionalMsec = helpers.number(ctx, "opts.additionalMsec", opts.additionalMsec ?? 0);
+      if (additionalMsec < 0) {
+        throw helpers.makeRuntimeErrorMsg(ctx, `additionalMsec must be non-negative, got ${additionalMsec}`);
+      }
 
       const server = helpers.getServer(ctx, hostname);
       if (!(server instanceof Server)) {
@@ -254,14 +265,14 @@ export const ns: InternalAPI<NSFull> = {
         throw helpers.makeRuntimeErrorMsg(ctx, canHack.msg || "");
       }
 
-      const growTime = calculateGrowTime(server, Player);
+      const growTime = calculateGrowTime(server, Player) + additionalMsec / 1000.0;
       helpers.log(
         ctx,
         () =>
           `Executing on '${server.hostname}' in ${convertTimeMsToTimeElapsedString(
             growTime * 1000,
             true,
-          )} (t=${numeralWrapper.formatThreads(threads)}).`,
+          )} (t=${formatThreads(threads)}).`,
       );
       return helpers.netscriptDelay(ctx, growTime * 1000).then(function () {
         const moneyBefore = server.moneyAvailable <= 0 ? 1 : server.moneyAvailable;
@@ -273,10 +284,9 @@ export const ns: InternalAPI<NSFull> = {
         helpers.log(
           ctx,
           () =>
-            `Available money on '${server.hostname}' grown by ${numeralWrapper.formatPercentage(
-              logGrowPercent,
-              6,
-            )}. Gained ${numeralWrapper.formatExp(expGain)} hacking exp (t=${numeralWrapper.formatThreads(threads)}).`,
+            `Available money on '${server.hostname}' grown by ${formatPercent(logGrowPercent, 6)}. Gained ${formatExp(
+              expGain,
+            )} hacking exp (t=${formatThreads(threads)}).`,
         );
         ctx.workerScript.scriptRef.onlineExpGained += expGain;
         Player.gainHackingExp(expGain);
@@ -288,22 +298,27 @@ export const ns: InternalAPI<NSFull> = {
     },
   growthAnalyze:
     (ctx) =>
-    (_hostname, _growth, _cores = 1) => {
-      const hostname = helpers.string(ctx, "hostname", _hostname);
-      const growth = helpers.number(ctx, "growth", _growth);
+    (_host, _multiplier, _cores = 1) => {
+      const host = helpers.string(ctx, "hostname", _host);
+      const mult = helpers.number(ctx, "multiplier", _multiplier);
       const cores = helpers.number(ctx, "cores", _cores);
 
       // Check argument validity
-      const server = helpers.getServer(ctx, hostname);
+      const server = helpers.getServer(ctx, host);
       if (!(server instanceof Server)) {
-        helpers.log(ctx, () => "Cannot be executed on this server.");
+        // Todo 2.3: Make this throw instead of returning 0?
+        helpers.log(ctx, () => `${host} is not a hackable server. Returning 0.`);
         return 0;
       }
-      if (typeof growth !== "number" || isNaN(growth) || growth < 1 || !isFinite(growth)) {
-        throw helpers.makeRuntimeErrorMsg(ctx, `Invalid argument: growth must be numeric and >= 1, is ${growth}.`);
+      if (mult < 1 || !isFinite(mult)) {
+        throw helpers.makeRuntimeErrorMsg(ctx, `Invalid argument: multiplier must be finite and >= 1, is ${mult}.`);
+      }
+      // TODO 2.3: Add assertion function for positive integer, there are a lot of places everywhere that can use this
+      if (!Number.isInteger(cores) || cores < 1) {
+        throw helpers.makeRuntimeErrorMsg(ctx, `Cores should be a positive integer. Cores provided: ${cores}`);
       }
 
-      return numCycleForGrowth(server, Number(growth), cores);
+      return numCycleForGrowth(server, mult, cores);
     },
   growthAnalyzeSecurity:
     (ctx) =>
@@ -334,11 +349,11 @@ export const ns: InternalAPI<NSFull> = {
       const hostname = helpers.string(ctx, "hostname", _hostname);
       const optsValidator: BasicHGWOptions = {};
       assertObjectType(ctx, "opts", opts, optsValidator);
-      const requestedThreads =
-        opts.threads === undefined
-          ? ctx.workerScript.scriptRef.threads
-          : helpers.number(ctx, "opts.threads", opts.threads);
-      const threads = helpers.resolveNetscriptRequestedThreads(ctx, requestedThreads);
+      const threads = helpers.resolveNetscriptRequestedThreads(ctx, opts.threads);
+      const additionalMsec = helpers.number(ctx, "opts.additionalMsec", opts.additionalMsec ?? 0);
+      if (additionalMsec < 0) {
+        throw helpers.makeRuntimeErrorMsg(ctx, `additionalMsec must be non-negative, got ${additionalMsec}`);
+      }
 
       const server = helpers.getServer(ctx, hostname);
       if (!(server instanceof Server)) {
@@ -352,14 +367,14 @@ export const ns: InternalAPI<NSFull> = {
         throw helpers.makeRuntimeErrorMsg(ctx, canHack.msg || "");
       }
 
-      const weakenTime = calculateWeakenTime(server, Player);
+      const weakenTime = calculateWeakenTime(server, Player) + additionalMsec / 1000.0;
       helpers.log(
         ctx,
         () =>
           `Executing on '${server.hostname}' in ${convertTimeMsToTimeElapsedString(
             weakenTime * 1000,
             true,
-          )} (t=${numeralWrapper.formatThreads(threads)})`,
+          )} (t=${formatThreads(threads)})`,
       );
       return helpers.netscriptDelay(ctx, weakenTime * 1000).then(function () {
         const host = GetServer(ctx.workerScript.hostname);
@@ -374,9 +389,9 @@ export const ns: InternalAPI<NSFull> = {
         helpers.log(
           ctx,
           () =>
-            `'${server.hostname}' security level weakened to ${
-              server.hackDifficulty
-            }. Gained ${numeralWrapper.formatExp(expGain)} hacking exp (t=${numeralWrapper.formatThreads(threads)})`,
+            `'${server.hostname}' security level weakened to ${server.hackDifficulty}. Gained ${formatExp(
+              expGain,
+            )} hacking exp (t=${formatThreads(threads)})`,
         );
         ctx.workerScript.scriptRef.onlineExpGained += expGain;
         Player.gainHackingExp(expGain);
@@ -675,11 +690,8 @@ export const ns: InternalAPI<NSFull> = {
     (ctx) =>
     (_scriptname, _threads = 1, ..._args) => {
       const scriptname = helpers.string(ctx, "scriptname", _scriptname);
-      const threads = helpers.number(ctx, "threads", _threads);
+      const threads = helpers.positiveInteger(ctx, "threads", _threads);
       const args = helpers.scriptArgs(ctx, _args);
-      if (isNaN(threads) || threads <= 0) {
-        throw helpers.makeRuntimeErrorMsg(ctx, `Invalid thread count. Must be numeric and > 0, is ${threads}`);
-      }
       const scriptServer = GetServer(ctx.workerScript.hostname);
       if (scriptServer == null) {
         throw helpers.makeRuntimeErrorMsg(ctx, "Could not find server. This is a bug. Report to dev.");
@@ -692,11 +704,8 @@ export const ns: InternalAPI<NSFull> = {
     (_scriptname, _hostname, _threads = 1, ..._args) => {
       const scriptname = helpers.string(ctx, "scriptname", _scriptname);
       const hostname = helpers.string(ctx, "hostname", _hostname);
-      const threads = helpers.number(ctx, "threads", _threads);
+      const threads = helpers.positiveInteger(ctx, "threads", _threads);
       const args = helpers.scriptArgs(ctx, _args);
-      if (isNaN(threads) || threads <= 0) {
-        throw helpers.makeRuntimeErrorMsg(ctx, `Invalid thread count. Must be numeric and > 0, is ${threads}`);
-      }
       const server = helpers.getServer(ctx, hostname);
       return runScriptFromScript("exec", server, scriptname, args, ctx.workerScript, threads);
     },
@@ -704,17 +713,10 @@ export const ns: InternalAPI<NSFull> = {
     (ctx) =>
     (_scriptname, _threads = 1, ..._args) => {
       const scriptname = helpers.string(ctx, "scriptname", _scriptname);
-      const threads = helpers.number(ctx, "threads", _threads);
+      const threads = helpers.positiveInteger(ctx, "threads", _threads);
       const args = helpers.scriptArgs(ctx, _args);
-      if (!scriptname || !threads) {
-        throw helpers.makeRuntimeErrorMsg(ctx, "Usage: spawn(scriptname, threads)");
-      }
-
       const spawnDelay = 10;
       setTimeout(() => {
-        if (isNaN(threads) || threads <= 0) {
-          throw helpers.makeRuntimeErrorMsg(ctx, `Invalid thread count. Must be numeric and > 0, is ${threads}`);
-        }
         const scriptServer = GetServer(ctx.workerScript.hostname);
         if (scriptServer == null) {
           throw helpers.makeRuntimeErrorMsg(ctx, "Could not find server. This is a bug. Report to dev");
@@ -731,7 +733,7 @@ export const ns: InternalAPI<NSFull> = {
     },
   kill:
     (ctx) =>
-    (scriptID, hostname?, ...scriptArgs) => {
+    (scriptID, hostname = ctx.workerScript.hostname, ...scriptArgs) => {
       const ident = helpers.scriptIdentifier(ctx, scriptID, hostname, scriptArgs);
       let res;
       const killByPid = typeof ident === "number";
@@ -740,7 +742,7 @@ export const ns: InternalAPI<NSFull> = {
         res = killWorkerScript(ident);
       } else {
         // Kill by filename/hostname
-        if (scriptID === undefined || hostname === undefined) {
+        if (scriptID === undefined) {
           throw helpers.makeRuntimeErrorMsg(ctx, "Usage: kill(scriptname, server, [arg1], [arg2]...)");
         }
 
@@ -826,7 +828,10 @@ export const ns: InternalAPI<NSFull> = {
 
       let noFailures = true;
       //ts detects files as any[] here even though we would have thrown in the above loop if it wasn't string[]
-      for (const file of files as string[]) {
+      for (let file of files as string[]) {
+        // cut off the leading / for files in the root of the server; this assumes that the filename is somewhat normalized and doesn't look like `//file.js`
+        if (file.startsWith("/") && file.indexOf("/", 1) === -1) file = file.slice(1);
+
         // Scp for lit files
         if (file.endsWith(".lit")) {
           const sourceMessage = sourceServ.messages.find((message) => message === file);
@@ -885,7 +890,8 @@ export const ns: InternalAPI<NSFull> = {
             continue;
           }
           destScript.code = sourceScript.code;
-          destScript.ramUsage = sourceScript.ramUsage;
+          // Set ramUsage to null in order to force a recalculation prior to next run.
+          destScript.ramUsage = null;
           destScript.markUpdated();
           helpers.log(ctx, () => `WARNING: File '${file}' overwritten on '${destServer?.hostname}'`);
           continue;
@@ -894,83 +900,31 @@ export const ns: InternalAPI<NSFull> = {
         // Create new script if it does not already exist
         const newScript = new Script(file);
         newScript.code = sourceScript.code;
-        newScript.ramUsage = sourceScript.ramUsage;
+        // Set ramUsage to null in order to force a recalculation prior to next run.
+        newScript.ramUsage = null;
         newScript.server = destServer.hostname;
         destServer.scripts.push(newScript);
         helpers.log(ctx, () => `File '${file}' copied over to '${destServer?.hostname}'.`);
-        newScript.updateRamUsage(destServer.scripts);
       }
 
       return noFailures;
     },
-  ls:
-    (ctx) =>
-    (_hostname, _grep = ""): string[] => {
-      const hostname = helpers.string(ctx, "hostname", _hostname);
-      const grep = helpers.string(ctx, "grep", _grep);
+  ls: (ctx) => (_hostname, _substring) => {
+    const hostname = helpers.string(ctx, "hostname", _hostname);
+    const substring = helpers.string(ctx, "substring", _substring ?? "");
+    const server = helpers.getServer(ctx, hostname);
 
-      const server = helpers.getServer(ctx, hostname);
+    const allFilenames = [
+      ...server.contracts.map((contract) => contract.fn),
+      ...server.messages,
+      ...server.programs,
+      ...server.scripts.map((script) => script.filename),
+      ...server.textFiles.map((textFile) => textFile.filename),
+    ];
 
-      // Get the grep filter, if one exists
-      let filter = "";
-      if (_grep !== undefined) {
-        filter = grep.toString();
-      }
-
-      const allFiles = [];
-      for (let i = 0; i < server.programs.length; i++) {
-        if (filter) {
-          if (server.programs[i].includes(filter)) {
-            allFiles.push(server.programs[i]);
-          }
-        } else {
-          allFiles.push(server.programs[i]);
-        }
-      }
-      for (let i = 0; i < server.scripts.length; i++) {
-        if (filter) {
-          if (server.scripts[i].filename.includes(filter)) {
-            allFiles.push(server.scripts[i].filename);
-          }
-        } else {
-          allFiles.push(server.scripts[i].filename);
-        }
-      }
-      for (let i = 0; i < server.messages.length; i++) {
-        if (filter) {
-          const msg = server.messages[i];
-          if (msg.includes(filter)) {
-            allFiles.push(msg);
-          }
-        } else {
-          allFiles.push(server.messages[i]);
-        }
-      }
-
-      for (let i = 0; i < server.textFiles.length; i++) {
-        if (filter) {
-          if (server.textFiles[i].fn.includes(filter)) {
-            allFiles.push(server.textFiles[i].fn);
-          }
-        } else {
-          allFiles.push(server.textFiles[i].fn);
-        }
-      }
-
-      for (let i = 0; i < server.contracts.length; ++i) {
-        if (filter) {
-          if (server.contracts[i].fn.includes(filter)) {
-            allFiles.push(server.contracts[i].fn);
-          }
-        } else {
-          allFiles.push(server.contracts[i].fn);
-        }
-      }
-
-      // Sort the files alphabetically then print each
-      allFiles.sort();
-      return allFiles;
-    },
+    if (!substring) return allFilenames.sort();
+    return allFilenames.filter((filename) => filename.includes(substring)).sort();
+  },
   getRecentScripts: () => (): RecentScript[] => {
     return recentScripts.map((rs) => ({
       timeOfDeath: rs.timeOfDeath,
@@ -1070,10 +1024,10 @@ export const ns: InternalAPI<NSFull> = {
     }
     if (server.hostname == "home") {
       // Return player's money
-      helpers.log(ctx, () => `returned player's money: ${numeralWrapper.formatMoney(Player.money)}`);
+      helpers.log(ctx, () => `returned player's money: ${formatMoney(Player.money)}`);
       return Player.money;
     }
-    helpers.log(ctx, () => `returned ${numeralWrapper.formatMoney(server.moneyAvailable)} for '${server.hostname}'`);
+    helpers.log(ctx, () => `returned ${formatMoney(server.moneyAvailable)} for '${server.hostname}'`);
     return server.moneyAvailable;
   },
   getServerSecurityLevel: (ctx) => (_hostname) => {
@@ -1086,10 +1040,7 @@ export const ns: InternalAPI<NSFull> = {
     if (helpers.failOnHacknetServer(ctx, server)) {
       return 1;
     }
-    helpers.log(
-      ctx,
-      () => `returned ${numeralWrapper.formatServerSecurity(server.hackDifficulty)} for '${server.hostname}'`,
-    );
+    helpers.log(ctx, () => `returned ${formatSecurity(server.hackDifficulty)} for '${server.hostname}'`);
     return server.hackDifficulty;
   },
   getServerBaseSecurityLevel: (ctx) => (_hostname) => {
@@ -1103,10 +1054,7 @@ export const ns: InternalAPI<NSFull> = {
     if (helpers.failOnHacknetServer(ctx, server)) {
       return 1;
     }
-    helpers.log(
-      ctx,
-      () => `returned ${numeralWrapper.formatServerSecurity(server.baseDifficulty)} for '${server.hostname}'`,
-    );
+    helpers.log(ctx, () => `returned ${formatSecurity(server.baseDifficulty)} for '${server.hostname}'`);
     return server.baseDifficulty;
   },
   getServerMinSecurityLevel: (ctx) => (_hostname) => {
@@ -1119,10 +1067,7 @@ export const ns: InternalAPI<NSFull> = {
     if (helpers.failOnHacknetServer(ctx, server)) {
       return 1;
     }
-    helpers.log(
-      ctx,
-      () => `returned ${numeralWrapper.formatServerSecurity(server.minDifficulty)} for ${server.hostname}`,
-    );
+    helpers.log(ctx, () => `returned ${formatSecurity(server.minDifficulty)} for ${server.hostname}`);
     return server.minDifficulty;
   },
   getServerRequiredHackingLevel: (ctx) => (_hostname) => {
@@ -1135,7 +1080,7 @@ export const ns: InternalAPI<NSFull> = {
     if (helpers.failOnHacknetServer(ctx, server)) {
       return 1;
     }
-    helpers.log(ctx, () => `returned ${formatNumber(server.requiredHackingSkill, 0)} for '${server.hostname}'`);
+    helpers.log(ctx, () => `returned ${formatNumberNoSuffix(server.requiredHackingSkill, 0)} for '${server.hostname}'`);
     return server.requiredHackingSkill;
   },
   getServerMaxMoney: (ctx) => (_hostname) => {
@@ -1148,7 +1093,7 @@ export const ns: InternalAPI<NSFull> = {
     if (helpers.failOnHacknetServer(ctx, server)) {
       return 0;
     }
-    helpers.log(ctx, () => `returned ${numeralWrapper.formatMoney(server.moneyMax)} for '${server.hostname}'`);
+    helpers.log(ctx, () => `returned ${formatMoney(server.moneyMax)} for '${server.hostname}'`);
     return server.moneyMax;
   },
   getServerGrowth: (ctx) => (_hostname) => {
@@ -1180,13 +1125,13 @@ export const ns: InternalAPI<NSFull> = {
   getServerMaxRam: (ctx) => (_hostname) => {
     const hostname = helpers.string(ctx, "hostname", _hostname);
     const server = helpers.getServer(ctx, hostname);
-    helpers.log(ctx, () => `returned ${numeralWrapper.formatRAM(server.maxRam)}`);
+    helpers.log(ctx, () => `returned ${formatRam(server.maxRam)}`);
     return server.maxRam;
   },
   getServerUsedRam: (ctx) => (_hostname) => {
     const hostname = helpers.string(ctx, "hostname", _hostname);
     const server = helpers.getServer(ctx, hostname);
-    helpers.log(ctx, () => `returned ${numeralWrapper.formatRAM(server.ramUsed)}`);
+    helpers.log(ctx, () => `returned ${formatRam(server.ramUsed)}`);
     return server.ramUsed;
   },
   serverExists: (ctx) => (_hostname) => {
@@ -1273,7 +1218,7 @@ export const ns: InternalAPI<NSFull> = {
     }
 
     if (Player.money < cost) {
-      helpers.log(ctx, () => `Not enough money to purchase server. Need ${numeralWrapper.formatMoney(cost)}`);
+      helpers.log(ctx, () => `Not enough money to purchase server. Need ${formatMoney(cost)}`);
       return "";
     }
     const newServ = safelyCreateUniqueServer({
@@ -1292,10 +1237,7 @@ export const ns: InternalAPI<NSFull> = {
     homeComputer.serversOnNetwork.push(newServ.hostname);
     newServ.serversOnNetwork.push(homeComputer.hostname);
     Player.loseMoney(cost, "servers");
-    helpers.log(
-      ctx,
-      () => `Purchased new server with hostname '${newServ.hostname}' for ${numeralWrapper.formatMoney(cost)}`,
-    );
+    helpers.log(ctx, () => `Purchased new server with hostname '${newServ.hostname}' for ${formatMoney(cost)}`);
     return newServ.hostname;
   },
 
@@ -1410,19 +1352,16 @@ export const ns: InternalAPI<NSFull> = {
     });
     return res;
   },
-  writePort:
-    (ctx) =>
-    (_port, data): string | number | null => {
-      const port = helpers.number(ctx, "port", _port);
-      if (typeof data !== "string" && typeof data !== "number") {
-        throw helpers.makeRuntimeErrorMsg(
-          ctx,
-          `Trying to write invalid data to a port: only strings and numbers are valid.`,
-        );
-      }
-      const iport = helpers.getValidPort(ctx, port);
-      return iport.write(data);
-    },
+  writePort: (ctx) => (_portNumber, data) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    if (typeof data !== "string" && typeof data !== "number") {
+      throw helpers.makeRuntimeErrorMsg(
+        ctx,
+        `Trying to write invalid data to a port: only strings and numbers are valid.`,
+      );
+    }
+    return writePort(portNumber, data);
+  },
   write:
     (ctx) =>
     (_filename, _data = "", _mode = "a") => {
@@ -1440,12 +1379,14 @@ export const ns: InternalAPI<NSFull> = {
         let script = ctx.workerScript.getScriptOnServer(fn, server);
         if (script == null) {
           // Create a new script
-          script = new Script(fn, String(data), server.hostname, server.scripts);
+          script = new Script(fn, String(data), server.hostname);
           server.scripts.push(script);
-          return script.updateRamUsage(server.scripts);
+          return;
         }
         mode === "w" ? (script.code = String(data)) : (script.code += data);
-        return script.updateRamUsage(server.scripts);
+        // Set ram to null so a recalc is performed the next time ram usage is needed
+        script.ramUsage = null;
+        return;
       } else {
         // Write to text file
         if (!fn.endsWith(".txt")) throw helpers.makeRuntimeErrorMsg(ctx, `Invalid filename: ${fn}`);
@@ -1462,25 +1403,19 @@ export const ns: InternalAPI<NSFull> = {
       }
       return;
     },
-  tryWritePort:
-    (ctx) =>
-    (_port, data = "") => {
-      const port = helpers.number(ctx, "port", _port);
-      if (typeof data !== "string" && typeof data !== "number") {
-        throw helpers.makeRuntimeErrorMsg(
-          ctx,
-          `Trying to write invalid data to a port: only strings and numbers are valid.`,
-        );
-      }
-      const iport = helpers.getValidPort(ctx, port);
-      return iport.tryWrite(data);
-    },
-  readPort: (ctx) => (_port) => {
-    const port = helpers.number(ctx, "port", _port);
-    // Read from port
-    const iport = helpers.getValidPort(ctx, port);
-    const x = iport.read();
-    return x;
+  tryWritePort: (ctx) => (_portNumber, data) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    if (typeof data !== "string" && typeof data !== "number") {
+      throw helpers.makeRuntimeErrorMsg(
+        ctx,
+        `Trying to write invalid data to a port: only strings and numbers are valid.`,
+      );
+    }
+    return tryWritePort(portNumber, data);
+  },
+  readPort: (ctx) => (_portNumber) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    return readPort(portNumber);
   },
   read: (ctx) => (_filename) => {
     const fn = helpers.string(ctx, "filename", _filename);
@@ -1505,11 +1440,9 @@ export const ns: InternalAPI<NSFull> = {
       }
     }
   },
-  peek: (ctx) => (_port) => {
-    const port = helpers.number(ctx, "port", _port);
-    const iport = helpers.getValidPort(ctx, port);
-    const x = iport.peek();
-    return x;
+  peek: (ctx) => (_portNumber) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    return peekPort(portNumber);
   },
   clear: (ctx) => (_file) => {
     const file = helpers.string(ctx, "file", _file);
@@ -1528,16 +1461,13 @@ export const ns: InternalAPI<NSFull> = {
       throw helpers.makeRuntimeErrorMsg(ctx, `Invalid argument: ${file}`);
     }
   },
-  clearPort: (ctx) => (_port) => {
-    const port = helpers.number(ctx, "port", _port);
-    // Clear port
-    const iport = helpers.getValidPort(ctx, port);
-    iport.clear();
+  clearPort: (ctx) => (_portNumber) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    return clearPort(portNumber);
   },
-  getPortHandle: (ctx) => (_port) => {
-    const port = helpers.number(ctx, "port", _port);
-    const iport = helpers.getValidPort(ctx, port);
-    return iport;
+  getPortHandle: (ctx) => (_portNumber) => {
+    const portNumber = helpers.portNumber(ctx, _portNumber);
+    return portHandle(portNumber);
   },
   rm:
     (ctx) =>
@@ -1587,12 +1517,14 @@ export const ns: InternalAPI<NSFull> = {
       const scriptname = helpers.string(ctx, "scriptname", _scriptname);
       const hostname = helpers.string(ctx, "hostname", _hostname);
       const server = helpers.getServer(ctx, hostname);
-      for (let i = 0; i < server.scripts.length; ++i) {
-        if (server.scripts[i].filename == scriptname) {
-          return server.scripts[i].ramUsage;
-        }
+      const script = server.scripts.find((serverScript) => areFilesEqual(serverScript.filename, scriptname));
+      if (!script) return 0;
+      const ramUsage = script.getRamUsage(server.scripts);
+      if (!ramUsage) {
+        helpers.log(ctx, () => `Could not calculate ram usage for ${scriptname} on ${hostname}.`);
+        return 0;
       }
-      return 0;
+      return ramUsage;
     },
   getRunningScript:
     (ctx) =>
@@ -1685,14 +1617,34 @@ export const ns: InternalAPI<NSFull> = {
       }
       return runningScript.onlineExpGained / runningScript.onlineRunningTime;
     },
+  formatNumber:
+    (ctx) =>
+    (_n, _fractionalDigits = 3, _suffixStart = 1000, isInteger) => {
+      const n = helpers.number(ctx, "n", _n);
+      const fractionalDigits = helpers.number(ctx, "fractionalDigits", _fractionalDigits);
+      const suffixStart = helpers.number(ctx, "suffixStart", _suffixStart);
+      return formatNumber(n, fractionalDigits, suffixStart, !!isInteger);
+    },
+  formatRam:
+    (ctx) =>
+    (_n, _fractionalDigits = 2) => {
+      const n = helpers.number(ctx, "n", _n);
+      const fractionalDigits = helpers.number(ctx, "fractionalDigits", _fractionalDigits);
+      return formatRam(n, fractionalDigits);
+    },
+  formatPercent:
+    (ctx) =>
+    (_n, _fractionalDigits = 2, _multStart = 1e6) => {
+      const n = helpers.number(ctx, "n", _n);
+      const fractionalDigits = helpers.number(ctx, "fractionalDigits", _fractionalDigits);
+      const multStart = helpers.number(ctx, "multStart", _multStart);
+      return formatPercent(n, fractionalDigits, multStart);
+    },
+  // Todo: Remove function in 2.3. Until then it just directly wraps numeral.
   nFormat: (ctx) => (_n, _format) => {
     const n = helpers.number(ctx, "n", _n);
     const format = helpers.string(ctx, "format", _format);
-    if (isNaN(n)) {
-      return "";
-    }
-
-    return numeralWrapper.format(n, format);
+    return numeral(n).format(format);
   },
   tFormat: (ctx) => (_milliseconds, _milliPrecision) => {
     const milliseconds = helpers.number(ctx, "milliseconds", _milliseconds);

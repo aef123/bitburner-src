@@ -6,7 +6,7 @@
 
 Throw a party for your employees
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 throwParty(divisionName: string, city: CityName | `${CityName}`, costPerEmployee: number): number;
@@ -20,9 +20,9 @@ throwParty(divisionName: string, city: CityName | `${CityName}`, costPerEmployee
 |  city | [CityName](./bitburner.cityname.md) \| \`${[CityName](./bitburner.cityname.md)<!-- -->}\` | Name of the city |
 |  costPerEmployee | number | Amount to spend per employee. |
 
-<b>Returns:</b>
+**Returns:**
 
 number
 
-Multiplier for happiness and morale, or zero on failure
+Multiplier for morale, or zero on failure
 

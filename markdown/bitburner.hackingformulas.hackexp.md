@@ -6,7 +6,7 @@
 
 Calculate hack exp for one thread.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 hackExp(server: Server, player: Person): number;
@@ -16,10 +16,10 @@ hackExp(server: Server, player: Person): number;
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  server | [Server](./bitburner.server.md) | Server info from [getServer](./bitburner.ns.getserver.md) |
-|  player | [Person](./bitburner.person.md) | Player info from [getPlayer](./bitburner.ns.getplayer.md) |
+|  server | [Server](./bitburner.server.md) | Server info, typically from [getServer](./bitburner.ns.getserver.md) |
+|  player | [Person](./bitburner.person.md) | Player info, typically from [getPlayer](./bitburner.ns.getplayer.md) |
 
-<b>Returns:</b>
+**Returns:**
 
 number
 

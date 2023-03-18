@@ -4,9 +4,9 @@
 
 ## NS.gang property
 
-Namespace for gang functions.
+Namespace for gang functions. Contains spoilers.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 readonly gang: Gang;

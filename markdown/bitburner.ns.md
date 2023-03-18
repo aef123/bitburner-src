@@ -6,7 +6,7 @@
 
 Collection of all functions passed to scripts
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 export interface NS 
@@ -22,7 +22,7 @@ export interface NS
  // Some related functions are gathered within a common namespace
  stock.getPrice();
 ```
-[ns1 in-game docs](https://bitburner.readthedocs.io/en/latest/netscript/netscript1.html) <hr> <b>Basic ns2 usage example:</b>
+[ns1 in-game docs](https://bitburner-official.readthedocs.io/en/latest/netscript/netscript1.html) <hr> <b>Basic ns2 usage example:</b>
 
 ```ts
 export async function main(ns) {
@@ -34,28 +34,28 @@ export async function main(ns) {
  await ns.hack('n00dles');
 }
 ```
-[ns2 in-game docs](https://bitburner.readthedocs.io/en/latest/netscript/netscriptjs.html) <hr>
+[ns2 in-game docs](https://bitburner-official.readthedocs.io/en/latest/netscript/netscriptjs.html) <hr>
 
 ## Properties
 
-|  Property | Type | Description |
-|  --- | --- | --- |
-|  [args](./bitburner.ns.args.md) | (string \| number \| boolean)\[\] | Arguments passed into the script. |
-|  [bladeburner](./bitburner.ns.bladeburner.md) | [Bladeburner](./bitburner.bladeburner.md) | Namespace for bladeburner functions. |
-|  [codingcontract](./bitburner.ns.codingcontract.md) | [CodingContract](./bitburner.codingcontract.md) | Namespace for codingcontract functions. |
-|  [corporation](./bitburner.ns.corporation.md) | [Corporation](./bitburner.corporation.md) | Namespace for corporation functions. RAM cost: 1022.4 GB |
-|  [enums](./bitburner.ns.enums.md) | [NSEnums](./bitburner.nsenums.md) |  |
-|  [formulas](./bitburner.ns.formulas.md) | [Formulas](./bitburner.formulas.md) | Namespace for formulas functions. |
-|  [gang](./bitburner.ns.gang.md) | [Gang](./bitburner.gang.md) | Namespace for gang functions. |
-|  [grafting](./bitburner.ns.grafting.md) | [Grafting](./bitburner.grafting.md) | Namespace for grafting functions. |
-|  [hacknet](./bitburner.ns.hacknet.md) | [Hacknet](./bitburner.hacknet.md) | Namespace for hacknet functions. |
-|  [infiltration](./bitburner.ns.infiltration.md) | [Infiltration](./bitburner.infiltration.md) | Namespace for infiltration functions. RAM cost: 0 GB |
-|  [pid](./bitburner.ns.pid.md) | number | The current script's PID |
-|  [singularity](./bitburner.ns.singularity.md) | [Singularity](./bitburner.singularity.md) | Namespace for singularity functions. RAM cost: 0 GB |
-|  [sleeve](./bitburner.ns.sleeve.md) | [Sleeve](./bitburner.sleeve.md) | Namespace for sleeve functions. |
-|  [stanek](./bitburner.ns.stanek.md) | [Stanek](./bitburner.stanek.md) | Namespace for stanek functions. RAM cost: 0 GB |
-|  [stock](./bitburner.ns.stock.md) | [TIX](./bitburner.tix.md) | Namespace for stock functions. |
-|  [ui](./bitburner.ns.ui.md) | [UserInterface](./bitburner.userinterface.md) | Namespace for user interface functions. RAM cost: 0 GB |
+|  Property | Modifiers | Type | Description |
+|  --- | --- | --- | --- |
+|  [args](./bitburner.ns.args.md) | <code>readonly</code> | (string \| number \| boolean)\[\] | Arguments passed into the script. |
+|  [bladeburner](./bitburner.ns.bladeburner.md) | <code>readonly</code> | [Bladeburner](./bitburner.bladeburner.md) | Namespace for bladeburner functions. Contains spoilers. |
+|  [codingcontract](./bitburner.ns.codingcontract.md) | <code>readonly</code> | [CodingContract](./bitburner.codingcontract.md) | Namespace for codingcontract functions. |
+|  [corporation](./bitburner.ns.corporation.md) | <code>readonly</code> | [Corporation](./bitburner.corporation.md) | Namespace for corporation functions. Contains spoilers. |
+|  [enums](./bitburner.ns.enums.md) |  | [NSEnums](./bitburner.nsenums.md) |  |
+|  [formulas](./bitburner.ns.formulas.md) | <code>readonly</code> | [Formulas](./bitburner.formulas.md) | Namespace for formulas functions. |
+|  [gang](./bitburner.ns.gang.md) | <code>readonly</code> | [Gang](./bitburner.gang.md) | Namespace for gang functions. Contains spoilers. |
+|  [grafting](./bitburner.ns.grafting.md) | <code>readonly</code> | [Grafting](./bitburner.grafting.md) | Namespace for grafting functions. Contains spoilers. |
+|  [hacknet](./bitburner.ns.hacknet.md) | <code>readonly</code> | [Hacknet](./bitburner.hacknet.md) | Namespace for hacknet functions. Some of this API contains spoilers. |
+|  [infiltration](./bitburner.ns.infiltration.md) | <code>readonly</code> | [Infiltration](./bitburner.infiltration.md) | Namespace for infiltration functions. |
+|  [pid](./bitburner.ns.pid.md) | <code>readonly</code> | number | The current script's PID |
+|  [singularity](./bitburner.ns.singularity.md) | <code>readonly</code> | [Singularity](./bitburner.singularity.md) | Namespace for singularity functions. Contains spoilers. |
+|  [sleeve](./bitburner.ns.sleeve.md) | <code>readonly</code> | [Sleeve](./bitburner.sleeve.md) | Namespace for sleeve functions. Contains spoilers. |
+|  [stanek](./bitburner.ns.stanek.md) | <code>readonly</code> | [Stanek](./bitburner.stanek.md) | Namespace for stanek functions. Contains spoilers. |
+|  [stock](./bitburner.ns.stock.md) | <code>readonly</code> | [TIX](./bitburner.tix.md) | Namespace for stock functions. |
+|  [ui](./bitburner.ns.ui.md) | <code>readonly</code> | [UserInterface](./bitburner.userinterface.md) | Namespace for user interface functions. |
 
 ## Methods
 
@@ -72,10 +72,13 @@ export async function main(ns) {
 |  [deleteServer(host)](./bitburner.ns.deleteserver.md) | Delete a purchased server. |
 |  [disableLog(fn)](./bitburner.ns.disablelog.md) | Disables logging for the given function. |
 |  [enableLog(fn)](./bitburner.ns.enablelog.md) | Enable logging for a certain function. |
-|  [exec(script, host, numThreads, args)](./bitburner.ns.exec.md) | Start another script on any server. |
+|  [exec(script, hostname, numThreads, args)](./bitburner.ns.exec.md) | Start another script on any server. |
 |  [exit()](./bitburner.ns.exit.md) | Terminates the current script immediately. |
 |  [fileExists(filename, host)](./bitburner.ns.fileexists.md) | Check if a file exists. |
 |  [flags(schema)](./bitburner.ns.flags.md) | Parse command line flags. |
+|  [formatNumber(n, fractionalDigits, suffixStart, isInteger)](./bitburner.ns.formatnumber.md) | Format a number. |
+|  [formatPercent(n, fractionalDigits, multStart)](./bitburner.ns.formatpercent.md) | Format a number as a percentage. |
+|  [formatRam(n, fractionalDigits)](./bitburner.ns.formatram.md) | Format a number as an amount of ram. |
 |  [ftpcrack(host)](./bitburner.ns.ftpcrack.md) | Runs FTPCrack.exe on a server. |
 |  [getBitNodeMultipliers(n, lvl)](./bitburner.ns.getbitnodemultipliers.md) | Get the current Bitnode multipliers. |
 |  [getFavorToDonate()](./bitburner.ns.getfavortodonate.md) | Returns the amount of Faction favor required to be able to donate to a faction. |
@@ -87,7 +90,7 @@ export async function main(ns) {
 |  [getHostname()](./bitburner.ns.gethostname.md) | Returns a string with the hostname of the server that the script is running on. |
 |  [getMoneySources()](./bitburner.ns.getmoneysources.md) | Get information about the sources of income for this run. |
 |  [getPlayer()](./bitburner.ns.getplayer.md) | Get information about the player. |
-|  [getPortHandle(port)](./bitburner.ns.getporthandle.md) | Get all data on a port. |
+|  [getPortHandle(portNumber)](./bitburner.ns.getporthandle.md) | Get all data on a port. |
 |  [getPurchasedServerCost(ram)](./bitburner.ns.getpurchasedservercost.md) | Get cost of purchasing a server. |
 |  [getPurchasedServerLimit()](./bitburner.ns.getpurchasedserverlimit.md) | Returns the maximum number of servers you can purchase. |
 |  [getPurchasedServerMaxRam()](./bitburner.ns.getpurchasedservermaxram.md) | Returns the maximum RAM that a purchased server can have. |
@@ -101,7 +104,7 @@ export async function main(ns) {
 |  [getScriptName()](./bitburner.ns.getscriptname.md) | Returns the current script name. |
 |  [getScriptRam(script, host)](./bitburner.ns.getscriptram.md) | Get the ram cost of a script. |
 |  [getServer(host)](./bitburner.ns.getserver.md) | Returns a server object for the given server. Defaults to the running script's server if host is not specified. |
-|  [getServerBaseSecurityLevel(host)](./bitburner.ns.getserverbasesecuritylevel.md) |  |
+|  [getServerBaseSecurityLevel(host)](./bitburner.ns.getserverbasesecuritylevel.md) | Get the base security level of a server. |
 |  [getServerGrowth(host)](./bitburner.ns.getservergrowth.md) | Get a server growth parameter. |
 |  [getServerMaxMoney(host)](./bitburner.ns.getservermaxmoney.md) | Get the maximum money available on a server. |
 |  [getServerMaxRam(host)](./bitburner.ns.getservermaxram.md) | Get the maximum amount of RAM on a server. |
@@ -117,34 +120,34 @@ export async function main(ns) {
 |  [getTotalScriptIncome()](./bitburner.ns.gettotalscriptincome.md) | Get the income of all scripts. |
 |  [getWeakenTime(host)](./bitburner.ns.getweakentime.md) | Get the execution time of a weaken() call. |
 |  [grow(host, opts)](./bitburner.ns.grow.md) | Spoof money in a server's bank account, increasing the amount available. |
-|  [growthAnalyze(host, growthAmount, cores)](./bitburner.ns.growthanalyze.md) | Calculate the number of grow threads needed to grow a server by a certain multiplier. |
-|  [growthAnalyzeSecurity(threads, hostname, cores)](./bitburner.ns.growthanalyzesecurity.md) | Calculate the security increase for a number of threads. |
+|  [growthAnalyze(host, multiplier, cores)](./bitburner.ns.growthanalyze.md) | Calculate the number of grow threads needed for a given multiplicative growth factor. |
+|  [growthAnalyzeSecurity(threads, hostname, cores)](./bitburner.ns.growthanalyzesecurity.md) | Calculate the security increase for a number of grow threads. |
 |  [hack(host, opts)](./bitburner.ns.hack.md) | Steal a server's money. |
 |  [hackAnalyze(host)](./bitburner.ns.hackanalyze.md) | Get the part of money stolen with a single thread. |
 |  [hackAnalyzeChance(host)](./bitburner.ns.hackanalyzechance.md) | Get the chance of successfully hacking a server. |
 |  [hackAnalyzeSecurity(threads, hostname)](./bitburner.ns.hackanalyzesecurity.md) | Get the security increase for a number of threads. |
-|  [hackAnalyzeThreads(host, hackAmount)](./bitburner.ns.hackanalyzethreads.md) | Predict the effect of hack. |
+|  [hackAnalyzeThreads(host, hackAmount)](./bitburner.ns.hackanalyzethreads.md) | Calculate the decimal number of threads needed to hack a specified amount of money from a target host. |
 |  [hasRootAccess(host)](./bitburner.ns.hasrootaccess.md) | Check if you have root access on a server. |
 |  [hasTorRouter()](./bitburner.ns.hastorrouter.md) | Returns whether the player has access to the darkweb. |
 |  [httpworm(host)](./bitburner.ns.httpworm.md) | Runs HTTPWorm.exe on a server. |
 |  [isLogEnabled(fn)](./bitburner.ns.islogenabled.md) | Checks the status of the logging for the given function. |
 |  [isRunning(script, host, args)](./bitburner.ns.isrunning.md) | Check if a script is running. |
-|  [kill(script)](./bitburner.ns.kill.md) | Terminate another script. |
-|  [kill(script, host, args)](./bitburner.ns.kill_1.md) | Terminate another script. |
+|  [kill(pid)](./bitburner.ns.kill.md) | Terminate the script with the provided PID. |
+|  [kill(filename, hostname, args)](./bitburner.ns.kill_1.md) | Terminate the script with the provided filename, hostname, and script arguments. |
 |  [killall(host, safetyguard)](./bitburner.ns.killall.md) | Terminate all scripts on a server. |
-|  [ls(host, grep)](./bitburner.ns.ls.md) | List files on a server. |
+|  [ls(host, substring)](./bitburner.ns.ls.md) | List files on a server. |
 |  [moveTail(x, y, pid)](./bitburner.ns.movetail.md) | Move a tail window. |
 |  [mv(host, source, destination)](./bitburner.ns.mv.md) | Move a file on the target server. |
-|  [nFormat(n, format)](./bitburner.ns.nformat.md) | Format a number. |
+|  [nFormat(n, format)](./bitburner.ns.nformat.md) | Format a number using the numeral library. This function is deprecated and will be removed in 2.3. |
 |  [nuke(host)](./bitburner.ns.nuke.md) | Runs NUKE.exe on a server. |
-|  [peek(port)](./bitburner.ns.peek.md) | Get a copy of the data from a port without popping it. |
+|  [peek(portNumber)](./bitburner.ns.peek.md) | Get a copy of the data from a port without popping it. |
 |  [print(args)](./bitburner.ns.print.md) | Prints one or more values or variables to the script’s logs. |
 |  [printf(format, args)](./bitburner.ns.printf.md) | Prints a formatted string to the script’s logs. |
 |  [prompt(txt, options)](./bitburner.ns.prompt.md) | Prompt the player with an input modal. |
 |  [ps(host)](./bitburner.ns.ps.md) | List running scripts on a server. |
 |  [purchaseServer(hostname, ram)](./bitburner.ns.purchaseserver.md) | Purchase a server. |
 |  [read(filename)](./bitburner.ns.read.md) | Read content of a file. |
-|  [readPort(port)](./bitburner.ns.readport.md) | Read data from a port. |
+|  [readPort(portNumber)](./bitburner.ns.readport.md) | Read data from a port. |
 |  [relaysmtp(host)](./bitburner.ns.relaysmtp.md) | Runs relaySMTP.exe on a server. |
 |  [renamePurchasedServer(hostname, newName)](./bitburner.ns.renamepurchasedserver.md) | Rename a purchased server. |
 |  [resizeTail(width, height, pid)](./bitburner.ns.resizetail.md) | Resize a tail window. |
@@ -165,12 +168,12 @@ export async function main(ns) {
 |  [toast(msg, variant, duration)](./bitburner.ns.toast.md) | Queue a toast (bottom-right notification). |
 |  [tprint(args)](./bitburner.ns.tprint.md) | Prints one or more values or variables to the Terminal. |
 |  [tprintf(format, values)](./bitburner.ns.tprintf.md) | Prints a raw value or a variable to the Terminal. |
-|  [tryWritePort(port, data)](./bitburner.ns.trywriteport.md) | Attempt to write to a port. |
+|  [tryWritePort(portNumber, data)](./bitburner.ns.trywriteport.md) | Attempt to write to a port. |
 |  [upgradePurchasedServer(hostname, ram)](./bitburner.ns.upgradepurchasedserver.md) | Upgrade a purchased server's RAM. |
 |  [vsprintf(format, args)](./bitburner.ns.vsprintf.md) | Format a string with an array of arguments. |
 |  [weaken(host, opts)](./bitburner.ns.weaken.md) | Reduce a server's security level. |
 |  [weakenAnalyze(threads, cores)](./bitburner.ns.weakenanalyze.md) | Predict the effect of weaken. |
 |  [wget(url, target, host)](./bitburner.ns.wget.md) | Download a file from the internet. |
 |  [write(filename, data, mode)](./bitburner.ns.write.md) | Write data to a file. |
-|  [writePort(port, data)](./bitburner.ns.writeport.md) | Write data to a port. |
+|  [writePort(portNumber, data)](./bitburner.ns.writeport.md) | Write data to a port. |
 

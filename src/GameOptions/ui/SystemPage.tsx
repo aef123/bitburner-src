@@ -140,6 +140,7 @@ export const SystemPage = (): React.ReactElement => {
           marks
         />
       </>
+
       <OptionSwitch
         checked={Settings.SuppressSavedGameToast}
         onChange={(newValue) => (Settings.SuppressSavedGameToast = newValue)}

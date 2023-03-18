@@ -26,7 +26,7 @@ import { Player } from "@player";
 import { saveObject, loadGame } from "./SaveObject";
 import { initForeignServers } from "./Server/AllServers";
 import { Settings } from "./Settings/Settings";
-import { ThemeEvents } from "./Themes/ui/Theme";
+import { FormatsNeedToChange } from "./ui/formatNumber";
 import { initSymbolToStockMap, processStockPrices } from "./StockMarket/StockMarket";
 import { Terminal } from "./Terminal";
 
@@ -44,11 +44,13 @@ import React from "react";
 import { setupUncaughtPromiseHandler } from "./UncaughtPromiseHandler";
 import { Button, Typography } from "@mui/material";
 import { SnackbarEvents, ToastVariant } from "./ui/React/Snackbar";
+import { prestigeSourceFile } from "./Prestige";
 
 /** Game engine. Handles the main game loop. */
 const Engine: {
   _lastUpdate: number;
   updateGame: (numCycles?: number) => void;
+  nodeTransfer: boolean | undefined;
   Counters: {
     [key: string]: number | undefined;
     autoSaveCounter: number;
@@ -72,9 +74,13 @@ const Engine: {
 } = {
   // Time variables (milliseconds unix epoch time)
   _lastUpdate: new Date().getTime(),
-
+  nodeTransfer: undefined,
   updateGame: function (numCycles = 1) {
-    const time = numCycles * CONSTANTS._idleSpeed;
+    if (this.nodeTransfer != undefined) {
+      prestigeSourceFile(this.nodeTransfer);
+      this.nodeTransfer = undefined;
+    }
+    const time = numCycles * CONSTANTS.MilliPerCycle;
     if (Player.totalPlaytime == null) {
       Player.totalPlaytime = 0;
     }
@@ -226,7 +232,7 @@ const Engine: {
     // Load game from save or create new game
 
     if (loadGame(saveString)) {
-      ThemeEvents.emit();
+      FormatsNeedToChange.emit();
       initSourceFiles();
       initDarkWebItems();
       initAugmentations(); // Also calls Player.reapplyAllAugmentations()
@@ -242,7 +248,7 @@ const Engine: {
       Engine._lastUpdate = new Date().getTime();
       const lastUpdate = Player.lastUpdate;
       const timeOffline = Engine._lastUpdate - lastUpdate;
-      const numCyclesOffline = Math.floor(timeOffline / CONSTANTS._idleSpeed);
+      const numCyclesOffline = Math.floor(timeOffline / CONSTANTS.MilliPerCycle);
 
       // Calculate the number of chances for a contract the player had whilst offline
       const contractChancesWhileOffline = Math.floor(timeOffline / (1000 * 60 * 10));
@@ -332,7 +338,7 @@ const Engine: {
       Player.sleeves.forEach((sleeve) => sleeve.process(numCyclesOffline));
 
       // Update total playtime
-      const time = numCyclesOffline * CONSTANTS._idleSpeed;
+      const time = numCyclesOffline * CONSTANTS.MilliPerCycle;
       Player.totalPlaytime ??= 0;
       Player.playtimeSinceLastAug ??= 0;
       Player.playtimeSinceLastBitnode ??= 0;
@@ -370,6 +376,7 @@ const Engine: {
       );
     } else {
       // No save found, start new game
+      FormatsNeedToChange.emit();
       initSourceFiles();
       initDarkWebItems();
       Engine.start(); // Run main game loop and Scripts loop
@@ -389,10 +396,10 @@ const Engine: {
     // Get time difference
     const _thisUpdate = new Date().getTime();
     let diff = _thisUpdate - Engine._lastUpdate;
-    const offset = diff % CONSTANTS._idleSpeed;
+    const offset = diff % CONSTANTS.MilliPerCycle;
 
     // Divide this by cycle time to determine how many cycles have elapsed since last update
-    diff = Math.floor(diff / CONSTANTS._idleSpeed);
+    diff = Math.floor(diff / CONSTANTS.MilliPerCycle);
 
     if (diff > 0) {
       // Update the game engine by the calculated number of cycles
@@ -400,7 +407,7 @@ const Engine: {
       Player.lastUpdate = _thisUpdate - offset;
       Engine.updateGame(diff);
     }
-    window.requestAnimationFrame(Engine.start);
+    window.setTimeout(Engine.start, CONSTANTS.MilliPerCycle - offset);
   },
 };
 

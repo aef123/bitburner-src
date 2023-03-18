@@ -6,19 +6,19 @@
 
 Get all data on a port.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-getPortHandle(port: number): NetscriptPort;
+getPortHandle(portNumber: number): NetscriptPort;
 ```
 
 ## Parameters
 
 |  Parameter | Type | Description |
 |  --- | --- | --- |
-|  port | number | Port number. Must be an integer between 1 and 20. |
+|  portNumber | number | Port number. Must be an integer between 1 and 20. |
 
-<b>Returns:</b>
+**Returns:**
 
 [NetscriptPort](./bitburner.netscriptport.md)
 

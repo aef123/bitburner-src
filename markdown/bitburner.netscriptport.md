@@ -6,10 +6,10 @@
 
 Object representing a port. A port is a serialized queue.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-interface NetscriptPort 
+export interface NetscriptPort 
 ```
 
 ## Methods

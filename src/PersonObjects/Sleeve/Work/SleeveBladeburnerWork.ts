@@ -15,24 +15,25 @@ export const isSleeveBladeburnerWork = (w: Work | null): w is SleeveBladeburnerW
   w !== null && w.type === WorkType.BLADEBURNER;
 
 export class SleeveBladeburnerWork extends Work {
+  type: WorkType.BLADEBURNER = WorkType.BLADEBURNER;
   cyclesWorked = 0;
   actionType: "General" | "Contracts";
   actionName: string;
 
   constructor(params?: SleeveBladeburnerWorkParams) {
-    super(WorkType.BLADEBURNER);
+    super();
     this.actionType = params?.type ?? "General";
-    this.actionName = params?.name ?? "Field analysis";
+    this.actionName = params?.name ?? "Field Analysis";
   }
 
   cyclesNeeded(sleeve: Sleeve): number {
     const ret = Player.bladeburner?.getActionTimeNetscriptFn(sleeve, this.actionType, this.actionName);
     if (!ret || typeof ret === "string") throw new Error(`Error querying ${this.actionName} time`);
-    return ret / CONSTANTS._idleSpeed;
+    return ret / CONSTANTS.MilliPerCycle;
   }
 
   process(sleeve: Sleeve, cycles: number) {
-    if (!Player.bladeburner) throw new Error("sleeve doing blade work without being a member");
+    if (!Player.bladeburner) return sleeve.stopWork();
     this.cyclesWorked += cycles;
     const actionIdent = Player.bladeburner.getActionIdFromTypeAndName(this.actionType, this.actionName);
     if (!actionIdent) throw new Error(`Error getting ${this.actionName} action`);
@@ -62,12 +63,13 @@ export class SleeveBladeburnerWork extends Work {
     }
   }
 
-  APICopy() {
+  APICopy(sleeve: Sleeve) {
     return {
       type: WorkType.BLADEBURNER as "BLADEBURNER",
       actionType: this.actionType,
       actionName: this.actionName,
       cyclesWorked: this.cyclesWorked,
+      cyclesNeeded: this.cyclesNeeded(sleeve),
     };
   }
 

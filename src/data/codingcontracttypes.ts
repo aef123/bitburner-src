@@ -1073,8 +1073,8 @@ export const codingContractTypesMetadata: ICodingContractTypeMetadata[] = [
         "the result should be an array with only an empty string.\n\n",
         "IMPORTANT: The string may contain letters, not just parentheses.",
         `Examples:\n`,
-        `"()())()" -> [()()(), (())()]\n`,
-        `"(a)())()" -> [(a)()(), (a())()]\n`,
+        `"()())()" -> ["()()()", "(())()"]\n`,
+        `"(a)())()" -> ["(a)()()", "(a())()"]\n`,
         `")(" -> [""]`,
       ].join(" ");
     },
@@ -1271,6 +1271,8 @@ export const codingContractTypesMetadata: ICodingContractTypeMetadata[] = [
 
       const result: string[] = [];
       helper(result, "", num, target, 0, 0, 0);
+      // Prevent player from providing extra wrong answers and still receiving credit
+      if (result.length !== sanitizedPlayerAnsArr.length) return false;
 
       for (const expr of result) {
         if (!sanitizedPlayerAnsArr.includes(expr)) {

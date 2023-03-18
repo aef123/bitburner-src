@@ -6,7 +6,7 @@
 
 Copy file between servers.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 scp(files: string | string[], destination: string, source?: string): boolean;
@@ -18,9 +18,9 @@ scp(files: string | string[], destination: string, source?: string): boolean;
 |  --- | --- | --- |
 |  files | string \| string\[\] | Filename or an array of filenames of script/literature files to copy. Note that if a file is located in a subdirectory, the filename must include the leading <code>/</code>. |
 |  destination | string | Hostname of the destination server, which is the server to which the file will be copied. |
-|  source | string | Hostname of the source server, which is the server from which the file will be copied. This argument is optional and if it’s omitted the source will be the current server. |
+|  source | string | _(Optional)_ Hostname of the source server, which is the server from which the file will be copied. This argument is optional and if it’s omitted the source will be the current server. |
 
-<b>Returns:</b>
+**Returns:**
 
 boolean
 
@@ -35,36 +35,21 @@ Copies a script or literature (.lit) file(s) to another server. The files argume
 ## Example 1
 
 
-```ts
-// NS1:
+```js
 //Copies foo.lit from the helios server to the home computer:
-scp("foo.lit", "home", "helios");
+ns.scp("foo.lit", "home", "helios" );
 
 //Tries to copy three files from rothman-uni to home computer:
-files = ["foo1.lit", "foo2.script", "foo3.script"];
-scp(files, "home", "rothman-uni");
+files = ["foo1.lit", "foo2.txt", "foo3.js"];
+ns.scp(files, "home", "rothman-uni");
 ```
 
 ## Example 2
 
 
-```ts
-// NS2:
-//Copies foo.lit from the helios server to the home computer:
-ns.scp("foo.lit", "home", "helios" );
-
-//Tries to copy three files from rothman-uni to home computer:
-files = ["foo1.lit", "foo2.script", "foo3.script"];
-ns.scp(files,  "home", "rothman-uni");
-```
-
-## Example 3
-
-
-```ts
-//ns2, copies files from home to a target server
+```js
 const server = ns.args[0];
-const files = ["hack.js","weaken.js","grow.js"];
+const files = ["hack.js", "weaken.js", "grow.js"];
 ns.scp(files, server, "home");
 ```
 

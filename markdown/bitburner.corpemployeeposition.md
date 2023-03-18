@@ -5,7 +5,7 @@
 ## CorpEmployeePosition type
 
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 type CorpEmployeePosition =
@@ -14,6 +14,6 @@ type CorpEmployeePosition =
   | "Business"
   | "Management"
   | "Research & Development"
-  | "Training"
+  | "Intern"
   | "Unassigned";
 ```

@@ -14,10 +14,11 @@ import { findCrime } from "../../../Crime/CrimeHelpers";
 export const isSleeveCrimeWork = (w: Work | null): w is SleeveCrimeWork => w !== null && w.type === WorkType.CRIME;
 
 export class SleeveCrimeWork extends Work {
+  type: WorkType.CRIME = WorkType.CRIME;
   crimeType: CrimeType;
   cyclesWorked = 0;
   constructor(crimeType?: CrimeType) {
-    super(WorkType.CRIME);
+    super();
     this.crimeType = crimeType ?? CrimeType.shoplift;
   }
 
@@ -31,7 +32,7 @@ export class SleeveCrimeWork extends Work {
   }
 
   cyclesNeeded(): number {
-    return this.getCrime().time / CONSTANTS._idleSpeed;
+    return this.getCrime().time / CONSTANTS.MilliPerCycle;
   }
 
   process(sleeve: Sleeve, cycles: number) {
@@ -41,8 +42,10 @@ export class SleeveCrimeWork extends Work {
     const crime = this.getCrime();
     const gains = this.getExp(sleeve);
     const success = Math.random() < crime.successRate(sleeve);
-    if (success) Player.karma -= crime.karma * sleeve.syncBonus();
-    else gains.money = 0;
+    if (success) {
+      Player.karma -= crime.karma * sleeve.syncBonus();
+      Player.numPeopleKilled += crime.kills;
+    } else gains.money = 0;
     applySleeveGains(sleeve, gains, success ? 1 : 0.25);
     this.cyclesWorked -= this.cyclesNeeded();
   }
@@ -52,6 +55,7 @@ export class SleeveCrimeWork extends Work {
       type: WorkType.CRIME as "CRIME",
       crimeType: this.crimeType,
       cyclesWorked: this.cyclesWorked,
+      cyclesNeeded: this.cyclesNeeded(),
     };
   }
 

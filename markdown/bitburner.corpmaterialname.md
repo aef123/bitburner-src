@@ -5,12 +5,13 @@
 ## CorpMaterialName type
 
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 type CorpMaterialName =
+  | "Minerals"
+  | "Ore"
   | "Water"
-  | "Energy"
   | "Food"
   | "Plants"
   | "Metal"

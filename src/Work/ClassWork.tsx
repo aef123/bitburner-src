@@ -2,7 +2,7 @@ import React from "react";
 import { Reviver, Generic_toJSON, Generic_fromJSON, IReviverValue } from "../utils/JSONReviver";
 import { CONSTANTS } from "../Constants";
 import { LocationName } from "../Enums";
-import { numeralWrapper } from "../ui/numeralFormat";
+import { formatExp } from "../ui/formatNumber";
 import { dialogBoxCreate } from "../ui/React/DialogBox";
 import { Money } from "../ui/React/Money";
 import { convertTimeMsToTimeElapsedString } from "../utils/StringHelperFunctions";
@@ -118,16 +118,16 @@ export class ClassWork extends Work {
       dialogBoxCreate(
         <>
           After {this.getClass().youAreCurrently} for{" "}
-          {convertTimeMsToTimeElapsedString(this.cyclesWorked * CONSTANTS._idleSpeed)}, <br />
+          {convertTimeMsToTimeElapsedString(this.cyclesWorked * CONSTANTS.MilliPerCycle)}, <br />
           you spent a total of <Money money={-this.earnings.money} />. <br />
           <br />
           You earned a total of: <br />
-          {numeralWrapper.formatExp(this.earnings.hackExp)} hacking exp <br />
-          {numeralWrapper.formatExp(this.earnings.strExp)} strength exp <br />
-          {numeralWrapper.formatExp(this.earnings.defExp)} defense exp <br />
-          {numeralWrapper.formatExp(this.earnings.dexExp)} dexterity exp <br />
-          {numeralWrapper.formatExp(this.earnings.agiExp)} agility exp <br />
-          {numeralWrapper.formatExp(this.earnings.chaExp)} charisma exp
+          {formatExp(this.earnings.hackExp)} hacking exp <br />
+          {formatExp(this.earnings.strExp)} strength exp <br />
+          {formatExp(this.earnings.defExp)} defense exp <br />
+          {formatExp(this.earnings.dexExp)} dexterity exp <br />
+          {formatExp(this.earnings.agiExp)} agility exp <br />
+          {formatExp(this.earnings.chaExp)} charisma exp
           <br />
         </>,
       );

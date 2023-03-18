@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { convertTimeMsToTimeElapsedString } from "../../utils/StringHelperFunctions";
 import { CONSTANTS } from "../../Constants";
 import { StaneksGiftEvents } from "../StaneksGiftEvents";
@@ -11,16 +11,14 @@ import { ActiveFragment } from "../ActiveFragment";
 import { Fragments } from "../Fragment";
 import { DummyGrid } from "./DummyGrid";
 import Container from "@mui/material/Container";
+import { useRerender } from "../../ui/React/hooks";
 
 type IProps = {
   staneksGift: StaneksGift;
 };
 
 export function StaneksGiftRoot({ staneksGift }: IProps): React.ReactElement {
-  const setRerender = useState(true)[1];
-  function rerender(): void {
-    setRerender((o) => !o);
-  }
+  const rerender = useRerender();
   useEffect(() => StaneksGiftEvents.subscribe(rerender), []);
   return (
     <Container maxWidth="lg" disableGutters sx={{ mx: 0 }}>
@@ -193,7 +191,7 @@ export function StaneksGiftRoot({ staneksGift }: IProps): React.ReactElement {
       </Typography>
       {staneksGift.storedCycles > 5 && (
         <Typography sx={{ mb: 1 }}>
-          Bonus time: {convertTimeMsToTimeElapsedString(CONSTANTS._idleSpeed * staneksGift.storedCycles)}
+          Bonus time: {convertTimeMsToTimeElapsedString(CONSTANTS.MilliPerCycle * staneksGift.storedCycles)}
         </Typography>
       )}
       <MainBoard gift={staneksGift} />

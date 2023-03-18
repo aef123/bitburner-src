@@ -6,10 +6,10 @@
 
 Set market TA 1 for a product.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
-setProductMarketTA1(divisionName: string, productName: string, on: boolean): void;
+setProductMarketTA1(divisionName: string, city: CityName | `${CityName}`, productName: string, on: boolean): void;
 ```
 
 ## Parameters
@@ -17,10 +17,11 @@ setProductMarketTA1(divisionName: string, productName: string, on: boolean): voi
 |  Parameter | Type | Description |
 |  --- | --- | --- |
 |  divisionName | string | Name of the division |
+|  city | [CityName](./bitburner.cityname.md) \| \`${[CityName](./bitburner.cityname.md)<!-- -->}\` | Name of the city |
 |  productName | string | Name of the product |
 |  on | boolean | market ta enabled |
 
-<b>Returns:</b>
+**Returns:**
 
 void
 

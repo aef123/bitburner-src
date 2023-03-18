@@ -4,9 +4,9 @@
 
 ## NS.bladeburner property
 
-Namespace for bladeburner functions.
+Namespace for bladeburner functions. Contains spoilers.
 
-<b>Signature:</b>
+**Signature:**
 
 ```typescript
 readonly bladeburner: Bladeburner;
