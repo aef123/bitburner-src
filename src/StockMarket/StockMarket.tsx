@@ -39,6 +39,8 @@ export function placeOrder(
     } else {
       dialogBoxCreate(`ERROR: Invalid stock passed to placeOrder() function`);
     }
+
+    
     return false;
   }
   if (typeof shares !== "number" || typeof price !== "number") {
