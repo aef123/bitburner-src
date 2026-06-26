@@ -116,14 +116,9 @@ module.exports = (env, argv) => {
           columns: true,
           module: true,
         }),
-      !isDevServer &&
-        new webpack.SourceMapDevToolPlugin({
-          filename: "[file].map",
-          columns: true,
-          module: true,
-        }),
       enableReactRefresh && new ReactRefreshWebpackPlugin(),
     ].filter(Boolean),
+    devtool: !isDevServer ? "source-map" : false,
     target: "web",
     entry: entry,
     output: {

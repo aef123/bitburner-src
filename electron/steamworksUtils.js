@@ -87,7 +87,8 @@ try {
 let steamworksClient = undefined;
 try {
   // 1812820 is our Steam App ID.
-  steamworksClient = steamworks?.init(1812820);
+  // Set NO_STEAM=1 in the environment to skip Steam initialization (useful for local dev builds).
+  if (!process.env.NO_STEAM) steamworksClient = steamworks?.init(1812820);
 } catch (error) {
   if (error instanceof Error) {
     log.warn(error.message);
