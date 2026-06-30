@@ -8,7 +8,13 @@ import {
   SimpleLogRecordProcessor,
   type LogRecordProcessor,
 } from "@opentelemetry/sdk-logs";
+import {
+  ConsoleMetricExporter,
+  PeriodicExportingMetricReader,
+  type MetricReader,
+} from "@opentelemetry/sdk-metrics";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import type { TelemetryConfig } from "./TelemetryConfig";
 import { StdioLogExporter } from "./exporters/StdioLogExporter";
 import { GameConsoleLogExporter } from "./exporters/GameConsoleLogExporter";
@@ -31,4 +37,29 @@ export function buildLogProcessors(config: TelemetryConfig): LogRecordProcessor[
     processors.push(new BatchLogRecordProcessor(new OTLPLogExporter({ url: otlpUrl(config.otlpEndpoint, "logs") })));
   }
   return processors;
+}
+
+/**
+ * One periodic metric reader per enabled exporting sink. The in-game console sink is
+ * logs-only, so it produces no reader.
+ */
+export function buildMetricReaders(config: TelemetryConfig): MetricReader[] {
+  const readers: MetricReader[] = [];
+  if (config.sinks.stdio) {
+    readers.push(
+      new PeriodicExportingMetricReader({
+        exporter: new ConsoleMetricExporter(),
+        exportIntervalMillis: config.exportIntervalMs,
+      }),
+    );
+  }
+  if (config.sinks.otlp) {
+    readers.push(
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: otlpUrl(config.otlpEndpoint, "metrics") }),
+        exportIntervalMillis: config.exportIntervalMs,
+      }),
+    );
+  }
+  return readers;
 }

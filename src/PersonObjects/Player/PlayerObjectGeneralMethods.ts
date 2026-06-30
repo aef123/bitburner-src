@@ -9,6 +9,7 @@ import {
   LocationName,
   ToastVariant,
 } from "@enums";
+import { recordIncome } from "../../Telemetry/TelemetryMetrics";
 
 import type { PlayerObject } from "./PlayerObject";
 import type { ProgramFilePath } from "../../Paths/ProgramFilePath";
@@ -252,6 +253,7 @@ export function recordMoneySource(this: PlayerObject, amt: number, source: Money
   }
   this.moneySourceA.record(amt, source);
   this.moneySourceB.record(amt, source);
+  recordIncome(source, amt);
 }
 
 export function startFocusing(this: PlayerObject): void {

@@ -8,6 +8,7 @@
  */
 import type { SeverityNumber } from "@opentelemetry/api-logs";
 import type { LoggerProvider } from "@opentelemetry/sdk-logs";
+import type { MeterProvider } from "@opentelemetry/sdk-metrics";
 import type { TelemetryConfig } from "./TelemetryConfig";
 import { hasAnySink, readTelemetryConfig } from "./TelemetryConfig";
 import { EmittedLog, setLogEmitter, setMinLogLevel } from "./TelemetryLogger";
@@ -15,6 +16,9 @@ import { EmittedLog, setLogEmitter, setMinLogLevel } from "./TelemetryLogger";
 let active = false;
 let activeConfig: TelemetryConfig | null = null;
 let loggerProvider: LoggerProvider | null = null;
+let meterProvider: MeterProvider | null = null;
+/** Detaches the income recorder; set when metrics are registered. */
+let unregisterMetrics: (() => void) | null = null;
 /** Bumped on every reconfigure so a slow async build can detect it has been superseded. */
 let generation = 0;
 
@@ -28,11 +32,19 @@ export function getActiveConfig(): TelemetryConfig | null {
   return activeConfig;
 }
 
+interface BuiltProviders {
+  logger: LoggerProvider;
+  meter: MeterProvider | null;
+  unregisterMetrics: (() => void) | null;
+}
+
 /** Builds the OTel providers, lazily importing the SDK. */
-async function buildProviders(config: TelemetryConfig): Promise<{ provider: LoggerProvider }> {
-  const [sdkLogs, sinks, resources] = await Promise.all([
+async function buildProviders(config: TelemetryConfig): Promise<BuiltProviders> {
+  const [sdkLogs, sdkMetrics, sinks, engineMetrics, resources] = await Promise.all([
     import("@opentelemetry/sdk-logs"),
+    import("@opentelemetry/sdk-metrics"),
     import("./TelemetrySinks"),
+    import("./EngineMetrics"),
     import("@opentelemetry/resources"),
   ]);
   const resource = resources.resourceFromAttributes({
@@ -41,18 +53,38 @@ async function buildProviders(config: TelemetryConfig): Promise<{ provider: Logg
     "bitburner.bitnode": config.bitNode,
     "deployment.environment": config.environment,
   });
-  const provider = new sdkLogs.LoggerProvider({ resource, processors: sinks.buildLogProcessors(config) });
-  return { provider };
+
+  const logger = new sdkLogs.LoggerProvider({ resource, processors: sinks.buildLogProcessors(config) });
+
+  let meter: MeterProvider | null = null;
+  let unregister: (() => void) | null = null;
+  if (config.metricsEnabled) {
+    const readers = sinks.buildMetricReaders(config);
+    if (readers.length > 0) {
+      meter = new sdkMetrics.MeterProvider({ resource, readers });
+      engineMetrics.registerEngineMetrics(meter.getMeter("bitburner"), config.bitNode);
+      unregister = engineMetrics.unregisterEngineMetrics;
+    }
+  }
+
+  return { logger, meter, unregisterMetrics: unregister };
 }
 
-/** Tears down any live providers and detaches the logger emitter. */
+/** Tears down any live providers and detaches the logger emitter + income recorder. */
 async function teardown(): Promise<void> {
   setLogEmitter(null);
-  const provider = loggerProvider;
-  loggerProvider = null;
-  if (provider) {
-    await provider.shutdown().catch((error: unknown) => console.error("Telemetry shutdown error", error));
+  if (unregisterMetrics) {
+    unregisterMetrics();
+    unregisterMetrics = null;
   }
+  const logger = loggerProvider;
+  const meter = meterProvider;
+  loggerProvider = null;
+  meterProvider = null;
+  const shutdowns: Promise<void>[] = [];
+  if (logger) shutdowns.push(logger.shutdown());
+  if (meter) shutdowns.push(meter.shutdown());
+  await Promise.all(shutdowns).catch((error: unknown) => console.error("Telemetry shutdown error", error));
 }
 
 /** Called once on game load. Wires up telemetry if it is enabled. */
@@ -76,7 +108,7 @@ export async function reconfigureTelemetry(): Promise<void> {
     return;
   }
 
-  let built: { provider: LoggerProvider };
+  let built: BuiltProviders;
   try {
     built = await buildProviders(config);
   } catch (error: unknown) {
@@ -87,11 +119,15 @@ export async function reconfigureTelemetry(): Promise<void> {
   }
   if (myGeneration !== generation) {
     // A newer reconfigure started while we were building; discard this one.
-    await built.provider.shutdown().catch(() => undefined);
+    built.unregisterMetrics?.();
+    await built.logger.shutdown().catch(() => undefined);
+    await built.meter?.shutdown().catch(() => undefined);
     return;
   }
 
-  loggerProvider = built.provider;
+  loggerProvider = built.logger;
+  meterProvider = built.meter;
+  unregisterMetrics = built.unregisterMetrics;
   setMinLogLevel(config.logLevel);
   const logger = loggerProvider.getLogger("bitburner");
   setLogEmitter((log: EmittedLog) =>
