@@ -46,7 +46,9 @@ export function reconfigureTelemetry(): void {
 }
 
 /** Flushes and shuts down telemetry. Best-effort: browser unload may kill in-flight exports. */
-export async function shutdownTelemetry(): Promise<void> {
+export function shutdownTelemetry(): Promise<void> {
+  // Provider flush/shutdown (which is genuinely async) is added in later phases.
   active = false;
   activeConfig = null;
+  return Promise.resolve();
 }
