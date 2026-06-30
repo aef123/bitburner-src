@@ -10,7 +10,8 @@ const ERROR_SEVERITY = 17; // OTel SeverityNumber.ERROR
 function formatRecord(record: ReadableLogRecord): string {
   const level = record.severityText ?? "LOG";
   const body = typeof record.body === "string" ? record.body : JSON.stringify(record.body);
-  const attrs = record.attributes && Object.keys(record.attributes).length ? ` ${JSON.stringify(record.attributes)}` : "";
+  const attrs =
+    record.attributes && Object.keys(record.attributes).length ? ` ${JSON.stringify(record.attributes)}` : "";
   return `[bitburner] ${level} ${body}${attrs}`;
 }
 

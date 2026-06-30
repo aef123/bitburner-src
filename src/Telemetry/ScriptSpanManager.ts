@@ -12,10 +12,7 @@ import type { ScriptStartInfo, ScriptTracerImpl } from "./ScriptTracer";
 export class ScriptSpanManager implements ScriptTracerImpl {
   private readonly spans = new Map<number, Span>();
 
-  constructor(
-    private readonly tracer: Tracer,
-    private readonly bitNode: number,
-  ) {}
+  constructor(private readonly tracer: Tracer, private readonly bitNode: number) {}
 
   onScriptStart(pid: number, info: ScriptStartInfo, parentPid?: number): void {
     const attributes = {

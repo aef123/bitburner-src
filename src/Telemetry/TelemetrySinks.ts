@@ -3,16 +3,8 @@
  * imports @opentelemetry/* and the custom exporters, so it must only ever be reached via the
  * dynamic import() in Telemetry.ts — that keeps the whole SDK in a lazy webpack chunk.
  */
-import {
-  BatchLogRecordProcessor,
-  SimpleLogRecordProcessor,
-  type LogRecordProcessor,
-} from "@opentelemetry/sdk-logs";
-import {
-  ConsoleMetricExporter,
-  PeriodicExportingMetricReader,
-  type MetricReader,
-} from "@opentelemetry/sdk-metrics";
+import { BatchLogRecordProcessor, SimpleLogRecordProcessor, type LogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { ConsoleMetricExporter, PeriodicExportingMetricReader, type MetricReader } from "@opentelemetry/sdk-metrics";
 import {
   BatchSpanProcessor,
   ConsoleSpanExporter,

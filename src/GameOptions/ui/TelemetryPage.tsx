@@ -92,11 +92,7 @@ export const TelemetryPage = (): React.ReactElement => {
         SnackbarEvents.emit(`Endpoint responded with HTTP ${response.status}.`, ToastVariant.WARNING, 5000);
       }
     } catch (error: unknown) {
-      SnackbarEvents.emit(
-        `Could not reach endpoint (network/CORS error). ${String(error)}`,
-        ToastVariant.ERROR,
-        6000,
-      );
+      SnackbarEvents.emit(`Could not reach endpoint (network/CORS error). ${String(error)}`, ToastVariant.ERROR, 6000);
     }
   }
 
@@ -108,8 +104,8 @@ export const TelemetryPage = (): React.ReactElement => {
       <Typography>
         OpenTelemetry support. When enabled, the game emits structured logs, periodic metrics (money, skills, running
         scripts, etc.), and traces of the script execution chain. Your scripts can also emit logs via{" "}
-        <code>ns.telemetry.debug/info/warn/error</code>. Data leaves the game only through the OTLP sink, to the endpoint
-        you configure below; nothing is sent anywhere else.
+        <code>ns.telemetry.debug/info/warn/error</code>. Data leaves the game only through the OTLP sink, to the
+        endpoint you configure below; nothing is sent anywhere else.
       </Typography>
 
       <OptionSwitch
@@ -157,7 +153,9 @@ export const TelemetryPage = (): React.ReactElement => {
           reconfigure();
         }}
         text="Stdout / stderr"
-        tooltip={<>Write to the JS console (developer tools): errors to console.error, everything else to console.log.</>}
+        tooltip={
+          <>Write to the JS console (developer tools): errors to console.error, everything else to console.log.</>
+        }
       />
       <OptionSwitch
         checked={sinkOtlp}
@@ -240,7 +238,9 @@ export const TelemetryPage = (): React.ReactElement => {
           step={5}
           min={0}
           max={100}
-          tooltip={<>Sampling is decided at the root script and inherited by children. 100% can be heavy for large fleets.</>}
+          tooltip={
+            <>Sampling is decided at the root script and inherited by children. 100% can be heavy for large fleets.</>
+          }
         />
       )}
 
