@@ -1,7 +1,7 @@
 # OpenTelemetry Support for Bitburner
 
 This folder holds the design and implementation plan for adding OpenTelemetry (OTel)
-logging and metrics to Bitburner.
+logging, metrics, and tracing to Bitburner.
 
 ## Documents
 
@@ -18,7 +18,8 @@ Electron renderer, and Node):
 2. **Player-facing NS API** — a new `ns.telemetry` namespace lets player scripts emit
    leveled, structured logs through the same pipeline.
 3. **Settings UI** — a new "Telemetry" options tab to enable/disable telemetry, set the
-   log level, and choose the sink (console, file, or OTLP endpoint).
+   log level, and choose any combination of three sinks: the **in-game console**
+   (`ns.print`/Terminal), **stdout/stderr** (JS console), and an **OTLP endpoint**.
 
 ## Status
 
@@ -32,6 +33,5 @@ begin until you approve.**
 | 1 | Use the **standard OpenTelemetry JS SDK** (not hand-rolled), must run in browser + Electron + Node | **Locked** (user) |
 | 2 | Signals in v1: **Logs + Metrics + Traces** (script execution chain) | **Locked** (user) — traces added |
 | 3 | NS API shape: **`ns.telemetry`** leveled logging (renamed from `ns.log` after review); custom player metrics deferred | Recommended — pending confirmation |
-| 4 | "File" sink is **Electron-only** (browser can't write files) | Recommended default — pending confirmation |
+| 4 | Three **multi-selectable** sinks: in-game console, stdout/stderr, OTLP. No file sink. | **Locked** (user) |
 | 5 | Runtime opt-in (off by default) + lazy-loaded SDK, **not** a compile-time build flag | Decided — pending confirmation |
-| 6 | Built for **this fork** first; upstream PR is a non-blocking nice-to-have | **Locked** (user) |

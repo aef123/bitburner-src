@@ -18,7 +18,9 @@ Add OpenTelemetry support to Bitburner in three layers:
    launched which).
 2. **Player NS API** — script authors can emit structured logs from their own scripts.
 3. **Configuration** — a settings page section to enable telemetry, set the log level,
-   and choose where signals go (console, file, or an OTLP endpoint).
+   and choose where signals go. Three sinks — **in-game console** (the `ns.print`/Terminal
+   surface), **stdout/stderr** (the JS console), and an **OTLP endpoint** — any combination
+   of which can be active at once.
 
 Built on the **standard OpenTelemetry JavaScript SDK** so it works in the browser, the
 Electron renderer, and Node (tests / headless).
@@ -32,10 +34,9 @@ Electron renderer, and Node (tests / headless).
 | 1 | Use the official `@opentelemetry/*` packages, not a hand-rolled exporter | User preference for standard libraries; must work in browser + Electron + Node. The OTLP/HTTP exporters have documented web support. | **Locked** |
 | 2 | v1 signals = **Logs + Metrics + Traces**. | **Changed — traces added at user request** to visualize the script execution chain (top-level → children → grandchildren). Feasible: Bitburner's pid/parent process tree maps onto OTel spans with clean start/end chokepoints (see §5.3). | **Changed — confirm** |
 | 3 | Player API namespace = **`ns.telemetry`** (`.debug/.info/.warn/.error`) | **Changed from `ns.log` after review.** `ns.log` collides conceptually with the existing `ns.disableLog`/`enableLog`/`isLogEnabled`/`clearLog`/`getScriptLogs`/`print` family, which all govern the *player-visible tail log*. Telemetry goes to an *external sink* — opposite concept. `ns.telemetry` is collision-free, self-documenting, and pairs with a future `ns.telemetry.counter/gauge`. | **Changed — confirm** |
-| 4 | **File** sink is **Electron-only**; in browser it's disabled with a tooltip | Browsers can't write arbitrary files; Electron can via the IPC bridge. | Default — confirm |
+| 4 | Three **multi-selectable** sinks: **in-game console** (`ns.print`/Terminal), **stdout/stderr** (JS console), **OTLP** (HTTP). Any combination can be on at once. No file sink. | User direction. OTel providers support multiple processors, so fan-out to several sinks is natural. File sink dropped (was Electron-only and the messiest surface). | **Locked (user)** |
 | 5 | The OTel SDK is **lazy-loaded** (dynamic `import()`) only when telemetry is enabled; gated by a **runtime** toggle, **not** a compile-time build flag | Keeps the SDK out of the initial bundle/hot path for players who never enable it, while avoiding the CI-matrix / "works on my build" cost of two build variants. The lazy chunk already gives the "zero cost when off" property a build flag would. | **Decided — confirm** |
 | 6 | Telemetry is **opt-in, off by default**; each signal (logs / metrics / traces) independently toggleable | Privacy + zero overhead. Telemetry that phones home must never be silent/default-on. Traces are high-churn, so a separate toggle matters. | **Strong recommendation** |
-| 7 | Build for **this fork first**; upstream maintainer buy-in is a *nice-to-have*, not a gate | User wants the feature for their own use regardless of upstream acceptance. Keep the code upstream-friendly (lazy chunk, opt-in, facade isolation) so a future PR is easy, but don't block on it. | **Decided (user)** |
 
 ---
 
@@ -105,7 +106,9 @@ Findings from a code survey, verified against the `otlp` branch.
 - Uncaught script errors: hook the existing path at
   `src/utils/helpers/exceptionAlert.tsx` (imported by `engine.tsx:34`). *(Not
   `ErrorHelper.ts` — corrected from the first draft.)*
-- Electron main uses `electron-log`.
+- The **in-game console sink** routes log records to the same surfaces `ns.print`/
+  `ns.tprint` use: a script's tail log (`RunningScript.log()`) for script-originated
+  records and the Terminal (`Terminal.print/warn/error`) for engine records.
 
 ### Settings UI
 - `src/GameOptions/ui/GameOptionsRoot.tsx` — `OptionsTabName` union (`:13`) + `tabs`
@@ -120,13 +123,10 @@ Findings from a code survey, verified against the `otlp` branch.
 ### Build / runtime constraints
 - Webpack 5; lean deps; bundle size matters to the community.
 - `src/` runs in **browser + Electron renderer** — **no Node APIs**. `fetch` available.
-- **Electron detection idiom (verified):** `navigator.userAgent.toLowerCase().includes("
-  electron/")` — must lowercase (real UAs say `"Electron/"`). Used at `Electron.tsx:55`,
+- **Electron detection idiom (verified)**, used only to set the `deployment.environment`
+  resource attribute: `navigator.userAgent.toLowerCase().includes(" electron/")` — must
+  lowercase (real UAs say `"Electron/"`). Used at `Electron.tsx:55`,
   `NetscriptFunctions/UserInterface.ts:205`, `utils/ErrorHelper.ts:101`.
-- Electron file writes: `window.electronBridge.send(channel, data)` (fire-and-forget,
-  whitelisted in `electron/preload.js:7`) → `ipcMain.on` handler (`electron/main.js:167`)
-  → `fs` helper in `electron/storage.js`. **Path resolution (`app.getPath(...)`) is
-  main-process only** — the renderer passes a filename, not an absolute path.
 
 ---
 
@@ -143,8 +143,10 @@ Findings from a code survey, verified against the `otlp` branch.
   ns.telemetry.* ────▶ │  Logger facade ──┬─▶ MeterProvider ──┐       │
   engine logs ───────▶ │                  └─▶ LoggerProvider ─┤       │
                        │                                       ▼       │
-                       │     Sinks: Console | File* | OTLP(HTTP) ──────┼─▶ collector :4318
-                       │     * File = Electron-only via IPC bridge     │
+                       │     Sinks (any combination, fan-out):         │
+                       │       • in-game console (ns.print/Terminal)   │
+                       │       • stdout/stderr (JS console)            │
+                       │       • OTLP (HTTP) ──────────────────────────┼─▶ collector :4318
                        └─────────────────────────────────────────────┘
                                           ▲ reads
                               Settings (enabled, level, sink, endpoint, …)
@@ -162,8 +164,9 @@ mitigation for the OTel logs SDK being experimental (see §9): churn stays conta
 | `TelemetryLogger.ts` | `logEvent(level, body, attributes)` for engine + NS API. Maps level → `SeverityNumber` (DEBUG=5, INFO=9, WARN=13, ERROR=17). **Rate-check and level-check happen FIRST, before any record/attribute allocation.** No-ops when disabled. |
 | `EngineMetrics.ts` | Observable instruments + `collect()` callbacks reading `Player`/server state. |
 | `ScriptTracer.ts` | Owns the `Map<pid, Span>`. `onScriptStart(childWs, parentWs?)` opens a span (parented to the launcher's span when present), `onScriptEnd(ws)` ends it, and both emit the `script.start`/`script.exit` log backbone. Keeps OTel out of `WorkerScript`. |
-| `TelemetrySinks.ts` | Builds log + metric + trace processors/readers per configured sink. Derives per-signal OTLP URLs (`/v1/logs`, `/v1/metrics`, `/v1/traces`). |
-| `FileExporter.ts` | Electron-only exporter implementing the `LogRecordExporter`/`PushMetricExporter` interface; serializes OTLP-JSON and ships over the IPC bridge. Resolves optimistically (bridge is fire-and-forget). Never constructed outside Electron. |
+| `TelemetrySinks.ts` | Builds the **array** of log/metric/trace processors/readers for every **enabled** sink (fan-out). Derives per-signal OTLP URLs (`/v1/logs`, `/v1/metrics`, `/v1/traces`). |
+| `exporters/GameConsoleLogExporter.ts` | Custom `LogRecordExporter` → in-game surfaces: a script's tail log for script-originated records (via the worker context on the record), the Terminal otherwise; severity maps to `print`/`warn`/`error`. Logs only. |
+| `exporters/StdioLogExporter.ts` | Custom `LogRecordExporter` → JS console: `console.error` for ERROR severity, `console.log` otherwise (so logs hit stdout and errors hit stderr under Node). Metrics/traces on this sink use OTel's built-in `ConsoleMetricExporter`/`ConsoleSpanExporter`. |
 | `TelemetryConfig.ts` | Normalizes `Settings.*`; level enum mapping; resource attributes. |
 | `index.ts` | Barrel exports. |
 
@@ -350,63 +353,72 @@ specifically to avoid implying any connection to those. `ns.print` is unchanged.
 
 ### 7.1 New settings (`src/Settings/Settings.ts`)
 ```
-TelemetryEnabled: boolean          // default false
+TelemetryEnabled: boolean          // default false  (master toggle)
 TelemetryLogLevel: OtelLogLevel    // default INFO
-TelemetrySink: OtelSink            // default CONSOLE  (console | file | otlp)
+// Sinks — independently toggleable; any combination may be active at once:
+TelemetrySinkGameConsole: boolean  // default false — route logs to ns.print/Terminal
+TelemetrySinkStdio: boolean        // default true  — JS console (stdout/stderr)
+TelemetrySinkOtlp: boolean         // default false — OTLP/HTTP exporter
 TelemetryOtlpEndpoint: string      // default "http://localhost:4318"  (BASE url)
 TelemetryMetricsEnabled: boolean   // default true (when telemetry on)
 TelemetryTracesEnabled: boolean    // default true (when telemetry on) — script-chain spans
 TelemetryTraceSampleRatio: number  // default 1.0, clamped 0..1
 TelemetryExportIntervalMs: number  // default 10000, clamped
-TelemetryFileName: string          // Electron-only; a filename, NOT an absolute path
 ```
-Enums in `SettingEnums.ts`: `OtelLogLevel` (DEBUG|INFO|WARN|ERROR), `OtelSink`
-(CONSOLE|FILE|OTLP).
+Enums in `SettingEnums.ts`: `OtelLogLevel` (DEBUG|INFO|WARN|ERROR). (No sink enum — sinks
+are independent booleans so they can combine.)
+
+> The in-game console sink applies to **logs only** (a stream of metrics/spans in the
+> Terminal isn't useful). Stdout/stderr and OTLP carry all enabled signals.
 
 **OTLP URL handling (review finding):** `TelemetryOtlpEndpoint` is the **base** URL. The
 `url` constructor option of the HTTP exporters is treated as the *full* signal path and is
-**not** auto-suffixed. `TelemetrySinks` must derive `${base}/v1/logs` and
-`${base}/v1/metrics` itself.
+**not** auto-suffixed. `TelemetrySinks` must derive `${base}/v1/logs`,
+`${base}/v1/metrics`, and `${base}/v1/traces` itself.
 
 Load/sanitize in `SettingsUtils.ts` `loadSettings` (the merge is a blind `Object.assign`,
 so validate defensively):
 - `isValidOtlpEndpoint(url)` — parseable http/https URL (modeled on
   `isValidConnectionHostname`/`Port`).
-- Clamp `TelemetryExportIntervalMs`; coerce unknown enum values to defaults; **coerce the
-  boolean toggles** (nothing else type-checks booleans on load).
+- Clamp `TelemetryExportIntervalMs` and `TelemetryTraceSampleRatio`; coerce unknown
+  `OtelLogLevel` values to default; **coerce all the boolean toggles** including the three
+  sink booleans (nothing else type-checks booleans on load).
 
 ### 7.2 Settings UI — new "Telemetry" tab
 - Add `"Telemetry"` to `OptionsTabName` + `tabs` (`GameOptionsRoot.tsx`) **and** a
   `<SideBarTab>` in `GameOptionsSidebar.tsx`.
 - New `src/GameOptions/ui/TelemetryPage.tsx`:
   - `OptionSwitch` — **Enable telemetry** (master; disables the rest when off).
-  - `Select` — **Log level**. `Select` — **Sink**.
-  - `TextField` (validated, `RemoteAPIPage` pattern) — **OTLP endpoint** (sink = OTLP).
-    **Warn on non-localhost/non-private endpoints** ("This sends your game data to an
-    external server"). One-line **CORS hint** under the field.
-  - `TextField` — **Log file name** (sink = File **and** Electron; else `disabled` with
-    tooltip "Available in the desktop app only").
+  - `Select` — **Log level**.
+  - **Sinks** (three independent `OptionSwitch`es — any combination):
+    - **In-game console** (`ns.print`/Terminal).
+    - **Stdout / stderr** (JS console).
+    - **OTLP endpoint** — reveals the endpoint field + Test Connection when on.
+  - `TextField` (validated, `RemoteAPIPage` pattern) — **OTLP endpoint** (shown when the
+    OTLP sink is on). **Warn on non-localhost/non-private endpoints** ("This sends your
+    game data to an external server"). One-line **CORS hint** under the field.
   - `OptionSwitch` — **Export game metrics**. Number field — **Export interval (s)**.
   - `OptionSwitch` — **Trace script execution chain**. `OptionsSlider` — **Trace sample
     rate** (0–100%, shown when traces on; warn that 100% is heavy for big script fleets).
-  - **Test connection** button (sink = OTLP) — best-effort POST + result toast.
-    *In-scope*: the #1 failure mode is "configured an endpoint, saw nothing."
-  - A short sentence stating **what is collected** and that it goes only to the configured
-    endpoint.
+  - **Test connection** button (shown when the OTLP sink is on) — best-effort POST +
+    result toast. *In-scope*: the #1 failure mode is "configured an endpoint, saw nothing."
+  - A short sentence stating **what is collected** and that it leaves the game only via the
+    OTLP sink, to the endpoint you configure.
 - Any change → write `Settings.*` and call `reconfigureTelemetry()`.
 
 ### 7.3 Sinks
+All sinks are independent and combine by fanning out to multiple processors/readers on
+each provider. The in-game console sink is logs-only.
+
 | Sink | Logs | Metrics | Traces | Browser | Electron | Node |
 |------|------|---------|--------|---------|----------|------|
-| Console | `ConsoleLogRecordExporter` | `ConsoleMetricExporter` | `ConsoleSpanExporter` | ✅ | ✅ | ✅ |
+| In-game console | custom `GameConsoleLogExporter` → tail log / Terminal (by severity) | — | — | ✅ | ✅ | ✅ |
+| Stdout / stderr | custom `StdioLogExporter` (`console.log` / `console.error`) | `ConsoleMetricExporter` | `ConsoleSpanExporter` | ✅ | ✅ | ✅ |
 | OTLP | `OTLPLogExporter` (http/json) | `OTLPMetricExporter` (http/json) | `OTLPTraceExporter` (http/json) | ✅ | ✅ | ✅ |
-| File | custom `FileExporter` (IPC) | custom `FileExporter` (IPC) | custom `FileExporter` (IPC) | ❌ disabled | ✅ | ✅ |
 
-**File sink (Electron):** add `"otel-write"` to the `send` whitelist in `preload.js`, an
-`ipcMain.on("otel-write", …)` handler in `main.js`, and an append helper in `storage.js`
-writing OTLP-JSON lines. **Main process resolves the path** (under `app.getPath("logs")` +
-the configured filename); the renderer only sends the filename + payload. The bridge is
-fire-and-forget, so `FileExporter.export()` resolves optimistically.
+Console-type exporters use `SimpleLogRecordProcessor` (immediate); OTLP uses
+`BatchLogRecordProcessor`. With no sink enabled, telemetry produces nothing (and the UI
+notes that).
 
 ---
 
@@ -419,8 +431,9 @@ must be committed**).
 
 - **Unit (Jest):** config normalization + validation; level filtering; rate cap (drop +
   throttled warn); no-op when disabled; attribute coercion/size caps;
-  `EngineMetrics.collect()` against a mock `Player`; `FileExporter` never built outside
-  Electron.
+  `EngineMetrics.collect()` against a mock `Player`; `TelemetrySinks` builds one
+  processor/reader per **enabled** sink and an empty set when all are off; the in-game
+  console sink is logs-only.
 - **NS API:** `ns.telemetry.*` produces records with correct severity + script attributes;
   RAM cost 0; the RAM-calculation jest test auto-discovers and exercises the new methods.
 - **Tracing:** a child launched via `runScriptFromScript` gets a span parented to the
@@ -431,7 +444,9 @@ must be committed**).
 - **Lazy import under ts-jest:** dynamic-importing ESM-heavy OTel packages in Node tests
   may need `transformIgnorePatterns`/`moduleNameMapper` tweaks — budget for it.
 - **Integration (manual):** local `otel/opentelemetry-collector` on `:4318`; confirm logs
-  + metrics arrive (JSON OTLP). Console sink in dev tools. File sink in an Electron build.
+  + metrics + traces arrive (JSON OTLP). Stdout/stderr sink in dev tools (errors on
+  `console.error`). In-game console sink shows log records in the Terminal/tail. Confirm
+  multiple sinks active at once fan out correctly.
 - **Bundle gate:** `npm run analyze-bundle` — **hard requirement: initial-bundle delta for
   telemetry-off users ≈ 0 KB** (SDK lands in a lazy chunk). Put the number in the PR.
 
@@ -450,10 +465,7 @@ must be committed**).
    (§5.3); open-span map bounded by live-script count; high churn handled by sampling.
 6. **Save/version compat** — additive, default-safe fields; old saves load fine; load-time
    validation guards tampered values.
-7. **Upstream acceptance (non-blocking).** ~9 runtime deps is a lot for a lean project, so
-   a future upstream PR may face pushback. Not a gate (this is the user's fork), but the
-   design stays upstream-friendly (lazy chunk, opt-in, facade) to keep that door open.
-8. **Player-defined metrics & custom spans deferred** — confirm acceptable for v1.
+7. **Player-defined metrics & custom spans deferred** — confirm acceptable for v1.
 
 ---
 
@@ -466,16 +478,18 @@ must be committed**).
 - Add settings fields + enums + load-time validation (no UI). Telemetry off by default.
 - **Exit:** game builds/runs identically; telemetry inert; bundle delta ≈ 0.
 
-### Phase 1 — Core + console sink
+### Phase 1 — Core + stdout/stderr & in-game console sinks
 - `Telemetry.ts` lifecycle (lazy load, init/reconfigure/shutdown, no global registration).
-- `TelemetryLogger` + level filter + **rate cap** + `ConsoleLogRecordExporter`.
+- `TelemetryLogger` + level filter + **rate cap**.
+- Multi-sink fan-out in `TelemetrySinks`; `StdioLogExporter` and `GameConsoleLogExporter`.
 - Wire `initTelemetry()`/`shutdownTelemetry()` into load/unload.
-- **Exit:** enabling telemetry logs structured events to the console.
+- **Exit:** enabling telemetry logs structured events to the JS console and/or the in-game
+  Terminal, per the sink toggles; multiple sinks can be on together.
 
 ### Phase 2 — Engine metrics
 - `EngineMetrics` observable instruments + `collect()`; `PeriodicExportingMetricReader`
-  (console first); hook `recordMoneySource` for the income counter.
-- **Exit:** metrics appear in console on the interval.
+  (`ConsoleMetricExporter` first); hook `recordMoneySource` for the income counter.
+- **Exit:** metrics appear on stdout on the interval.
 
 ### Phase 3 — Tracing (script execution chain)
 - `ScriptTracer` with the `Map<pid, Span>`; hook `onScriptStart` into
@@ -500,21 +514,12 @@ must be committed**).
 
 ### Phase 6 — Settings UI
 - `TelemetryPage.tsx` + tab/sidebar/page wiring; live `reconfigureTelemetry()`;
-  conditional fields (incl. trace toggle + sample-rate slider); endpoint validation +
-  external-endpoint warning + CORS hint; Test Connection button; Electron detection for the
-  file field.
-- **Exit:** players configure everything from options.
+  the three sink toggles, conditional OTLP fields, trace toggle + sample-rate slider;
+  endpoint validation + external-endpoint warning + CORS hint; Test Connection button.
+- **Exit:** players configure everything (sinks, level, endpoint, metrics, traces) from
+  options.
 
-### Phase 7 — File sink (Electron) — *cuttable*
-- IPC channel + main handler (path resolution) + storage append helper; `FileExporter`;
-  browser fallback (disabled).
-- **Exit:** Electron build writes telemetry to a file.
-- *Note:* a reviewer recommended deferring this to v2 to shrink the review surface (it's
-  the only Electron-main / custom-exporter piece). **Kept in v1 because the file sink is an
-  explicit requirement**, but it's the last phase and can be split into a follow-up PR if
-  the maintainers prefer a smaller first PR.
-
-### Phase 8 — Tests, docs, polish
+### Phase 7 — Tests, docs, polish
 - Unit + integration tests; in-game/markdown docs; bundle re-check; changelog entry.
 - **Exit:** CI green (build/lint/prettier/test/check-docs), docs committed, ready for PR.
 
@@ -546,15 +551,13 @@ architecture were confirmed correct against current OTel JS docs. Changes folded
   split HP; added faction rep.
 - **Concrete rate cap** (100/sec/script, checked before allocation).
 - **CI specifics** (named jobs; generated docs committed; ts-jest transform caveat).
-- **Sidebar is a separate edit**; **file path resolved in main process**; **boolean
-  coercion** on settings load.
-- **Decisions added:** runtime opt-in (not compile-time flag); Phase 0 maintainer buy-in +
-  ~0 KB bundle gate; privacy guarantees + external-endpoint warning + CORS hint; Test
-  Connection promoted to in-scope.
-- **File sink kept in v1** (explicit requirement) but marked cuttable per reviewer concern.
+- **Sidebar is a separate edit**; **boolean coercion** on settings load.
+- **Decisions added:** runtime opt-in (not compile-time flag); ~0 KB bundle gate; privacy
+  guarantees + external-endpoint warning + CORS hint; Test Connection promoted to in-scope.
 
 ### Post-review user direction
 - **Traces added to v1** (§5.3) — script-execution-chain tracing, one span per script,
   with the `script.start`/`script.exit` log backbone to handle long-running/immortal roots.
-- **Maintainer buy-in downgraded from a gate to a non-blocking nice-to-have** — this is the
-  user's fork; they want the feature regardless of upstream acceptance.
+- **Sink model reworked**: three independent, **multi-selectable** sinks — in-game console
+  (`ns.print`/Terminal), stdout/stderr (JS console), and OTLP. **File sink dropped.**
+- **Upstream/maintainer discussion removed** from the plan — out of scope for the design.
