@@ -3,7 +3,7 @@ import { defaultMonacoTheme } from "../ScriptEditor/ui/themes";
 import { defaultStyles } from "../Themes/Styles";
 import { defaultTheme } from "../Themes/Themes";
 import type { PlayerDefinedKeyBindingsType } from "../utils/KeyBindingUtils";
-import { OwnedAugmentationsOrderSetting, PurchaseAugmentationsOrderSetting } from "./SettingEnums";
+import { OtelLogLevel, OwnedAugmentationsOrderSetting, PurchaseAugmentationsOrderSetting } from "./SettingEnums";
 
 /** The current options the player has customized to their play style. */
 export const Settings = {
@@ -142,4 +142,26 @@ export const Settings = {
   KeyBindings: {} as PlayerDefinedKeyBindingsType,
   /** Whether to sync Steam achievements */
   SyncSteamAchievements: true,
+
+  // --- OpenTelemetry ---
+  /** Master switch for OpenTelemetry telemetry. Off by default; nothing is emitted and the SDK is not loaded when false. */
+  TelemetryEnabled: false,
+  /** Minimum log severity that will be emitted. */
+  TelemetryLogLevel: OtelLogLevel.INFO,
+  /** Sink: route log records to the in-game console (ns.print/Terminal). Logs only. */
+  TelemetrySinkGameConsole: false,
+  /** Sink: route signals to the JS console (stdout/stderr). */
+  TelemetrySinkStdio: true,
+  /** Sink: export signals to an OTLP/HTTP endpoint. */
+  TelemetrySinkOtlp: false,
+  /** Base URL of the OTLP/HTTP endpoint. Per-signal paths (/v1/logs, /v1/metrics, /v1/traces) are appended. */
+  TelemetryOtlpEndpoint: "http://localhost:4318",
+  /** Whether to export periodic game metrics (money, skills, etc.) when telemetry is on. */
+  TelemetryMetricsEnabled: true,
+  /** Whether to trace the script execution chain (one span per script) when telemetry is on. */
+  TelemetryTracesEnabled: true,
+  /** Head sampling ratio for traces, 0..1. */
+  TelemetryTraceSampleRatio: 1,
+  /** Metric/trace export interval in milliseconds. */
+  TelemetryExportIntervalMs: 10000,
 };
