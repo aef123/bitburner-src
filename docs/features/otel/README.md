@@ -14,15 +14,15 @@ Electron renderer, and Node):
 
 1. **Engine telemetry** — the game emits structured logs and periodic metrics (player
    money, skills, running scripts, RAM usage, faction rep, etc.) from the main tick loop.
-2. **Player-facing NS API** — a new `ns.log` namespace lets player scripts emit leveled,
-   structured logs through the same pipeline.
+2. **Player-facing NS API** — a new `ns.telemetry` namespace lets player scripts emit
+   leveled, structured logs through the same pipeline.
 3. **Settings UI** — a new "Telemetry" options tab to enable/disable telemetry, set the
    log level, and choose the sink (console, file, or OTLP endpoint).
 
 ## Status
 
-**Plan under review. Implementation has NOT started and will not begin until the plan is
-approved.**
+**Plan reviewed by subagents and revised. Implementation has NOT started and will not
+begin until you approve.**
 
 ## Decisions locked / pending
 
@@ -30,5 +30,6 @@ approved.**
 |---|----------|--------|
 | 1 | Use the **standard OpenTelemetry JS SDK** (not hand-rolled), must run in browser + Electron + Node | **Locked** (user) |
 | 2 | Signals in v1: **Logs + Metrics** (Traces deferred) | Recommended default — pending confirmation |
-| 3 | NS API shape: **`ns.log`** leveled logging; custom player metrics deferred | Recommended default — pending confirmation |
+| 3 | NS API shape: **`ns.telemetry`** leveled logging (renamed from `ns.log` after review); custom player metrics deferred | Recommended — pending confirmation |
 | 4 | "File" sink is **Electron-only** (browser can't write files) | Recommended default — pending confirmation |
+| 5 | Runtime opt-in (off by default) + lazy-loaded SDK, **not** a compile-time build flag | Decided — pending confirmation |
