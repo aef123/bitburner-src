@@ -255,9 +255,12 @@ process tree across `run`/`exec`/`spawn`.
   - Span name: the script filename. Attributes: `script.pid`, `script.filename`,
     `script.server`, `script.args`, `script.thread_count`, `bitnode`,
     `script.launch_method` (`run`/`exec`/`spawn`/`root`).
-  - Parent context: look up `parentWs.pid` in the `Map<pid, Span>`. Found → child span
-    parented to it (shares the launcher's `traceId`). Absent → **root span, new trace**
-    (terminal run, autoexec, restored scripts, tail relaunch, editor run, after-reset).
+  - Parent context: look up `parentWs.pid` in the `Map<pid, Span>`. Found → child span via
+    `tracer.startSpan(name, opts, trace.setSpan(ROOT_CONTEXT, parentSpan))` (use
+    `ROOT_CONTEXT` explicitly — we manage context by the pid map, not OTel's context
+    manager), sharing the launcher's `traceId`. Absent → `startSpan` with no parent context
+    → **root span, new trace** (terminal run, autoexec, restored scripts, tail relaunch,
+    editor run, after-reset).
 - **Close** at `stopAndCleanUpWorkerScript` (`killWorkerScript.ts:56`): call
   `ScriptTracer.onScriptEnd(ws)` → set status (ok / error from the script's exit) and
   `span.end()`, then drop it from the map. `BatchSpanProcessor` exports ended spans on its
@@ -287,6 +290,8 @@ process tree across `run`/`exec`/`spawn`.
   root and inherited by children, so sampled traces stay whole.
 - Span churn is cheap, but the open-span map is bounded by concurrent live scripts (which
   in-game RAM already bounds).
+- Long-lived root spans carry only fixed start attributes — **no per-event
+  `span.addEvent(...)`** (events accumulate in the open span's memory until it ends).
 
 > **No NS API for tracing in v1.** Tracing is automatic engine instrumentation. A future
 > `ns.telemetry.span(...)` for custom in-script spans is a v2 candidate.
