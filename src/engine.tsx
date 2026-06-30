@@ -8,6 +8,7 @@ import { Factions } from "./Faction/Factions";
 import { staneksGift } from "./CotMG/Helper";
 import { processPassiveFactionRepGain, inviteToFaction } from "./Faction/FactionHelpers";
 import { Router } from "./ui/GameRoot";
+import { initTelemetry } from "./Telemetry";
 import "./PersonObjects/Player/PlayerObject"; // For side-effect of creating Player
 
 import {
@@ -398,6 +399,9 @@ const Engine = {
       };
     }
     globalThis.openDevMenu = () => apr1();
+
+    // Wire up OpenTelemetry (no-op unless the player has enabled it in settings).
+    initTelemetry();
   },
 
   start: function () {
