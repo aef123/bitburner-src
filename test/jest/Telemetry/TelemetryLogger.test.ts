@@ -46,6 +46,13 @@ describe("TelemetryLogger", () => {
     });
   });
 
+  it("stamps source=system by default and source=user when requested", () => {
+    logEvent(OtelLogLevel.INFO, "engine");
+    logEvent(OtelLogLevel.INFO, "script", {}, undefined, "user");
+    expect(emitted[0].attributes.source).toBe("system");
+    expect(emitted[1].attributes.source).toBe("user");
+  });
+
   it("enforces the per-key rate cap and emits one throttled warning", () => {
     setRateLimit(3);
     for (let i = 0; i < 10; i++) logEvent(OtelLogLevel.INFO, `msg ${i}`, {}, "home/script.js");

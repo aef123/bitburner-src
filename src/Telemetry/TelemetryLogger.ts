@@ -10,6 +10,9 @@ import { OtelLogLevel } from "../Settings/SettingEnums";
 
 export type TelemetryAttributes = Record<string, string | number | boolean>;
 
+/** Whether a log record originated from the game engine ("system") or a player script ("user"). */
+export type TelemetrySource = "system" | "user";
+
 /** A log record ready to hand to the OTel logger. Mirrors the subset of LogRecord we set. */
 export interface EmittedLog {
   severityNumber: number;
@@ -88,12 +91,16 @@ function passesRate(key: string, now: number): { allowed: boolean; firstDrop: bo
 /**
  * Emits a telemetry log record. No-ops when telemetry is inactive or the level is below the
  * configured threshold. The level and rate checks happen BEFORE any record is constructed.
+ *
+ * Every emitted record carries a `source` attribute ("system" for engine/lifecycle logs,
+ * "user" for logs from player scripts via ns.telemetry) so the two can be separated easily.
  */
 export function logEvent(
   level: OtelLogLevel,
   body: string,
   attributes: TelemetryAttributes = {},
   scriptKey?: string,
+  source: TelemetrySource = "system",
 ): void {
   const sink = emitter;
   if (!sink) return;
@@ -109,12 +116,12 @@ export function logEvent(
           severityNumber: SEVERITY_NUMBER[OtelLogLevel.WARN],
           severityText: OtelLogLevel.WARN,
           body: `Telemetry rate limit (${rateLimit}/s) exceeded for ${scriptKey}; further records dropped this second.`,
-          attributes: { "telemetry.dropped": true },
+          attributes: { "telemetry.dropped": true, source: "system" },
         });
       }
       return;
     }
   }
 
-  sink({ severityNumber, severityText: level, body, attributes });
+  sink({ severityNumber, severityText: level, body, attributes: { ...attributes, source } });
 }

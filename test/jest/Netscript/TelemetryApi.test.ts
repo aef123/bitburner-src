@@ -29,6 +29,7 @@ describe("ns.telemetry", () => {
     expect(emitted[0].attributes).toMatchObject({
       custom: "x",
       n: 3,
+      source: "user",
       "script.pid": 7,
       "script.filename": "s.js",
       "script.server": "home",

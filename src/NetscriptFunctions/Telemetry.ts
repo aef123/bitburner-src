@@ -31,7 +31,7 @@ function emitAt(level: OtelLogLevel) {
         "script.server": ws.hostname,
         "script.args": JSON.stringify(ws.scriptRef.args),
       };
-      logEvent(level, message, attributes, scriptKey);
+      logEvent(level, message, attributes, scriptKey, "user");
     };
 }
 
