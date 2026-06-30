@@ -13,8 +13,15 @@ import {
   PeriodicExportingMetricReader,
   type MetricReader,
 } from "@opentelemetry/sdk-metrics";
+import {
+  BatchSpanProcessor,
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import type { TelemetryConfig } from "./TelemetryConfig";
 import { StdioLogExporter } from "./exporters/StdioLogExporter";
 import { GameConsoleLogExporter } from "./exporters/GameConsoleLogExporter";
@@ -62,4 +69,16 @@ export function buildMetricReaders(config: TelemetryConfig): MetricReader[] {
     );
   }
   return readers;
+}
+
+/** One span processor per enabled exporting sink. The in-game console sink emits no spans. */
+export function buildSpanProcessors(config: TelemetryConfig): SpanProcessor[] {
+  const processors: SpanProcessor[] = [];
+  if (config.sinks.stdio) {
+    processors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+  }
+  if (config.sinks.otlp) {
+    processors.push(new BatchSpanProcessor(new OTLPTraceExporter({ url: otlpUrl(config.otlpEndpoint, "traces") })));
+  }
+  return processors;
 }

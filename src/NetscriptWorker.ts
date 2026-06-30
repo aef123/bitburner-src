@@ -34,6 +34,7 @@ import { UIEventEmitter, UIEventType } from "./ui/UIEventEmitter";
 import { getErrorMessageWithStackAndCause } from "./utils/ErrorHelper";
 import { exceptionAlert } from "./utils/helpers/exceptionAlert";
 import { DarknetServer } from "./Server/DarknetServer";
+import { isTracing, onScriptStart } from "./Telemetry/ScriptTracer";
 
 export const NetscriptPorts = new Map<PortNumber, Port>();
 
@@ -71,7 +72,12 @@ async function startNetscript2Script(workerScript: WorkerScript): Promise<void> 
  * corresponding WorkerScript), and add the RunningScript to the server on which
  * it is active
  */
-export function startWorkerScript(runningScript: RunningScript, server: BaseServer, parent?: WorkerScript): number {
+export function startWorkerScript(
+  runningScript: RunningScript,
+  server: BaseServer,
+  parent?: WorkerScript,
+  launchMethod = "root",
+): number {
   if (server.hostname !== runningScript.server) {
     // Temporarily adding a check here to see if this ever triggers
     exceptionAlert(
@@ -82,7 +88,7 @@ export function startWorkerScript(runningScript: RunningScript, server: BaseServ
     );
     return 0;
   }
-  if (createAndAddWorkerScript(runningScript, server, parent)) {
+  if (createAndAddWorkerScript(runningScript, server, parent, launchMethod)) {
     // Push onto runningScripts.
     // This has to come after createAndAddWorkerScript() because that fn updates RAM usage
     server.runScript(runningScript);
@@ -102,7 +108,12 @@ export function startWorkerScript(runningScript: RunningScript, server: BaseServ
  * @param {Server} server - Server on which the script is to be run
  * returns {boolean} indicating whether or not the workerScript was successfully added
  */
-function createAndAddWorkerScript(runningScriptObj: RunningScript, server: BaseServer, parent?: WorkerScript): boolean {
+function createAndAddWorkerScript(
+  runningScriptObj: RunningScript,
+  server: BaseServer,
+  parent?: WorkerScript,
+  launchMethod = "root",
+): boolean {
   if (isLegacyScript(runningScriptObj.filename)) {
     deferredError(`Running .script files is unsupported.`);
     return false;
@@ -139,6 +150,21 @@ Otherwise, this can also occur if you have attempted to launch a script from a t
 
   // Add the WorkerScript to the global pool
   workerScripts.set(pid, workerScript);
+
+  // Open a telemetry span for this script (no-op unless tracing is enabled).
+  if (isTracing()) {
+    onScriptStart(
+      pid,
+      {
+        filename: workerScript.name,
+        server: workerScript.hostname,
+        threads: runningScriptObj.threads,
+        args: JSON.stringify(runningScriptObj.args),
+        launchMethod,
+      },
+      parent?.pid,
+    );
+  }
 
   // Start the script's execution using the correct function for file type
   startNetscript2Script(workerScript)
@@ -350,5 +376,5 @@ export function runScriptFromScript(
   runningScriptObj.threads = runOpts.threads;
   runningScriptObj.temporary = runOpts.temporary;
 
-  return startWorkerScript(runningScriptObj, server, workerScript);
+  return startWorkerScript(runningScriptObj, server, workerScript, caller);
 }

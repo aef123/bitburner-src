@@ -12,6 +12,7 @@ import { handleUnknownError } from "../utils/ErrorHandler";
 import { roundToTwo } from "../utils/helpers/roundToTwo";
 import { BaseServer } from "../Server/BaseServer";
 import { scriptKey } from "../utils/helpers/scriptKey";
+import { onScriptEnd } from "../Telemetry/ScriptTracer";
 
 export function killWorkerScript(ws: WorkerScript): void {
   stopAndCleanUpWorkerScript(ws);
@@ -83,6 +84,8 @@ function stopAndCleanUpWorkerScript(ws: WorkerScript): void {
   }
 
   ws.stopFlag = true;
+  // Close this script's telemetry span (no-op unless tracing is enabled).
+  onScriptEnd(ws.pid);
   removeWorkerScript(ws);
 }
 
