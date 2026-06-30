@@ -470,6 +470,14 @@ const grafting = {
   waitForOngoingGrafting: 0,
 } as const;
 
+// Telemetry API (logging is free, consistent with print/tprint)
+const telemetry = {
+  debug: 0,
+  info: 0,
+  warn: 0,
+  error: 0,
+} as const;
+
 const corporation = {
   hasCorporation: 0,
   canCreateCorporation: 0,
@@ -559,6 +567,7 @@ export const RamCosts: RamCostTree<NSFull> = {
   stanek,
   ui,
   grafting,
+  telemetry,
 
   sprintf: 0,
   vsprintf: 0,

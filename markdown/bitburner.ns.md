@@ -4,26 +4,10 @@
 
 ## NS interface
 
-Collection of all functions passed to scripts
-
 **Signature:**
 
 ```typescript
 export interface NS 
-```
-
-## Example
-
-
-```js
-export async function main(ns) {
- // Basic ns functions can be accessed on the ns object
- ns.getHostname();
- // Some related functions are gathered under a sub-property of the ns object
- ns.stock.getPrice();
- // Most functions that return a promise need to be awaited.
- await ns.hack('n00dles');
-}
 ```
 
 ## Properties
@@ -462,6 +446,27 @@ Namespace for [Stanek](./bitburner.stanek.md) functions. Contains spoilers.
 </td><td>
 
 Namespace for [stock](./bitburner.stock.md) functions.
+
+
+</td></tr>
+<tr><td>
+
+[telemetry](./bitburner.ns.telemetry.md)
+
+
+</td><td>
+
+`readonly`
+
+
+</td><td>
+
+[NSTelemetry](./bitburner.nstelemetry.md)
+
+
+</td><td>
+
+Namespace for [telemetry](./bitburner.nstelemetry.md) (OpenTelemetry logging) functions.
 
 
 </td></tr>

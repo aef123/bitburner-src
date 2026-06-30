@@ -1044,7 +1044,16 @@ The sub-condition must not be satisfied.
 
 </td><td>
 
-Collection of all functions passed to scripts
+
+</td></tr>
+<tr><td>
+
+[NSTelemetry](./bitburner.nstelemetry.md)
+
+
+</td><td>
+
+Telemetry (OpenTelemetry) logging API.
 
 
 </td></tr>

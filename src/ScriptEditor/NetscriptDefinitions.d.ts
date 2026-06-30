@@ -7140,6 +7140,62 @@ interface UserInterface {
  * }
  * ```
  */
+/**
+ * Telemetry (OpenTelemetry) logging API.
+ * @remarks
+ * These functions emit structured, leveled log records through the game's OpenTelemetry
+ * pipeline to whatever sinks the player has enabled (in-game console, stdout/stderr, or an
+ * OTLP endpoint). They are separate from {@link NS.print | print}/{@link NS.tprint | tprint},
+ * which write to the in-game tail log/terminal. Records below the configured log level are
+ * dropped, and a per-script rate cap prevents flooding. Every record is automatically tagged
+ * with the calling script's pid, filename, server, and args.
+ *
+ * When telemetry is disabled (the default), every method is a no-op.
+ *
+ * @public
+ */
+export interface NSTelemetry {
+  /**
+   * Emit a DEBUG-level telemetry log record.
+   * @remarks
+   * RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes attached to the record.
+   * @example
+   * ```js
+   * ns.telemetry.debug("starting batch", { target: "n00dles", threads: 50 });
+   * ```
+   */
+  debug(message: string, attributes?: Record<string, string | number | boolean>): void;
+
+  /**
+   * Emit an INFO-level telemetry log record.
+   * @remarks
+   * RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes attached to the record.
+   */
+  info(message: string, attributes?: Record<string, string | number | boolean>): void;
+
+  /**
+   * Emit a WARN-level telemetry log record.
+   * @remarks
+   * RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes attached to the record.
+   */
+  warn(message: string, attributes?: Record<string, string | number | boolean>): void;
+
+  /**
+   * Emit an ERROR-level telemetry log record.
+   * @remarks
+   * RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes attached to the record.
+   */
+  error(message: string, attributes?: Record<string, string | number | boolean>): void;
+}
+
 export interface NS {
   /**
    * Namespace for {@link Hacknet | hacknet} functions. Some of this API contains spoilers.
@@ -7225,6 +7281,11 @@ export interface NS {
    * Namespace for {@link Grafting | grafting} functions. Contains spoilers.
    */
   readonly grafting: Grafting;
+
+  /**
+   * Namespace for {@link NSTelemetry | telemetry} (OpenTelemetry logging) functions.
+   */
+  readonly telemetry: NSTelemetry;
 
   /**
    * Arguments passed into the script.
