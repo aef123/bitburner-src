@@ -13,8 +13,9 @@
 
 Add OpenTelemetry support to Bitburner in three layers:
 
-1. **Engine telemetry** — the game engine emits structured **logs** and periodic
-   **metrics** (player money, stats, etc.).
+1. **Engine telemetry** — the game engine emits structured **logs**, periodic **metrics**
+   (player money, stats, etc.), and **traces** of the script execution chain (which script
+   launched which).
 2. **Player NS API** — script authors can emit structured logs from their own scripts.
 3. **Configuration** — a settings page section to enable telemetry, set the log level,
    and choose where signals go (console, file, or an OTLP endpoint).
@@ -29,12 +30,12 @@ Electron renderer, and Node (tests / headless).
 | # | Decision | Rationale | Status |
 |---|----------|-----------|--------|
 | 1 | Use the official `@opentelemetry/*` packages, not a hand-rolled exporter | User preference for standard libraries; must work in browser + Electron + Node. The OTLP/HTTP exporters have documented web support. | **Locked** |
-| 2 | v1 signals = **Logs + Metrics**. Traces deferred. | Matches the goal. Tracing across the 200ms tick loop adds context-propagation complexity with unclear payoff. | Default — confirm |
+| 2 | v1 signals = **Logs + Metrics + Traces**. | **Changed — traces added at user request** to visualize the script execution chain (top-level → children → grandchildren). Feasible: Bitburner's pid/parent process tree maps onto OTel spans with clean start/end chokepoints (see §5.3). | **Changed — confirm** |
 | 3 | Player API namespace = **`ns.telemetry`** (`.debug/.info/.warn/.error`) | **Changed from `ns.log` after review.** `ns.log` collides conceptually with the existing `ns.disableLog`/`enableLog`/`isLogEnabled`/`clearLog`/`getScriptLogs`/`print` family, which all govern the *player-visible tail log*. Telemetry goes to an *external sink* — opposite concept. `ns.telemetry` is collision-free, self-documenting, and pairs with a future `ns.telemetry.counter/gauge`. | **Changed — confirm** |
 | 4 | **File** sink is **Electron-only**; in browser it's disabled with a tooltip | Browsers can't write arbitrary files; Electron can via the IPC bridge. | Default — confirm |
 | 5 | The OTel SDK is **lazy-loaded** (dynamic `import()`) only when telemetry is enabled; gated by a **runtime** toggle, **not** a compile-time build flag | Keeps the SDK out of the initial bundle/hot path for players who never enable it, while avoiding the CI-matrix / "works on my build" cost of two build variants. The lazy chunk already gives the "zero cost when off" property a build flag would. | **Decided — confirm** |
-| 6 | Telemetry is **opt-in, off by default** | Privacy + zero overhead. Telemetry that phones home must never be silent/default-on. | **Strong recommendation** |
-| 7 | **Maintainer buy-in on the dependency footprint is a Phase 0 gate** | Adding ~8 runtime deps to a dependency-conservative project is the top acceptance risk. Confirm in principle *before* building Phases 1–7. | **Process — recommended** |
+| 6 | Telemetry is **opt-in, off by default**; each signal (logs / metrics / traces) independently toggleable | Privacy + zero overhead. Telemetry that phones home must never be silent/default-on. Traces are high-churn, so a separate toggle matters. | **Strong recommendation** |
+| 7 | Build for **this fork first**; upstream maintainer buy-in is a *nice-to-have*, not a gate | User wants the feature for their own use regardless of upstream acceptance. Keep the code upstream-friendly (lazy chunk, opt-in, facade isolation) so a future PR is easy, but don't block on it. | **Decided (user)** |
 
 ---
 
@@ -75,6 +76,27 @@ Findings from a code survey, verified against the `otlp` branch.
   (`:545`). Mismatch is caught **twice**: a tsc type error (missing entries) and a runtime
   jest test (`test/jest/Netscript/RamCalculation.test.ts`) that walks the ns tree and
   throws "Missing ramcost for …". The new namespace must have matching `0`-cost entries.
+
+### Script process model (for tracing)
+- Every script is a `WorkerScript` (`src/Netscript/WorkerScript.ts:20`) with a unique
+  `pid` (`:61`). It has **no parent object reference**; the parent linkage is the parent's
+  **numeric pid** on the backing `RunningScript.parent` (`RunningScript.ts:60`, `0` = no
+  parent), set in `runScriptFromScript` (`NetscriptWorker.ts:349`).
+- **Span-start chokepoint:** `createAndAddWorkerScript(runningScript, server, parent?)`
+  (`NetscriptWorker.ts:105`) is the single place where both the **parent** WorkerScript
+  and the **newly-created child** WorkerScript are in scope at once (child built at `:138`).
+- **Span-end chokepoint:** `stopAndCleanUpWorkerScript(ws)` (`killWorkerScript.ts:56`) —
+  every termination path (natural exit `:148`, kill, error `:153`) funnels through it;
+  idempotent. The reliable "this script ended" hook.
+- **PID/running set:** pids from `generateNextPid()` (`Pid.ts:6`); global
+  `workerScripts = Map<pid, WorkerScript>` (`WorkerScripts.ts:4`).
+- **`ns.spawn`** (`NetscriptFunctions.ts:646`) kills the caller, then launches the child
+  from a `setTimeout` after a delay — the parent object is already removed from
+  `workerScripts` but its reference (and thus stored span context) is still passed through,
+  so child→parent linkage survives.
+- **Trace roots** (launched with no parent): Terminal `run` (`commands/runScript.ts:73`),
+  autoexec / restored scripts on load (`NetscriptWorker.ts:259`), tail relaunch
+  (`LogBoxManager.tsx:251`), Script Editor run button, Singularity after-reset.
 
 ### Existing logging
 - In-game tail log (`ns.print` → `RunningScript.log()`), Terminal (`ns.tprint`), Recently
@@ -139,7 +161,8 @@ mitigation for the OTel logs SDK being experimental (see §9): churn stays conta
 | `Telemetry.ts` | Public facade + lifecycle: `initTelemetry()`, `shutdownTelemetry()`, `reconfigureTelemetry()`. Lazy-loads the SDK on first enable. **Holds the provider references directly — does NOT call `logs.setGlobalLoggerProvider` / `metrics.setGlobalMeterProvider`** (those register only once per process and would break reconfigure). |
 | `TelemetryLogger.ts` | `logEvent(level, body, attributes)` for engine + NS API. Maps level → `SeverityNumber` (DEBUG=5, INFO=9, WARN=13, ERROR=17). **Rate-check and level-check happen FIRST, before any record/attribute allocation.** No-ops when disabled. |
 | `EngineMetrics.ts` | Observable instruments + `collect()` callbacks reading `Player`/server state. |
-| `TelemetrySinks.ts` | Builds log + metric processors/readers per configured sink. Derives per-signal OTLP URLs (`/v1/logs`, `/v1/metrics`). |
+| `ScriptTracer.ts` | Owns the `Map<pid, Span>`. `onScriptStart(childWs, parentWs?)` opens a span (parented to the launcher's span when present), `onScriptEnd(ws)` ends it, and both emit the `script.start`/`script.exit` log backbone. Keeps OTel out of `WorkerScript`. |
+| `TelemetrySinks.ts` | Builds log + metric + trace processors/readers per configured sink. Derives per-signal OTLP URLs (`/v1/logs`, `/v1/metrics`, `/v1/traces`). |
 | `FileExporter.ts` | Electron-only exporter implementing the `LogRecordExporter`/`PushMetricExporter` interface; serializes OTLP-JSON and ships over the IPC bridge. Resolves optimistically (bridge is fire-and-forget). Never constructed outside Electron. |
 | `TelemetryConfig.ts` | Normalizes `Settings.*`; level enum mapping; resource attributes. |
 | `index.ts` | Barrel exports. |
@@ -149,14 +172,19 @@ mitigation for the OTel logs SDK being experimental (see §9): churn stays conta
 Core (small, browser-safe): `@opentelemetry/api`, `@opentelemetry/api-logs`.
 
 SDK + exporters (lazy-loaded): `@opentelemetry/sdk-logs`, `@opentelemetry/sdk-metrics`,
-`@opentelemetry/exporter-logs-otlp-http`, `@opentelemetry/exporter-metrics-otlp-http`,
+`@opentelemetry/sdk-trace-base` (portable `BasicTracerProvider` + `BatchSpanProcessor` +
+`ConsoleSpanExporter`; we manage context manually via the pid map, so we don't need the
+web/node context-manager variants), `@opentelemetry/exporter-logs-otlp-http`,
+`@opentelemetry/exporter-metrics-otlp-http`, `@opentelemetry/exporter-trace-otlp-http`,
 `@opentelemetry/resources`, `@opentelemetry/semantic-conventions`.
 
 **Version pinning (review finding — do not hand-wave):** the packages split across two
 release lines:
-- **Stable** (1.x/2.x): `api`, `sdk-metrics`, `resources`, `semantic-conventions`.
+- **Stable** (1.x/2.x): `api`, `sdk-metrics`, `sdk-trace-base`, `resources`,
+  `semantic-conventions`.
 - **Experimental** (0.x): `api-logs`, `sdk-logs`, `exporter-logs-otlp-http`,
-  `exporter-metrics-otlp-http`.
+  `exporter-metrics-otlp-http`, `exporter-trace-otlp-http`. (Trace is the most mature
+  signal, but its OTLP-HTTP exporter still ships from the experimental line — pin it too.)
 
 A stable release pairs with a *specific* experimental release. **Pin the experimental
 0.x packages to exact versions** (not caret), bump them together, and verify the lockfile
@@ -214,6 +242,54 @@ A small fixed set through `TelemetryLogger`: game loaded / save / autosave (info
 BitNode entered / destroyed (info), uncaught script errors (error — hook
 `src/utils/helpers/exceptionAlert.tsx`), optional aug-installed / faction-joined (info).
 These are **additive** — they do not change the existing in-game log/terminal/toast UX.
+
+### 5.3 Traces — the script execution chain
+
+**Goal:** visualize which top-level script launched which children, and so on — the full
+process tree across `run`/`exec`/`spawn`.
+
+**Model:** one span per script, automatically (engine-side; no NS API needed).
+
+- **Open** at `createAndAddWorkerScript` (`NetscriptWorker.ts:105`): call
+  `ScriptTracer.onScriptStart(childWs, parentWs?)`.
+  - Span name: the script filename. Attributes: `script.pid`, `script.filename`,
+    `script.server`, `script.args`, `script.thread_count`, `bitnode`,
+    `script.launch_method` (`run`/`exec`/`spawn`/`root`).
+  - Parent context: look up `parentWs.pid` in the `Map<pid, Span>`. Found → child span
+    parented to it (shares the launcher's `traceId`). Absent → **root span, new trace**
+    (terminal run, autoexec, restored scripts, tail relaunch, editor run, after-reset).
+- **Close** at `stopAndCleanUpWorkerScript` (`killWorkerScript.ts:56`): call
+  `ScriptTracer.onScriptEnd(ws)` → set status (ok / error from the script's exit) and
+  `span.end()`, then drop it from the map. `BatchSpanProcessor` exports ended spans on its
+  interval.
+- **`ns.spawn`**: the new script is modeled as a **child of the spawning script** (parent
+  reference still flows through `runScriptFromScript`), so a spawn chain reads as a lineage.
+
+**The long-running-script reality (the user's concern, addressed):**
+- Spans export **individually when each ends**, and the backend assembles a trace from
+  spans arriving over time by `traceId`. So you do **not** wait for the root to end to see
+  the chain — every child that completes shows up immediately under the shared trace.
+- A long-running root (a days-long orchestrator) that spawns short-lived hack/grow/weaken
+  children: all those children export continuously; you watch the chain grow in real time.
+  Only the root's own span box (and total duration) is pending until it finally ends.
+- **Backbone for never-ending scripts:** `onScriptStart`/`onScriptEnd` also emit
+  `script.start` / `script.exit` **log events** carrying `{pid, parentPid, traceId,
+  spanId, filename, server, args}`. These export immediately, independent of span
+  completion — so the full process tree is always queryable from logs even if no span ever
+  closes (game closed, script truly immortal).
+- On clean shutdown, `ScriptTracer` best-effort `end()`s open spans with an `interrupted`
+  status so they flush. Spans open at an unclean close are lost (logs backbone covers it).
+
+**Controls (traces are high-churn):**
+- Independently toggleable (`TelemetryTracesEnabled`), off unless telemetry is on.
+- **Sampling**: a configurable head sampler (parent-based + ratio, default e.g. 100%) so a
+  player spawning thousands of scripts/sec can dial it down. Sampling decision is made at
+  root and inherited by children, so sampled traces stay whole.
+- Span churn is cheap, but the open-span map is bounded by concurrent live scripts (which
+  in-game RAM already bounds).
+
+> **No NS API for tracing in v1.** Tracing is automatic engine instrumentation. A future
+> `ns.telemetry.span(...)` for custom in-script spans is a v2 candidate.
 
 ---
 
@@ -274,6 +350,8 @@ TelemetryLogLevel: OtelLogLevel    // default INFO
 TelemetrySink: OtelSink            // default CONSOLE  (console | file | otlp)
 TelemetryOtlpEndpoint: string      // default "http://localhost:4318"  (BASE url)
 TelemetryMetricsEnabled: boolean   // default true (when telemetry on)
+TelemetryTracesEnabled: boolean    // default true (when telemetry on) — script-chain spans
+TelemetryTraceSampleRatio: number  // default 1.0, clamped 0..1
 TelemetryExportIntervalMs: number  // default 10000, clamped
 TelemetryFileName: string          // Electron-only; a filename, NOT an absolute path
 ```
@@ -304,6 +382,8 @@ so validate defensively):
   - `TextField` — **Log file name** (sink = File **and** Electron; else `disabled` with
     tooltip "Available in the desktop app only").
   - `OptionSwitch` — **Export game metrics**. Number field — **Export interval (s)**.
+  - `OptionSwitch` — **Trace script execution chain**. `OptionsSlider` — **Trace sample
+    rate** (0–100%, shown when traces on; warn that 100% is heavy for big script fleets).
   - **Test connection** button (sink = OTLP) — best-effort POST + result toast.
     *In-scope*: the #1 failure mode is "configured an endpoint, saw nothing."
   - A short sentence stating **what is collected** and that it goes only to the configured
@@ -311,11 +391,11 @@ so validate defensively):
 - Any change → write `Settings.*` and call `reconfigureTelemetry()`.
 
 ### 7.3 Sinks
-| Sink | Logs exporter | Metrics exporter | Browser | Electron | Node |
-|------|---------------|------------------|---------|----------|------|
-| Console | `ConsoleLogRecordExporter` | `ConsoleMetricExporter` | ✅ | ✅ | ✅ |
-| OTLP | `OTLPLogExporter` (http/json) | `OTLPMetricExporter` (http/json) | ✅ | ✅ | ✅ |
-| File | custom `FileExporter` (IPC) | custom `FileExporter` (IPC) | ❌ disabled | ✅ | ✅ |
+| Sink | Logs | Metrics | Traces | Browser | Electron | Node |
+|------|------|---------|--------|---------|----------|------|
+| Console | `ConsoleLogRecordExporter` | `ConsoleMetricExporter` | `ConsoleSpanExporter` | ✅ | ✅ | ✅ |
+| OTLP | `OTLPLogExporter` (http/json) | `OTLPMetricExporter` (http/json) | `OTLPTraceExporter` (http/json) | ✅ | ✅ | ✅ |
+| File | custom `FileExporter` (IPC) | custom `FileExporter` (IPC) | custom `FileExporter` (IPC) | ❌ disabled | ✅ | ✅ |
 
 **File sink (Electron):** add `"otel-write"` to the `send` whitelist in `preload.js`, an
 `ipcMain.on("otel-write", …)` handler in `main.js`, and an append helper in `storage.js`
@@ -338,6 +418,11 @@ must be committed**).
   Electron.
 - **NS API:** `ns.telemetry.*` produces records with correct severity + script attributes;
   RAM cost 0; the RAM-calculation jest test auto-discovers and exercises the new methods.
+- **Tracing:** a child launched via `runScriptFromScript` gets a span parented to the
+  launcher's span (shared `traceId`); a terminal/autoexec launch is a root; `onScriptEnd`
+  closes the span and removes it from the pid map (no leak across many start/stop cycles);
+  the `script.start`/`script.exit` log events fire with the right ids; sampling decision is
+  inherited by children; spawn chains link correctly.
 - **Lazy import under ts-jest:** dynamic-importing ESM-heavy OTel packages in Node tests
   may need `transformIgnorePatterns`/`moduleNameMapper` tweaks — budget for it.
 - **Integration (manual):** local `otel/opentelemetry-collector` on `:4318`; confirm logs
@@ -349,32 +434,32 @@ must be committed**).
 
 ## 9. Risks & open questions
 
-1. **Maintainer acceptance (top risk).** ~8 runtime deps into a lean project. Mitigations:
-   Phase 0 buy-in conversation, the ~0 KB bundle proof, and the facade isolation. *Open:*
-   maintainers' verdict on the dependency footprint — get it before building.
-2. **OTel logs are experimental (0.x).** Breaking changes can land between minors. The
-   `src/Telemetry/` facade is the containment boundary. Metrics is stable; logs is the
-   churn surface.
-3. **Bundle size** — mitigated by lazy chunk; proven by the bundle gate (§8).
-4. **Browser OTLP needs CORS** — collector must allow the game origin. Surfaced in-UI.
-5. **Unload flush is best-effort** in the browser (§4.4) — rely on periodic export.
+1. **OTel logs are experimental (0.x).** Breaking changes can land between minors. The
+   `src/Telemetry/` facade is the containment boundary. Metrics + traces are stable-ish;
+   logs is the churn surface.
+2. **Bundle size** — ~9 deps now; mitigated by lazy chunk; proven by the bundle gate (§8).
+3. **Browser OTLP needs CORS** — collector must allow the game origin. Surfaced in-UI.
+4. **Unload flush is best-effort** in the browser (§4.4) — rely on periodic export.
+5. **Trace-specific:** long-running / immortal root spans never export until they end (and
+   are lost on unclean close) — mitigated by the `script.start`/`script.exit` log backbone
+   (§5.3); open-span map bounded by live-script count; high churn handled by sampling.
 6. **Save/version compat** — additive, default-safe fields; old saves load fine; load-time
    validation guards tampered values.
-7. **Traces & player-defined metrics deferred** — confirm acceptable for v1.
+7. **Upstream acceptance (non-blocking).** ~9 runtime deps is a lot for a lean project, so
+   a future upstream PR may face pushback. Not a gate (this is the user's fork), but the
+   design stays upstream-friendly (lazy chunk, opt-in, facade) to keep that door open.
+8. **Player-defined metrics & custom spans deferred** — confirm acceptable for v1.
 
 ---
 
 ## 10. Phased implementation plan
 
-### Phase 0 — Buy-in, scaffolding & deps
-- **Gate: maintainer agreement in principle on the dependency footprint** (open a
-  discussion/issue). Don't build 1–7 on an unconfirmed premise.
+### Phase 0 — Scaffolding & deps
 - Add `@opentelemetry/*` deps (experimental pinned exact); verify lockfile dedupes `api`,
   lint/build pass, and confirm the lazy-chunk / ~0 KB bundle delta **with a number**.
 - Create `src/Telemetry/` facade + config types as no-op stubs.
 - Add settings fields + enums + load-time validation (no UI). Telemetry off by default.
-- **Exit:** game builds/runs identically; telemetry inert; bundle delta ≈ 0; maintainers
-  on board.
+- **Exit:** game builds/runs identically; telemetry inert; bundle delta ≈ 0.
 
 ### Phase 1 — Core + console sink
 - `Telemetry.ts` lifecycle (lazy load, init/reconfigure/shutdown, no global registration).
@@ -387,23 +472,35 @@ must be committed**).
   (console first); hook `recordMoneySource` for the income counter.
 - **Exit:** metrics appear in console on the interval.
 
-### Phase 3 — OTLP sink
-- OTLP log + metric HTTP exporters; per-signal URL derivation; endpoint from settings.
-- **Exit:** logs + metrics arrive at a local collector.
+### Phase 3 — Tracing (script execution chain)
+- `ScriptTracer` with the `Map<pid, Span>`; hook `onScriptStart` into
+  `createAndAddWorkerScript` and `onScriptEnd` into `stopAndCleanUpWorkerScript`.
+- Parent/root resolution, `script.launch_method` attribute, sampler, and the
+  `script.start`/`script.exit` log backbone. Console span exporter first.
+- Best-effort end-open-spans on shutdown. `WorkerScript` stays free of OTel imports.
+- **Exit:** running a script that `exec`s children produces a parented trace tree in the
+  console; roots vs children are correct; no span-map leak.
 
-### Phase 4 — `ns.telemetry` NS API
+### Phase 4 — OTLP sink
+- OTLP log + metric + trace HTTP exporters; per-signal URL derivation; endpoint from
+  settings.
+- **Exit:** logs + metrics + traces arrive at a local collector; the script chain is
+  visible in a trace UI (e.g. Jaeger/Tempo).
+
+### Phase 5 — `ns.telemetry` NS API
 - `NetscriptFunctions/Telemetry.ts`, mount, `NSTelemetry` type, RAM costs (0), rate cap,
   regenerate + commit docs.
 - **Exit:** a player script's `ns.telemetry.info(...)` flows through the pipeline.
   **Re-verify zero overhead when telemetry is off** (this is the player-reachable hot path).
 
-### Phase 5 — Settings UI
+### Phase 6 — Settings UI
 - `TelemetryPage.tsx` + tab/sidebar/page wiring; live `reconfigureTelemetry()`;
-  conditional fields; endpoint validation + external-endpoint warning + CORS hint; Test
-  Connection button; Electron detection for the file field.
+  conditional fields (incl. trace toggle + sample-rate slider); endpoint validation +
+  external-endpoint warning + CORS hint; Test Connection button; Electron detection for the
+  file field.
 - **Exit:** players configure everything from options.
 
-### Phase 6 — File sink (Electron) — *cuttable*
+### Phase 7 — File sink (Electron) — *cuttable*
 - IPC channel + main handler (path resolution) + storage append helper; `FileExporter`;
   browser fallback (disabled).
 - **Exit:** Electron build writes telemetry to a file.
@@ -412,17 +509,18 @@ must be committed**).
   explicit requirement**, but it's the last phase and can be split into a follow-up PR if
   the maintainers prefer a smaller first PR.
 
-### Phase 7 — Tests, docs, polish
+### Phase 8 — Tests, docs, polish
 - Unit + integration tests; in-game/markdown docs; bundle re-check; changelog entry.
 - **Exit:** CI green (build/lint/prettier/test/check-docs), docs committed, ready for PR.
 
 ---
 
 ## 11. Out of scope (v1)
-- Distributed tracing / spans.
-- Player-defined custom metrics (`ns.telemetry.counter/gauge`) — v2 candidate, same
-  namespace.
-- Auto-instrumentation of NS calls; bundled collector / dashboards.
+- Player-defined custom metrics (`ns.telemetry.counter/gauge`) and custom in-script spans
+  (`ns.telemetry.span`) — v2 candidates, same namespace.
+- Auto-instrumentation of individual NS calls as spans (e.g. a span per hack/grow/weaken).
+  v1 tracing is one span **per script**, not per NS call.
+- Bundled collector / prebuilt dashboards.
 
 ---
 
@@ -449,3 +547,9 @@ architecture were confirmed correct against current OTel JS docs. Changes folded
   ~0 KB bundle gate; privacy guarantees + external-endpoint warning + CORS hint; Test
   Connection promoted to in-scope.
 - **File sink kept in v1** (explicit requirement) but marked cuttable per reviewer concern.
+
+### Post-review user direction
+- **Traces added to v1** (§5.3) — script-execution-chain tracing, one span per script,
+  with the `script.start`/`script.exit` log backbone to handle long-running/immortal roots.
+- **Maintainer buy-in downgraded from a gate to a non-blocking nice-to-have** — this is the
+  user's fork; they want the feature regardless of upstream acceptance.
