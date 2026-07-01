@@ -73,4 +73,49 @@ describe("EngineMetrics", () => {
     recordIncome("hacking", 999);
     expect(counterAdds).toHaveLength(0);
   });
+
+  it("observes no gang metrics when the player has no gang", () => {
+    Player.gang = null;
+    const { meter, collect } = makeFakeMeter();
+    registerEngineMetrics(meter as never, 1);
+    expect(collect("bitburner.gang.respect")).toEqual([]);
+    expect(collect("bitburner.gang.member.stat")).toEqual([]);
+  });
+
+  it("observes gang-level and per-member gang metrics when a gang exists", () => {
+    const fakeGang = {
+      facName: "Slum Snakes",
+      respect: 1000,
+      wanted: 50,
+      respectGainRate: 5,
+      wantedGainRate: 0.5,
+      moneyGainRate: 200,
+      getWantedPenalty: () => 0.95,
+      getTerritory: () => 0.25,
+      getPower: () => 42,
+      members: [
+        { name: "Alice", hack: 10, str: 20, def: 30, dex: 40, agi: 50, cha: 60, earnedRespect: 111 },
+        { name: "Bob", hack: 1, str: 2, def: 3, dex: 4, agi: 5, cha: 6, earnedRespect: 7 },
+      ],
+    };
+    Player.gang = fakeGang as never;
+    const { meter, collect } = makeFakeMeter();
+    registerEngineMetrics(meter as never, 2);
+
+    expect(collect("bitburner.gang.respect")).toEqual([
+      { value: 1000, attributes: { bitnode: 2, faction: "Slum Snakes" } },
+    ]);
+    expect(collect("bitburner.gang.territory")[0].value).toBe(0.25);
+    expect(collect("bitburner.gang.member_count")[0].value).toBe(2);
+
+    const memberStats = collect("bitburner.gang.member.stat");
+    expect(memberStats.length).toBe(2 * 6); // 2 members × 6 stats
+    const aliceHacking = memberStats.find((o) => o.attributes.member === "Alice" && o.attributes.stat === "hacking");
+    expect(aliceHacking?.value).toBe(10);
+
+    const respect = collect("bitburner.gang.member.earned_respect");
+    expect(respect.find((o) => o.attributes.member === "Bob")?.value).toBe(7);
+
+    Player.gang = null;
+  });
 });
