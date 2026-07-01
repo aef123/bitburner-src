@@ -14,14 +14,23 @@ import type { TelemetryConfig } from "./TelemetryConfig";
 import { hasAnySink, readTelemetryConfig } from "./TelemetryConfig";
 import { EmittedLog, setLogEmitter, setMinLogLevel } from "./TelemetryLogger";
 import { endAllOpenSpans, setScriptTracerImpl } from "./ScriptTracer";
+import { setUserMetricsImpl } from "./UserMetrics";
+import { setUserSpansImpl } from "./UserSpans";
+
+/** Minimal shape we need to flush user spans on teardown, without importing the OTel class. */
+interface OpenSpanCloser {
+  endAllOpenSpans(): void;
+}
 
 let active = false;
 let activeConfig: TelemetryConfig | null = null;
 let loggerProvider: LoggerProvider | null = null;
 let meterProvider: MeterProvider | null = null;
 let tracerProvider: BasicTracerProvider | null = null;
-/** Detaches the income recorder; set when metrics are registered. */
+/** Detaches the income recorder; set when engine metrics are registered. */
 let unregisterMetrics: (() => void) | null = null;
+/** The live user-span manager, so open custom spans can be flushed on teardown. */
+let userSpanManager: OpenSpanCloser | null = null;
 /** Bumped on every reconfigure so a slow async build can detect it has been superseded. */
 let generation = 0;
 
@@ -40,19 +49,28 @@ interface BuiltProviders {
   meter: MeterProvider | null;
   tracer: BasicTracerProvider | null;
   unregisterMetrics: (() => void) | null;
+  userSpanManager: OpenSpanCloser | null;
 }
 
-/** Builds the OTel providers, lazily importing the SDK. */
+/**
+ * Builds the OTel providers, lazily importing the SDK. The MeterProvider and TracerProvider
+ * are built whenever an exporting sink exists — so player-defined metrics/spans work whenever
+ * telemetry is enabled. The engine's OWN auto-instrumentation (game metrics, script-chain
+ * spans) is registered only when its respective toggle is on.
+ */
 async function buildProviders(config: TelemetryConfig): Promise<BuiltProviders> {
-  const [sdkLogs, sdkMetrics, sdkTrace, sinks, engineMetrics, spanManager, resources] = await Promise.all([
-    import("@opentelemetry/sdk-logs"),
-    import("@opentelemetry/sdk-metrics"),
-    import("@opentelemetry/sdk-trace-base"),
-    import("./TelemetrySinks"),
-    import("./EngineMetrics"),
-    import("./ScriptSpanManager"),
-    import("@opentelemetry/resources"),
-  ]);
+  const [sdkLogs, sdkMetrics, sdkTrace, sinks, engineMetrics, spanManager, userMetricsMod, userSpanMod, resources] =
+    await Promise.all([
+      import("@opentelemetry/sdk-logs"),
+      import("@opentelemetry/sdk-metrics"),
+      import("@opentelemetry/sdk-trace-base"),
+      import("./TelemetrySinks"),
+      import("./EngineMetrics"),
+      import("./ScriptSpanManager"),
+      import("./UserMetricsManager"),
+      import("./UserSpanManager"),
+      import("@opentelemetry/resources"),
+    ]);
   const resource = resources.resourceFromAttributes({
     "service.name": "bitburner",
     "service.version": config.serviceVersion,
@@ -64,40 +82,50 @@ async function buildProviders(config: TelemetryConfig): Promise<BuiltProviders> 
 
   let meter: MeterProvider | null = null;
   let unregister: (() => void) | null = null;
-  if (config.metricsEnabled) {
-    const readers = sinks.buildMetricReaders(config);
-    if (readers.length > 0) {
-      meter = new sdkMetrics.MeterProvider({ resource, readers });
-      engineMetrics.registerEngineMetrics(meter.getMeter("bitburner"), config.bitNode);
+  const readers = sinks.buildMetricReaders(config);
+  if (readers.length > 0) {
+    meter = new sdkMetrics.MeterProvider({ resource, readers });
+    const meterInstance = meter.getMeter("bitburner");
+    if (config.metricsEnabled) {
+      engineMetrics.registerEngineMetrics(meterInstance, config.bitNode);
       unregister = engineMetrics.unregisterEngineMetrics;
     }
+    setUserMetricsImpl(new userMetricsMod.UserMetricsManager(meterInstance));
   }
 
   let tracer: BasicTracerProvider | null = null;
-  if (config.tracesEnabled) {
-    const spanProcessors = sinks.buildSpanProcessors(config);
-    if (spanProcessors.length > 0) {
-      const sampler = new sdkTrace.ParentBasedSampler({
-        root: new sdkTrace.TraceIdRatioBasedSampler(config.traceSampleRatio),
-      });
-      tracer = new sdkTrace.BasicTracerProvider({ resource, sampler, spanProcessors });
-      const manager = new spanManager.ScriptSpanManager(tracer.getTracer("bitburner"), config.bitNode);
-      setScriptTracerImpl(manager);
+  let spanCloser: OpenSpanCloser | null = null;
+  const spanProcessors = sinks.buildSpanProcessors(config);
+  if (spanProcessors.length > 0) {
+    const sampler = new sdkTrace.ParentBasedSampler({
+      root: new sdkTrace.TraceIdRatioBasedSampler(config.traceSampleRatio),
+    });
+    tracer = new sdkTrace.BasicTracerProvider({ resource, sampler, spanProcessors });
+    const tracerInstance = tracer.getTracer("bitburner");
+    if (config.tracesEnabled) {
+      setScriptTracerImpl(new spanManager.ScriptSpanManager(tracerInstance, config.bitNode));
     }
+    const manager = new userSpanMod.UserSpanManager(tracerInstance);
+    setUserSpansImpl(manager);
+    spanCloser = manager;
   }
 
-  return { logger, meter, tracer, unregisterMetrics: unregister };
+  return { logger, meter, tracer, unregisterMetrics: unregister, userSpanManager: spanCloser };
 }
 
-/** Tears down any live providers and detaches the logger emitter, income recorder, tracer. */
+/** Tears down any live providers and detaches all emitters/recorders/managers. */
 async function teardown(): Promise<void> {
   setLogEmitter(null);
   if (unregisterMetrics) {
     unregisterMetrics();
     unregisterMetrics = null;
   }
+  setUserMetricsImpl(null);
   endAllOpenSpans();
   setScriptTracerImpl(null);
+  userSpanManager?.endAllOpenSpans();
+  setUserSpansImpl(null);
+  userSpanManager = null;
   const logger = loggerProvider;
   const meter = meterProvider;
   const tracer = tracerProvider;
@@ -144,8 +172,11 @@ export async function reconfigureTelemetry(): Promise<void> {
   if (myGeneration !== generation) {
     // A newer reconfigure started while we were building; discard this one.
     built.unregisterMetrics?.();
+    setUserMetricsImpl(null);
     endAllOpenSpans();
     setScriptTracerImpl(null);
+    built.userSpanManager?.endAllOpenSpans();
+    setUserSpansImpl(null);
     await built.logger.shutdown().catch(() => undefined);
     await built.meter?.shutdown().catch(() => undefined);
     await built.tracer?.shutdown().catch(() => undefined);
@@ -156,6 +187,7 @@ export async function reconfigureTelemetry(): Promise<void> {
   meterProvider = built.meter;
   tracerProvider = built.tracer;
   unregisterMetrics = built.unregisterMetrics;
+  userSpanManager = built.userSpanManager;
   setMinLogLevel(config.logLevel);
   const logger = loggerProvider.getLogger("bitburner");
   setLogEmitter((log: EmittedLog) =>
