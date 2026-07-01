@@ -91,8 +91,8 @@ describe("UserSpanManager", () => {
     const { tracer, spans } = makeFakeTracer();
     const mgr = new UserSpanManager(tracer as never);
     const root = mgr.start("root", {});
-    const child = mgr.start("child", { parent: root });
-    const other = mgr.start("other", {});
+    mgr.start("child", { parent: root });
+    mgr.start("other", {});
     expect(root).not.toBe("");
     expect(spans[1].context.traceId).toBe(spans[0].context.traceId); // child shares root's trace
     expect(spans[2].context.traceId).not.toBe(spans[0].context.traceId); // other is its own trace
