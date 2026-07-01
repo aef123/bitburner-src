@@ -4,7 +4,7 @@
 
 ## NSTelemetry interface
 
-Telemetry (OpenTelemetry) logging API.
+Telemetry (OpenTelemetry) API, organized into [logs](./bitburner.nstelemetrylogs.md)<!-- -->, [metrics](./bitburner.nstelemetrymetrics.md)<!-- -->, and [traces](./bitburner.nstelemetrytraces.md)<!-- -->.
 
 **Signature:**
 
@@ -12,17 +12,21 @@ Telemetry (OpenTelemetry) logging API.
 export interface NSTelemetry 
 ```
 
-## Remarks
-
-These functions emit structured, leveled log records through the game's OpenTelemetry pipeline to whatever sinks the player has enabled (in-game console, stdout/stderr, or an OTLP endpoint). They are separate from [print](./bitburner.ns.print.md)<!-- -->/[tprint](./bitburner.ns.tprint.md)<!-- -->, which write to the in-game tail log/terminal. Records below the configured log level are dropped, and a per-script rate cap prevents flooding. Every record is automatically tagged with the calling script's pid, filename, server, and args.
-
-When telemetry is disabled (the default), every method is a no-op.
-
-## Methods
+## Properties
 
 <table><thead><tr><th>
 
-Method
+Property
+
+
+</th><th>
+
+Modifiers
+
+
+</th><th>
+
+Type
 
 
 </th><th>
@@ -33,45 +37,64 @@ Description
 </th></tr></thead>
 <tbody><tr><td>
 
-[debug(message, attributes)](./bitburner.nstelemetry.debug.md)
+[logs](./bitburner.nstelemetry.logs.md)
 
 
 </td><td>
 
-Emit a DEBUG-level telemetry log record.
+`readonly`
+
+
+</td><td>
+
+[NSTelemetryLogs](./bitburner.nstelemetrylogs.md)
+
+
+</td><td>
+
+Structured logging — [NSTelemetryLogs](./bitburner.nstelemetrylogs.md)<!-- -->.
 
 
 </td></tr>
 <tr><td>
 
-[error(message, attributes)](./bitburner.nstelemetry.error.md)
+[metrics](./bitburner.nstelemetry.metrics.md)
 
 
 </td><td>
 
-Emit an ERROR-level telemetry log record.
+`readonly`
+
+
+</td><td>
+
+[NSTelemetryMetrics](./bitburner.nstelemetrymetrics.md)
+
+
+</td><td>
+
+Player-defined metrics — [NSTelemetryMetrics](./bitburner.nstelemetrymetrics.md)<!-- -->.
 
 
 </td></tr>
 <tr><td>
 
-[info(message, attributes)](./bitburner.nstelemetry.info.md)
+[traces](./bitburner.nstelemetry.traces.md)
 
 
 </td><td>
 
-Emit an INFO-level telemetry log record.
-
-
-</td></tr>
-<tr><td>
-
-[warn(message, attributes)](./bitburner.nstelemetry.warn.md)
+`readonly`
 
 
 </td><td>
 
-Emit a WARN-level telemetry log record.
+[NSTelemetryTraces](./bitburner.nstelemetrytraces.md)
+
+
+</td><td>
+
+Player-defined traces/spans — [NSTelemetryTraces](./bitburner.nstelemetrytraces.md)<!-- -->.
 
 
 </td></tr>

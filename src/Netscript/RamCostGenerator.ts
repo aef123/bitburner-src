@@ -470,12 +470,26 @@ const grafting = {
   waitForOngoingGrafting: 0,
 } as const;
 
-// Telemetry API (logging is free, consistent with print/tprint)
+// Telemetry API (free, consistent with print/tprint — observability shouldn't cost RAM)
 const telemetry = {
-  debug: 0,
-  info: 0,
-  warn: 0,
-  error: 0,
+  logs: {
+    debug: 0,
+    info: 0,
+    warn: 0,
+    error: 0,
+  },
+  metrics: {
+    counter: 0,
+    upDownCounter: 0,
+    gauge: 0,
+    histogram: 0,
+  },
+  traces: {
+    startSpan: 0,
+    endSpan: 0,
+    spanEvent: 0,
+    setSpanAttributes: 0,
+  },
 } as const;
 
 const corporation = {
