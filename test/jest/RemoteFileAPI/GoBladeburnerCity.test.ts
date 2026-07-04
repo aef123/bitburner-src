@@ -311,6 +311,23 @@ describe("serializeBladeburner()", () => {
     expect(state!.currentAction).toBeNull();
   });
 
+  test("currentAction.type emits the protocol string ('contract'), not the internal enum value ('Contracts')", async () => {
+    const bb = new Bladeburner();
+    bb.init();
+    Player.bladeburner = bb;
+
+    // Start a contract action so bb.action is set
+    Terminal.outputHistory = [];
+    await invokeAction(makeMsg("bladeburnerStartAction", { type: "contract", name: "Tracking" }));
+    expect(bb.action).not.toBeNull();
+
+    const state = serializeBladeburner();
+    expect(state!.currentAction).not.toBeNull();
+    // Must be the protocol string, not the enum value ("Contracts")
+    expect(state!.currentAction!.type).toBe("contract");
+    expect(state!.currentAction!.name).toBe("Tracking");
+  });
+
   test("actions list includes contracts, operations, and blackops", () => {
     const bb = new Bladeburner();
     bb.init();

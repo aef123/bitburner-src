@@ -25,7 +25,7 @@ import { Factions } from "../Faction/Factions";
 import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Faction/FactionHelpers";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
-import { AugmentationName, GoColor, CityName } from "@enums";
+import { AugmentationName, GoColor, CityName, BladeburnerActionType } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
 import { Go } from "../Go/Go";
 import { simpleBoardFromBoard, getPreviousMove } from "../Go/boardAnalysis/boardAnalysis";
@@ -1081,6 +1081,18 @@ export function serializeGo(): GoState {
 
 // --- Bladeburner state shapes (mirror docs/protocol.md) ---
 
+/**
+ * Reverse of PROTOCOL_TYPE_TO_BB in GameActionHandlers.ts.
+ * Maps BladeburnerActionType enum values (e.g. "Contracts") → protocol strings (e.g. "contract")
+ * so currentAction.type in the serialized payload matches what bladeburnerStartAction expects.
+ */
+const BB_TYPE_TO_PROTOCOL: Record<BladeburnerActionType, string> = {
+  [BladeburnerActionType.Contract]: "contract",
+  [BladeburnerActionType.Operation]: "operation",
+  [BladeburnerActionType.BlackOp]: "blackop",
+  [BladeburnerActionType.General]: "general",
+};
+
 export interface BbActionDto {
   type: "contract" | "operation" | "blackop";
   name: string;
@@ -1150,7 +1162,7 @@ export function serializeBladeburner(): BladeburnerState | null {
     stamina: { current: finite(bb.stamina), max: finite(bb.maxStamina) },
     cityChaos: finite(currentCity.chaos),
     skillPoints: bb.skillPoints,
-    currentAction: bb.action ? { type: bb.action.type, name: bb.action.name } : null,
+    currentAction: bb.action ? { type: BB_TYPE_TO_PROTOCOL[bb.action.type] ?? bb.action.type, name: bb.action.name } : null,
     actions: [...contracts, ...operations, ...blackOps],
   };
 }

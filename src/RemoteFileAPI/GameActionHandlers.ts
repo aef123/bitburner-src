@@ -23,7 +23,7 @@ import { installAugmentations as doInstallAugmentations, getAugCost } from "../A
 import { Augmentations } from "../Augmentation/Augmentations";
 import { Factions } from "../Faction/Factions";
 import { AugmentationName, FactionName, PositionType, GoColor, GoValidity, BladeburnerActionType } from "@enums";
-import { Go, GoEvents } from "../Go/Go";
+import { Go } from "../Go/Go";
 import { evaluateIfMoveIsValid } from "../Go/boardAnalysis/boardAnalysis";
 import { makeMove, passTurn } from "../Go/boardState/boardState";
 import { handleNextTurn } from "../Go/boardAnalysis/goAI";
