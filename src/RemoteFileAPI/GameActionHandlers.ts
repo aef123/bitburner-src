@@ -13,9 +13,18 @@ import { killWorkerScriptByPid } from "../Netscript/killWorkerScript";
 import { Player } from "@player";
 import { CONSTANTS } from "../Constants";
 import { CityName } from "../Locations/Enums";
-import { joinFaction } from "../Faction/FactionHelpers";
+import {
+  joinFaction,
+  purchaseAugmentation,
+  getFactionAugmentationsFiltered,
+  hasAugmentationPrereqs,
+} from "../Faction/FactionHelpers";
+import { installAugmentations as doInstallAugmentations, getAugCost } from "../Augmentation/AugmentationHelpers";
+import { Augmentations } from "../Augmentation/Augmentations";
 import { Factions } from "../Faction/Factions";
-import { FactionName, PositionType } from "@enums";
+import { AugmentationName, FactionName, PositionType } from "@enums";
+import type { Augmentation } from "../Augmentation/Augmentation";
+import type { Faction } from "../Faction/Faction";
 import { GangMemberTasks } from "../Gang/GangMemberTasks";
 import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
 import { RecruitmentResult } from "../Gang/Gang";
@@ -184,6 +193,73 @@ const actionRegistry: Record<string, ActionImpl> = {
     },
   },
 
+  // ─── Augmentation actions (GC-2) ─────────────────────────────────────────
+
+  queueAugmentation: {
+    /**
+     * Read-only pre-check — mirrors checkIfPlayerCanPurchaseAugmentation without mutating state.
+     * Checks in order: faction exists, aug exists, membership, aug offered, not already
+     * owned/queued (unless NFG), prereqs met, money sufficient, rep sufficient.
+     */
+    validate(args) {
+      if (typeof args.faction !== "string") return "Missing or invalid faction (must be a string)";
+      if (typeof args.augment !== "string") return "Missing or invalid augment (must be a string)";
+      const factionName = args.faction as FactionName;
+      const augName = args.augment as AugmentationName;
+      const faction = Factions[factionName] as Faction | undefined;
+      if (!faction) return `Unknown faction: ${args.faction as string}`;
+      const aug = Augmentations[augName] as Augmentation | undefined;
+      if (!aug) return `Unknown augmentation: ${args.augment as string}`;
+      if (!Player.factions.includes(factionName)) {
+        return `You are not a member of faction ${args.faction as string}`;
+      }
+      if (!getFactionAugmentationsFiltered(faction).includes(augName)) {
+        return `Faction ${args.faction as string} does not offer augmentation ${args.augment as string}`;
+      }
+      if (augName !== AugmentationName.NeuroFluxGovernor) {
+        if (Player.queuedAugmentations.some((a) => a.name === augName)) {
+          return `You already queued augmentation ${args.augment as string}`;
+        }
+        if (Player.augmentations.some((a) => a.name === augName)) {
+          return `You already installed augmentation ${args.augment as string}`;
+        }
+      }
+      if (!hasAugmentationPrereqs(aug)) {
+        return `Prerequisites not met for augmentation ${args.augment as string}`;
+      }
+      const costs = getAugCost(aug);
+      if (costs.moneyCost !== 0 && Player.money < costs.moneyCost) {
+        return `Insufficient money for augmentation ${args.augment as string} (need $${costs.moneyCost})`;
+      }
+      if (faction.playerReputation < costs.repCost) {
+        return `Insufficient reputation for augmentation ${args.augment as string} (need ${costs.repCost})`;
+      }
+      return null;
+    },
+    describe(args) {
+      return `queue augmentation "${args.augment as string}" from ${args.faction as string}`;
+    },
+    execute(args) {
+      const faction = Factions[args.faction as FactionName];
+      const aug = Augmentations[args.augment as AugmentationName];
+      const result = purchaseAugmentation(faction, aug, true);
+      return { ok: result.success, message: result.message };
+    },
+  },
+
+  installAugmentations: {
+    validate(_args) {
+      return Player.queuedAugmentations.length > 0 ? null : "No augmentations queued";
+    },
+    describe(_args) {
+      return `install ${Player.queuedAugmentations.length} augmentation(s) (soft reset)`;
+    },
+    execute(_args) {
+      doInstallAugmentations(true);
+      return { ok: true };
+    },
+  },
+
   // ─── Gang actions (GD-1) ─────────────────────────────────────────────────
 
   ascendGangMember: {
@@ -326,6 +402,7 @@ const actionRegistry: Record<string, ActionImpl> = {
       const stock = SymbolToStockMap[args.symbol as string];
       if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
       if (stock.playerShares <= 0) return `No long shares of ${args.symbol as string} to sell`;
+      if (args.shares > stock.playerShares) return "Not enough shares to sell";
       return null;
     },
     describe(args) {
@@ -375,6 +452,7 @@ const actionRegistry: Record<string, ActionImpl> = {
       const stock = SymbolToStockMap[args.symbol as string];
       if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
       if (stock.playerShortShares <= 0) return `No short shares of ${args.symbol as string} to cover`;
+      if (args.shares > stock.playerShortShares) return "Not enough short shares to cover";
       return null;
     },
     describe(args) {

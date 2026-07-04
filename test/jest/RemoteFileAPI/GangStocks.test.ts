@@ -176,6 +176,23 @@ describe("serializeGang — populated gang", () => {
     const state = serializeGang()!;
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
   });
+
+  test("equipmentCatalog is a non-empty array of {name, cost, type} entries", () => {
+    const { equipmentCatalog } = serializeGang()!;
+    expect(Array.isArray(equipmentCatalog)).toBe(true);
+    expect(equipmentCatalog.length).toBeGreaterThan(0);
+    for (const entry of equipmentCatalog) {
+      expect(typeof entry.name).toBe("string");
+      expect(typeof entry.cost).toBe("number");
+      expect(typeof entry.type).toBe("string");
+      expect(Number.isFinite(entry.cost)).toBe(true);
+    }
+  });
+
+  test("equipmentCatalog entries are JSON-pure", () => {
+    const { equipmentCatalog } = serializeGang()!;
+    expect(JSON.parse(JSON.stringify(equipmentCatalog))).toEqual(equipmentCatalog);
+  });
 });
 
 // ─── serializeStocks — null branch ───────────────────────────────────────────
@@ -486,6 +503,15 @@ describe("invokeAction — sellStock", () => {
     expect((resp.result as { ok: boolean }).ok).toBe(false);
     expect(sellStockMock).not.toHaveBeenCalled();
   });
+
+  test("returns ok:false with 'Not enough shares' when trying to sell more than owned", async () => {
+    testStock.playerShares = 5;
+    const resp = await invokeAction(makeMsg("sellStock", { symbol: "ECS", shares: 10 }));
+    const result = resp.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Not enough shares");
+    expect(sellStockMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── invokeAction — coverShort ────────────────────────────────────────────────
@@ -522,6 +548,15 @@ describe("invokeAction — coverShort", () => {
     testStock.playerShortShares = 0;
     const resp = await invokeAction(makeMsg("coverShort", { symbol: "ECS", shares: 5 }));
     expect((resp.result as { ok: boolean }).ok).toBe(false);
+    expect(sellShortMock).not.toHaveBeenCalled();
+  });
+
+  test("returns ok:false with 'Not enough short shares' when trying to cover more than owned", async () => {
+    testStock.playerShortShares = 3;
+    const resp = await invokeAction(makeMsg("coverShort", { symbol: "ECS", shares: 10 }));
+    const result = resp.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Not enough short shares");
     expect(sellShortMock).not.toHaveBeenCalled();
   });
 });

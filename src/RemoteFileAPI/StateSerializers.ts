@@ -27,6 +27,7 @@ import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
 import { AugmentationName } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
+import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
 import { StockMarket } from "../StockMarket/StockMarket";
 import { Stock } from "../StockMarket/Stock";
 import { HacknetNode } from "../Hacknet/HacknetNode";
@@ -463,6 +464,12 @@ export interface GangMemberDto {
   equipment: string[];
 }
 
+export interface GangEquipmentEntry {
+  name: string;
+  cost: number;
+  type: string;
+}
+
 export interface GangState {
   faction: string;
   isHacking: boolean;
@@ -478,6 +485,7 @@ export interface GangState {
   members: GangMemberDto[];
   taskNames: string[];
   otherGangs: { name: string; territory: number; power: number }[];
+  equipmentCatalog: GangEquipmentEntry[];
 }
 
 /**
@@ -532,6 +540,12 @@ export function serializeGang(): GangState | null {
       power: finite(info.power),
     }));
 
+  const equipmentCatalog: GangEquipmentEntry[] = Object.values(GangMemberUpgrades).map((upg) => ({
+    name: upg.name,
+    cost: finite(gang.getUpgradeCost(upg)),
+    type: upg.getType(),
+  }));
+
   return {
     faction: gang.facName,
     isHacking: gang.isHackingGang,
@@ -547,6 +561,7 @@ export function serializeGang(): GangState | null {
     members,
     taskNames: gang.getAllTaskNames(),
     otherGangs,
+    equipmentCatalog,
   };
 }
 

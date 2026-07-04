@@ -10,6 +10,14 @@ jest.mock("../../../src/Netscript/killWorkerScript", () => ({
 
 jest.mock("../../../src/Faction/FactionHelpers", () => ({
   joinFaction: jest.fn(),
+  purchaseAugmentation: jest.fn(),
+  getFactionAugmentationsFiltered: jest.fn(),
+  hasAugmentationPrereqs: jest.fn(),
+}));
+
+jest.mock("../../../src/Augmentation/AugmentationHelpers", () => ({
+  installAugmentations: jest.fn(),
+  getAugCost: jest.fn(),
 }));
 
 import { invokeAction } from "../../../src/RemoteFileAPI/GameActionHandlers";
@@ -17,9 +25,10 @@ import { RFAMessage } from "../../../src/RemoteFileAPI/MessageDefinitions";
 import { Terminal } from "../../../src/Terminal";
 import { Player, setPlayer } from "../../../src/Player";
 import { PlayerObject } from "../../../src/PersonObjects/Player/PlayerObject";
-import { FactionName } from "../../../src/Enums";
+import { AugmentationName, FactionName } from "../../../src/Enums";
 import { killWorkerScriptByPid } from "../../../src/Netscript/killWorkerScript";
-import { joinFaction } from "../../../src/Faction/FactionHelpers";
+import { joinFaction, purchaseAugmentation, getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../../../src/Faction/FactionHelpers";
+import { installAugmentations, getAugCost } from "../../../src/Augmentation/AugmentationHelpers";
 import { Factions } from "../../../src/Faction/Factions";
 import { AddToAllServers, prestigeAllServers } from "../../../src/Server/AllServers";
 import { Server } from "../../../src/Server/Server";
@@ -221,5 +230,110 @@ describe("invokeAction — joinFaction", () => {
     } finally {
       Factions[FactionName.CyberSec].isBanned = false;
     }
+  });
+});
+
+describe("invokeAction — queueAugmentation", () => {
+  const FACTION = FactionName.CyberSec;
+  const AUG = AugmentationName.BitWire;
+
+  beforeEach(() => {
+    setupWorld();
+    Terminal.outputHistory = [];
+    // Reset faction state that persists across tests.
+    Factions[FACTION].playerReputation = 0;
+    Factions[FACTION].isMember = false;
+    // Reset all mocks and configure defaults: aug is offered, prereqs met, normal costs.
+    (getFactionAugmentationsFiltered as jest.Mock).mockReset().mockReturnValue([AUG]);
+    (hasAugmentationPrereqs as jest.Mock).mockReset().mockReturnValue(true);
+    (getAugCost as jest.Mock).mockReset().mockReturnValue({ moneyCost: 1e7, repCost: 3750 });
+    (purchaseAugmentation as jest.Mock).mockReset();
+  });
+
+  afterEach(() => {
+    Factions[FACTION].playerReputation = 0;
+    Factions[FACTION].isMember = false;
+  });
+
+  test("refuses with ok:false when player is not a member of the faction", async () => {
+    Player.factions = [];
+    const response = await invokeAction(makeMsg("queueAugmentation", { faction: FACTION, augment: AUG }));
+    const result = response.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("member");
+    expect(purchaseAugmentation).not.toHaveBeenCalled();
+    expect(hasVscodeEcho()).toBe(false);
+  });
+
+  test("refuses with ok:false when player has insufficient reputation", async () => {
+    Player.factions = [FACTION];
+    Factions[FACTION].playerReputation = 100; // below repCost of 3750
+    Player.money = 1e15; // money is fine — rep check must fail
+    const response = await invokeAction(makeMsg("queueAugmentation", { faction: FACTION, augment: AUG }));
+    const result = response.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("reputation");
+    expect(purchaseAugmentation).not.toHaveBeenCalled();
+    expect(hasVscodeEcho()).toBe(false);
+  });
+
+  test("refuses with ok:false when player has insufficient money", async () => {
+    Player.factions = [FACTION];
+    Factions[FACTION].playerReputation = 1e9; // rep is fine — money check must fail
+    Player.money = 0; // below moneyCost of 1e7
+    const response = await invokeAction(makeMsg("queueAugmentation", { faction: FACTION, augment: AUG }));
+    const result = response.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("money");
+    expect(purchaseAugmentation).not.toHaveBeenCalled();
+    expect(hasVscodeEcho()).toBe(false);
+  });
+
+  test("succeeds: aug appears in queuedAugmentations and [vscode] echo is written", async () => {
+    Player.factions = [FACTION];
+    Factions[FACTION].playerReputation = 1e9;
+    Player.money = 1e15;
+    // Mock purchaseAugmentation to simulate the real side effect of queuing.
+    (purchaseAugmentation as jest.Mock).mockImplementationOnce((_faction, aug) => {
+      Player.queueAugmentation((aug as { name: AugmentationName }).name);
+      return { success: true };
+    });
+    const response = await invokeAction(makeMsg("queueAugmentation", { faction: FACTION, augment: AUG }));
+    const result = response.result as { ok: boolean };
+    expect(result.ok).toBe(true);
+    expect(hasVscodeEcho()).toBe(true);
+    expect(Player.queuedAugmentations.some((a) => a.name === AUG)).toBe(true);
+  });
+});
+
+describe("invokeAction — installAugmentations", () => {
+  beforeEach(() => {
+    setupWorld();
+    Terminal.outputHistory = [];
+    (installAugmentations as jest.Mock).mockReset();
+  });
+
+  test("refuses with ok:false when queue is empty", async () => {
+    Player.queuedAugmentations = [];
+    const response = await invokeAction(makeMsg("installAugmentations", {}));
+    const result = response.result as { ok: boolean; message: string };
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("No augmentations queued");
+    expect(installAugmentations).not.toHaveBeenCalled();
+  });
+
+  test("installs augmentations: clears the queue and returns ok:true", async () => {
+    // Seed one queued aug so validate() passes.
+    Player.queueAugmentation(AugmentationName.BitWire);
+    expect(Player.queuedAugmentations.length).toBe(1);
+    // Mock installAugmentations to simulate the real side effect of clearing the queue.
+    (installAugmentations as jest.Mock).mockImplementationOnce(() => {
+      Player.queuedAugmentations = [];
+      return true;
+    });
+    const response = await invokeAction(makeMsg("installAugmentations", {}));
+    const result = response.result as { ok: boolean };
+    expect(result.ok).toBe(true);
+    expect(Player.queuedAugmentations.length).toBe(0);
   });
 });
