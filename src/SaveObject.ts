@@ -30,9 +30,6 @@ import { isObject, assertObject } from "./utils/TypeAssertion";
 import { evaluateVersionCompatibility } from "./utils/SaveDataMigrationUtils";
 import { Reviver } from "./utils/GenericReviver";
 import { EventEmitter } from "./utils/EventEmitter";
-
-/** Fires after each successful game save. Used by the Remote File API "events" topic. Additive seam — no save behavior changed. */
-export const SaveEvents = new EventEmitter<[]>();
 import { populateDarknet } from "./DarkNet/controllers/NetworkGenerator";
 import { getDarkNetSave, loadDarkNet } from "./DarkNet/effects/SaveLoad";
 import { giveExportBonus } from "./ExportBonus";
@@ -41,6 +38,9 @@ import { InfiltrationState } from "./Infiltration/formulas/game";
 import { hasDarknetAccess } from "./DarkNet/utils/darknetAuthUtils";
 import { loadSettings } from "./Settings/SettingsUtils";
 import { getBitNodeLevel } from "./BitNode/BitNodeUtils";
+
+/** Fires after each successful game save. Used by the Remote File API "events" topic. Additive seam — no save behavior changed. */
+export const SaveEvents = new EventEmitter<[]>();
 
 /* SaveObject.js
  *  Defines the object used to save/load games

@@ -9,6 +9,7 @@ import {
   isFileData,
   isSubscribeParams,
   isUnsubscribeParams,
+  isInvokeActionParams,
   type FileData,
   type FileLocation,
   type FileServer,
@@ -351,7 +352,11 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
     return runTerminalCommand(msg);
   },
 
-  invokeAction: function (msg: RFAMessage): Promise<RFAMessage> {
+  invokeAction: function (msg: RFAMessage): RFAMessage | Promise<RFAMessage> {
+    const validationResult = validateParams(isInvokeActionParams, msg);
+    if (!validationResult.success) {
+      return validationResult.errorResponse;
+    }
     return invokeAction(msg);
   },
 };

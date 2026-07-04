@@ -20,6 +20,7 @@ import { PlayerObject } from "../../../src/PersonObjects/Player/PlayerObject";
 import { FactionName } from "../../../src/Enums";
 import { killWorkerScriptByPid } from "../../../src/Netscript/killWorkerScript";
 import { joinFaction } from "../../../src/Faction/FactionHelpers";
+import { Factions } from "../../../src/Faction/Factions";
 import { AddToAllServers, prestigeAllServers } from "../../../src/Server/AllServers";
 import { Server } from "../../../src/Server/Server";
 import type { IPAddress } from "../../../src/Types/strings";
@@ -206,5 +207,19 @@ describe("invokeAction — joinFaction", () => {
     const result = response.result as { ok: boolean };
     expect(result.ok).toBe(false);
     expect(joinFaction).not.toHaveBeenCalled();
+  });
+
+  test("refuses ok:false when faction is banned", async () => {
+    Player.factionInvitations = [FactionName.CyberSec];
+    Factions[FactionName.CyberSec].isBanned = true;
+    try {
+      const response = await invokeAction(makeMsg("joinFaction", { faction: FactionName.CyberSec }));
+      const result = response.result as { ok: boolean; message: string };
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("banned");
+      expect(joinFaction).not.toHaveBeenCalled();
+    } finally {
+      Factions[FactionName.CyberSec].isBanned = false;
+    }
   });
 });

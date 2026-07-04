@@ -116,6 +116,8 @@ const actionRegistry: Record<string, ActionImpl> = {
   joinFaction: {
     validate(args) {
       if (typeof args.faction !== "string") return "Missing or invalid faction (must be a string)";
+      const faction = Factions[args.faction as FactionName];
+      if (faction?.isBanned) return `Faction ${args.faction as string} is banned`;
       return null;
     },
     describe(args) {
