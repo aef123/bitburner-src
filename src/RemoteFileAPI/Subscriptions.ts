@@ -11,6 +11,8 @@ import {
   serializeHacknet,
   serializeSleeves,
   serializeCorporation,
+  serializeBladeburner,
+  serializeGo,
 } from "./StateSerializers";
 import { FactionInvitationEvents } from "../Faction/ui/FactionInvitationManager";
 import { SaveEvents } from "../SaveObject";
@@ -45,8 +47,8 @@ export const serializerRegistry: Record<Topic, () => unknown> = {
   hacknet: serializeHacknet,
   sleeves: serializeSleeves,
   corporation: serializeCorporation,
-  bladeburner: () => null,
-  go: () => null,
+  bladeburner: serializeBladeburner,
+  go: serializeGo,
   events: () => null,
 };
 

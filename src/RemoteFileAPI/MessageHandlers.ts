@@ -36,6 +36,9 @@ import {
   serializeHacknet,
   serializeSleeves,
   serializeCorporation,
+  serializeGo,
+  serializeBladeburner,
+  serializeCity,
 } from "./StateSerializers";
 import { runTerminalCommand, invokeAction } from "./GameActionHandlers";
 
@@ -381,6 +384,18 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
 
   getCorporationState: function (msg: RFAMessage): RFAMessage {
     return new RFAMessage({ result: serializeCorporation() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getGoState: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeGo() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getBladeburnerState: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeBladeburner() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getCityState: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeCity() as unknown as Record<string, unknown>, id: msg.id });
   },
 
   runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {

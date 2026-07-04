@@ -25,8 +25,13 @@ import { Factions } from "../Faction/Factions";
 import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Faction/FactionHelpers";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
-import { AugmentationName } from "@enums";
+import { AugmentationName, GoColor, CityName } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
+import { Go } from "../Go/Go";
+import { simpleBoardFromBoard, getPreviousMove } from "../Go/boardAnalysis/boardAnalysis";
+import { getScore } from "../Go/boardAnalysis/scoring";
+import { Cities } from "../Locations/Cities";
+import { Locations } from "../Locations/Locations";
 import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
 import { StockMarket } from "../StockMarket/StockMarket";
 import { Stock } from "../StockMarket/Stock";
@@ -1026,6 +1031,173 @@ export function serializeDivision(division: Division): DivisionDto {
     warehouses,
     offices,
   };
+}
+
+// --- Go state shapes (mirror docs/protocol.md) ---
+
+export interface GoState {
+  boardSize: number;
+  /** string[] of columns — each column string encodes cells top-to-bottom: X=black O=white .=empty #=offline */
+  board: string[];
+  opponent: string;
+  playerColor: "black" | "white";
+  currentTurn: "black" | "white" | "none";
+  komi: number;
+  captures: { black: number; white: number };
+  previousMove: [number, number] | null;
+  gameOver: boolean;
+}
+
+/**
+ * Serialize the current IPvGo board state per docs/protocol.md GoState shape.
+ *
+ * Player is always black. currentTurn = "none" when the game is over (previousPlayer === null).
+ * board = simpleBoardFromBoard (columns as strings, each char X/O/./#).
+ * captures = current piece counts from getScore (not cumulative; the game does not track cumulative captures).
+ */
+export function serializeGo(): GoState {
+  const boardState = Go.currentGame;
+  const score = getScore(boardState);
+  // previousPlayer is who moved last; currentTurn is whoever goes next.
+  const prev = boardState.previousPlayer;
+  const currentTurn: "black" | "white" | "none" =
+    prev === null ? "none" : prev === GoColor.black ? "white" : "black";
+
+  return {
+    boardSize: boardState.board.length,
+    board: simpleBoardFromBoard(boardState.board),
+    opponent: boardState.ai,
+    playerColor: "black",
+    currentTurn,
+    komi: score[GoColor.white].komi,
+    captures: {
+      black: score[GoColor.black].pieces,
+      white: score[GoColor.white].pieces,
+    },
+    previousMove: getPreviousMove(),
+    gameOver: prev === null,
+  };
+}
+
+// --- Bladeburner state shapes (mirror docs/protocol.md) ---
+
+export interface BbActionDto {
+  type: "contract" | "operation" | "blackop";
+  name: string;
+  countRemaining: number | null;
+  successChance: [number, number];
+  reqRank: number | null;
+}
+
+export interface BladeburnerState {
+  rank: number;
+  stamina: { current: number; max: number };
+  cityChaos: number;
+  skillPoints: number;
+  currentAction: { type: string; name: string } | null;
+  actions: BbActionDto[];
+}
+
+/**
+ * Serialize the player's Bladeburner state per docs/protocol.md BladeburnerState shape.
+ * Returns null if the player has not joined Bladeburner.
+ *
+ * successChance is the [min, max] range as returned by action.getSuccessRange().
+ * countRemaining is LevelableAction.count for contracts/operations; null for blackops (done once).
+ * All blackops are included (static data the UI shows) — they are not secret.
+ */
+export function serializeBladeburner(): BladeburnerState | null {
+  const bb = Player.bladeburner;
+  if (!bb) return null;
+
+  const currentCity = bb.getCurrentCity();
+
+  const contracts: BbActionDto[] = Object.values(bb.contracts).map((c) => {
+    const range = c.getSuccessRange(bb, Player);
+    return {
+      type: "contract" as const,
+      name: c.name,
+      countRemaining: c.count,
+      successChance: [finite(range[0]), finite(range[1])],
+      reqRank: null,
+    };
+  });
+
+  const operations: BbActionDto[] = Object.values(bb.operations).map((op) => {
+    const range = op.getSuccessRange(bb, Player);
+    return {
+      type: "operation" as const,
+      name: op.name,
+      countRemaining: op.count,
+      successChance: [finite(range[0]), finite(range[1])],
+      reqRank: null,
+    };
+  });
+
+  const blackOps: BbActionDto[] = Object.values(bb.blackOperations).map((blackOp) => {
+    const range = blackOp.getSuccessRange(bb, Player);
+    return {
+      type: "blackop" as const,
+      name: blackOp.name,
+      countRemaining: null,
+      successChance: [finite(range[0]), finite(range[1])],
+      reqRank: blackOp.reqdRank,
+    };
+  });
+
+  return {
+    rank: finite(bb.rank),
+    stamina: { current: finite(bb.stamina), max: finite(bb.maxStamina) },
+    cityChaos: finite(currentCity.chaos),
+    skillPoints: bb.skillPoints,
+    currentAction: bb.action ? { type: bb.action.type, name: bb.action.name } : null,
+    actions: [...contracts, ...operations, ...blackOps],
+  };
+}
+
+// --- City/World state shapes (see docs/protocol.md CityWorldState) ---
+
+export interface CityLocationDto {
+  name: string;
+  types: string[];
+}
+
+export interface CityDto {
+  name: string;
+  current: boolean;
+  locations: CityLocationDto[];
+}
+
+export interface CityWorldState {
+  cities: CityDto[];
+  travelCost: number;
+}
+
+/**
+ * Serialize the static city/world layout per docs/protocol.md CityWorldState shape.
+ *
+ * City geography (cities, locations, types) is static data the player sees in-game at all times.
+ * travelCost = CONSTANTS.TravelCost. current = (cityName === Player.city).
+ * Location types are serialized as their enum string values.
+ */
+export function serializeCity(): CityWorldState {
+  const playerCity = Player.city;
+  const cities: CityDto[] = Object.values(CityName).map((cityName) => {
+    const city = Cities[cityName];
+    const locations: CityLocationDto[] = city.locations.map((locName) => {
+      const location = Locations[locName];
+      return {
+        name: locName,
+        types: location ? location.types.map((t) => String(t)) : [],
+      };
+    });
+    return {
+      name: cityName,
+      current: cityName === playerCity,
+      locations,
+    };
+  });
+  return { cities, travelCost: CONSTANTS.TravelCost };
 }
 
 /**

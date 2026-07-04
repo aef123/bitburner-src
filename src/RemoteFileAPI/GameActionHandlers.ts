@@ -22,7 +22,11 @@ import {
 import { installAugmentations as doInstallAugmentations, getAugCost } from "../Augmentation/AugmentationHelpers";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { Factions } from "../Faction/Factions";
-import { AugmentationName, FactionName, PositionType } from "@enums";
+import { AugmentationName, FactionName, PositionType, GoColor, GoValidity, BladeburnerActionType } from "@enums";
+import { Go, GoEvents } from "../Go/Go";
+import { evaluateIfMoveIsValid } from "../Go/boardAnalysis/boardAnalysis";
+import { makeMove, passTurn } from "../Go/boardState/boardState";
+import { handleNextTurn } from "../Go/boardAnalysis/goAI";
 import type { Augmentation } from "../Augmentation/Augmentation";
 import type { Faction } from "../Faction/Faction";
 import { GangMemberTasks } from "../Gang/GangMemberTasks";
@@ -73,6 +77,14 @@ function resolveHacknetNode(index: unknown): HacknetNode | HacknetServer | null 
 
 /** The upgrade kinds hacknetPurchase understands. */
 const HACKNET_KINDS = new Set(["node", "level", "ram", "core", "cache"]);
+
+/** Maps protocol-level action type strings to BladeburnerActionType enum values. */
+const PROTOCOL_TYPE_TO_BB: Record<string, BladeburnerActionType | undefined> = {
+  contract: BladeburnerActionType.Contract,
+  operation: BladeburnerActionType.Operation,
+  blackop: BladeburnerActionType.BlackOp,
+  general: BladeburnerActionType.General,
+};
 
 /**
  * Run a terminal command string via Terminal.executeCommands and return the delta output.
@@ -714,6 +726,133 @@ const actionRegistry: Record<string, ActionImpl> = {
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : String(e) };
       }
+    },
+  },
+
+  // ─── IPvGo actions (GE-1) ─────────────────────────────────────────────────
+
+  /**
+   * goPlayMove { x, y } — place a black stone at (x, y) and trigger the AI response.
+   *
+   * Mirrors the NS makePlayerMove path: validate → makeMove → handleNextTurn (fire-and-forget).
+   * Does NOT use the React clickHandler or Snackbar paths to avoid UI side effects.
+   * validate() is read-only (same guards as validateMove in netscriptGoImplementation).
+   * Player is always black.
+   */
+  goPlayMove: {
+    validate(args) {
+      if (typeof args.x !== "number" || !Number.isInteger(args.x)) return "Missing or invalid x (must be an integer)";
+      if (typeof args.y !== "number" || !Number.isInteger(args.y)) return "Missing or invalid y (must be an integer)";
+      const board = Go.currentGame;
+      if (board.previousPlayer === null) return "Game is over. Start a new game.";
+      if (board.previousPlayer === GoColor.black) return "It is not your turn (you play as black)";
+      const x = args.x as number;
+      const y = args.y as number;
+      const size = board.board.length;
+      if (x < 0 || x >= size || y < 0 || y >= size) {
+        return `Coordinates (${x}, ${y}) are out of bounds for a ${size}x${size} board`;
+      }
+      const validity = evaluateIfMoveIsValid(board, x, y, GoColor.black);
+      if (validity !== GoValidity.valid) return `Invalid move at (${x}, ${y}): ${validity}`;
+      return null;
+    },
+    describe(args) {
+      return `Play Go move at (${args.x as number}, ${args.y as number})`;
+    },
+    execute(args) {
+      const boardState = Go.currentGame;
+      const x = args.x as number;
+      const y = args.y as number;
+      if (boardState.previousPlayer === null) return { ok: false, message: "Game is over" };
+      const validity = evaluateIfMoveIsValid(boardState, x, y, GoColor.black);
+      if (validity !== GoValidity.valid) return { ok: false, message: `Invalid move: ${validity}` };
+      const moved = makeMove(boardState, x, y, GoColor.black);
+      if (!moved) return { ok: false, message: "Move could not be applied" };
+      // Fire-and-forget AI response; handleNextTurn emits GoEvents internally.
+      void handleNextTurn(boardState, true).catch(() => {});
+      return { ok: true, message: `Played move at (${x}, ${y})` };
+    },
+  },
+
+  /**
+   * goPass {} — pass the current turn as black and trigger the AI response.
+   * Mirrors passTurn + handleNextTurn from the NS path.
+   */
+  goPass: {
+    validate(_args) {
+      if (Go.currentGame.previousPlayer === null) return "Game is over. Start a new game.";
+      if (Go.currentGame.previousPlayer === GoColor.black) return "It is not your turn (you play as black)";
+      return null;
+    },
+    describe(_args) {
+      return "Pass Go turn";
+    },
+    execute(_args) {
+      const boardState = Go.currentGame;
+      if (boardState.previousPlayer === null) return { ok: false, message: "Game is over" };
+      passTurn(boardState, GoColor.black);
+      void handleNextTurn(boardState, true).catch(() => {});
+      return { ok: true, message: "Turn passed" };
+    },
+  },
+
+  // ─── Bladeburner actions (GE-1) ──────────────────────────────────────────
+
+  /**
+   * bladeburnerStartAction { type, name } — start a Bladeburner action.
+   *
+   * type = "contract" | "operation" | "blackop" | "general" (protocol strings).
+   * validate() is read-only: checks bladeburner exists, type/name resolves, and action is available.
+   * execute() calls bladeburner.startAction(action.id) which mirrors the UI / NS path.
+   */
+  bladeburnerStartAction: {
+    validate(args) {
+      if (typeof args.type !== "string") return "Missing or invalid type (must be a string)";
+      if (typeof args.name !== "string") return "Missing or invalid name (must be a string)";
+      const bb = Player.bladeburner;
+      if (!bb) return "Player is not in Bladeburner";
+      const bbType = PROTOCOL_TYPE_TO_BB[args.type as string];
+      if (!bbType) {
+        return `Invalid action type: ${args.type as string}. Valid types: ${Object.keys(PROTOCOL_TYPE_TO_BB).join(", ")}`;
+      }
+      const action = bb.getActionFromTypeAndName(bbType, args.name as string);
+      if (!action) return `Unknown action: ${args.name as string} (type: ${args.type as string})`;
+      const avail = action.getAvailability(bb);
+      if (!avail.available) return `Action unavailable: ${avail.error}`;
+      return null;
+    },
+    describe(args) {
+      return `Start Bladeburner action ${args.type as string}/${args.name as string}`;
+    },
+    execute(args) {
+      const bb = Player.bladeburner;
+      if (!bb) return { ok: false, message: "Player is not in Bladeburner" };
+      const bbType = PROTOCOL_TYPE_TO_BB[args.type as string];
+      if (!bbType) return { ok: false, message: `Invalid action type: ${args.type as string}` };
+      const action = bb.getActionFromTypeAndName(bbType, args.name as string);
+      if (!action) return { ok: false, message: `Unknown action: ${args.name as string}` };
+      const attempt = bb.startAction(action.id);
+      return { ok: attempt.success === true, message: attempt.message };
+    },
+  },
+
+  /**
+   * bladeburnerStopAction {} — stop the current Bladeburner action (reset to idle).
+   * Calls bladeburner.startAction(null) which calls resetAction() internally.
+   */
+  bladeburnerStopAction: {
+    validate(_args) {
+      if (!Player.bladeburner) return "Player is not in Bladeburner";
+      return null;
+    },
+    describe(_args) {
+      return "Stop current Bladeburner action";
+    },
+    execute(_args) {
+      const bb = Player.bladeburner;
+      if (!bb) return { ok: false, message: "Player is not in Bladeburner" };
+      const attempt = bb.startAction(null);
+      return { ok: attempt.success === true, message: attempt.message };
     },
   },
 
