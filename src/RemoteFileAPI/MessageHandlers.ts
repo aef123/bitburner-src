@@ -39,6 +39,7 @@ import {
   serializeGo,
   serializeBladeburner,
   serializeCity,
+  serializeWorkOptions,
 } from "./StateSerializers";
 import { runTerminalCommand, invokeAction } from "./GameActionHandlers";
 
@@ -396,6 +397,10 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
 
   getCityState: function (msg: RFAMessage): RFAMessage {
     return new RFAMessage({ result: serializeCity() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getWorkOptions: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeWorkOptions() as unknown as Record<string, unknown>, id: msg.id });
   },
 
   runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {

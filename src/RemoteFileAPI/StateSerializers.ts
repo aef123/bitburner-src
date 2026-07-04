@@ -25,13 +25,17 @@ import { Factions } from "../Faction/Factions";
 import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Faction/FactionHelpers";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
-import { AugmentationName, GoColor, CityName, BladeburnerActionType } from "@enums";
+import { AugmentationName, GoColor, CityName, BladeburnerActionType, LocationType, UniversityClassType, GymType, CrimeType } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
 import { Go } from "../Go/Go";
 import { simpleBoardFromBoard, getPreviousMove } from "../Go/boardAnalysis/boardAnalysis";
 import { getScore } from "../Go/boardAnalysis/scoring";
 import { Cities } from "../Locations/Cities";
 import { Locations } from "../Locations/Locations";
+import { Crimes } from "../Crime/Crimes";
+import { Classes } from "../Work/ClassWork";
+import { calculateCost as calculateClassCost } from "../Work/Formulas";
+import { getCloudServerCost, getCloudServerMaxRam } from "../Server/ServerPurchases";
 import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
 import { StockMarket } from "../StockMarket/StockMarket";
 import { Stock } from "../StockMarket/Stock";
@@ -43,6 +47,7 @@ import {
 } from "../Hacknet/HacknetHelpers";
 import { calculateMoneyGainRate } from "../Hacknet/formulas/HacknetNodes";
 import { HacknetNodeConstants, HacknetServerConstants } from "../Hacknet/data/Constants";
+import { ServerConstants } from "../Server/data/Constants";
 import type { Sleeve } from "../PersonObjects/Sleeve/Sleeve";
 import { SleeveWorkType } from "../PersonObjects/Sleeve/Work/Work";
 import type { Division } from "../Corporation/Division";
@@ -264,7 +269,7 @@ function scriptIncomePerSec(): number {
   return finite(total);
 }
 
-function serializeCurrentWork(): HudState["currentWork"] {
+export function serializeCurrentWork(): HudState["currentWork"] {
   const work = Player.currentWork;
   if (!work) return null;
   let description = "";
@@ -1288,5 +1293,158 @@ export function serializeCorporation(): CorpState | null {
     sharePrice: finite(corp.sharePrice),
     divisions,
     researchPoints,
+  };
+}
+
+// ─── Work options state (GG-1) ───────────────────────────────────────────────
+
+/** A university location with its available courses and cost information. */
+export interface UniversityOptionDto {
+  /** LocationName value, e.g. "Rothman University". */
+  name: string;
+  /** CityName this university is in. */
+  city: string;
+  /** Courses offered. costPerSec is negative (money consumed per second). */
+  courses: { classType: string; costPerSec: number }[];
+}
+
+/** A gym location with its trainable stats and per-second cost. */
+export interface GymOptionDto {
+  /** LocationName value, e.g. "Powerhouse Gym". */
+  name: string;
+  /** CityName this gym is in. */
+  city: string;
+  /** The dollar cost per second (absolute value; deducted from player money). */
+  costPerSec: number;
+  /** GymType values available to train here ("str"|"def"|"dex"|"agi"). */
+  stats: string[];
+}
+
+/** A crime option shown on the Slums page. */
+export interface CrimeOptionDto {
+  /** CrimeType key (used as the `crime` arg to commitCrime). */
+  crimeType: string;
+  /** Human-readable crime name shown on the Work screen ("to shoplift" etc.). */
+  name: string;
+  /** Karma lost on success. */
+  karma: number;
+  /** Money gained on success. */
+  money: number;
+  /** Time in milliseconds to attempt the crime. */
+  timeMs: number;
+  /** Probability of success given the player's current stats, 0..1. */
+  successChance: number;
+}
+
+/** Server RAM tier cost entry. */
+export interface ServerCostDto {
+  /** RAM in GB (a power of 2). */
+  ram: number;
+  /** Dollar cost to purchase a server with this RAM. */
+  cost: number;
+}
+
+/**
+ * Work options state — per-city universities/gyms, global crimes, player jobs, and purchase costs.
+ * Serialized by serializeWorkOptions (read-only, no mutations).
+ */
+export interface WorkOptionsState {
+  /** Universities in the player's current city with course cost information. */
+  universities: UniversityOptionDto[];
+  /** Gyms in the player's current city. */
+  gyms: GymOptionDto[];
+  /** All crimes (available from any Slums location). */
+  crimes: CrimeOptionDto[];
+  /** Company names where the player currently holds a job. */
+  companies: string[];
+  /** Current work summary (mirrors hud.currentWork). null if not working. */
+  currentWork: { type: string; description: string; etaMs: number | null } | null;
+  /** Cost to double home computer RAM. 0 if already at max. */
+  homeRamUpgradeCost: number;
+  /** Costs for purchasing a new cloud server at each valid RAM tier. */
+  purchaseServerCosts: ServerCostDto[];
+  /** TOR Router purchase cost (CONSTANTS.TorRouterCost). */
+  torCost: number;
+  /** Whether the player already has a TOR Router. */
+  hasTor: boolean;
+}
+
+/** All gym stat types available at any gym. */
+const ALL_GYM_TYPES = Object.values(GymType);
+
+/** All university class types. */
+const ALL_UNIVERSITY_TYPES = Object.values(UniversityClassType);
+
+/**
+ * Serialize the player's current work options per docs/protocol.md WorkOptionsState shape.
+ *
+ * Universities and gyms are filtered to the player's current city (loc.city === Player.city).
+ * Crimes are global (Slums has city:null and is accessible from any city).
+ * purchaseServerCosts covers all valid RAM tiers (positive powers of 2 up to the node-mult cap).
+ */
+export function serializeWorkOptions(): WorkOptionsState {
+  const playerCity = Player.city;
+
+  // Universities in player's city
+  const universities: UniversityOptionDto[] = [];
+  // Gyms in player's city
+  const gyms: GymOptionDto[] = [];
+
+  for (const loc of Object.values(Locations)) {
+    if (loc.city !== playerCity) continue;
+    if (loc.types.includes(LocationType.University)) {
+      const courses = ALL_UNIVERSITY_TYPES.map((classType) => {
+        const cls = Classes[classType];
+        const costPerSec = finite(Math.abs(calculateClassCost(cls, loc)));
+        return { classType, costPerSec };
+      });
+      universities.push({ name: loc.name, city: loc.city as string, courses });
+    } else if (loc.types.includes(LocationType.Gym)) {
+      // All gym exercises cost the same — compute from the first (strength).
+      const strengthClass = Classes[GymType.strength];
+      const costPerSec = finite(Math.abs(calculateClassCost(strengthClass, loc)));
+      gyms.push({ name: loc.name, city: loc.city as string, costPerSec, stats: ALL_GYM_TYPES.slice() });
+    }
+  }
+
+  // Crimes (global; success chance depends on player stats)
+  const crimes: CrimeOptionDto[] = Object.values(Crimes).map((crime) => ({
+    crimeType: crime.type,
+    name: crime.workName,
+    karma: crime.karma,
+    money: finite(crime.money),
+    timeMs: crime.time,
+    successChance: finite(crime.successRate(Player)),
+  }));
+
+  // Companies where the player has a job
+  const companies = Object.keys(Player.jobs);
+
+  // Server costs for all valid RAM tiers (powers of 2, from 2 up to node-limited max)
+  const maxRam = getCloudServerMaxRam();
+  const purchaseServerCosts: ServerCostDto[] = [];
+  for (let ram = 2; ram <= maxRam; ram *= 2) {
+    const cost = getCloudServerCost(ram);
+    if (Number.isFinite(cost) && cost > 0) {
+      purchaseServerCosts.push({ ram, cost: finite(cost) });
+    }
+  }
+
+  const home = Player.getHomeComputer();
+  const atMaxRam =
+    (Player.bitNodeOptions.restrictHomePCUpgrade && home.maxRam >= 128) ||
+    home.maxRam >= ServerConstants.HomeComputerMaxRam;
+  const homeRamUpgradeCost = atMaxRam ? 0 : finite(Player.getUpgradeHomeRamCost());
+
+  return {
+    universities,
+    gyms,
+    crimes,
+    companies,
+    currentWork: serializeCurrentWork(),
+    homeRamUpgradeCost,
+    purchaseServerCosts,
+    torCost: CONSTANTS.TorRouterCost,
+    hasTor: Player.hasTorRouter(),
   };
 }

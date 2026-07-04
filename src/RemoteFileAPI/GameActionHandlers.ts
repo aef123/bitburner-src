@@ -22,7 +22,22 @@ import {
 import { installAugmentations as doInstallAugmentations, getAugCost } from "../Augmentation/AugmentationHelpers";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { Factions } from "../Faction/Factions";
-import { AugmentationName, FactionName, PositionType, GoColor, GoValidity, BladeburnerActionType } from "@enums";
+import {
+  AugmentationName,
+  FactionName,
+  FactionWorkType,
+  PositionType,
+  GoColor,
+  GoValidity,
+  BladeburnerActionType,
+  LocationType,
+  LocationName,
+  CompanyName,
+  CrimeType,
+  UniversityClassType,
+  GymType,
+} from "@enums";
+import type { ClassType } from "@enums";
 import { Go } from "../Go/Go";
 import { evaluateIfMoveIsValid } from "../Go/boardAnalysis/boardAnalysis";
 import { makeMove, passTurn } from "../Go/boardState/boardState";
@@ -42,7 +57,7 @@ import { SymbolToStockMap } from "../StockMarket/StockMarket";
 import { getBuyTransactionCost } from "../StockMarket/StockMarketHelpers";
 import { HacknetNode } from "../Hacknet/HacknetNode";
 import { HacknetServer } from "../Hacknet/HacknetServer";
-import { GetServer } from "../Server/AllServers";
+import { GetServer, AddToAllServers, createUniqueRandomIp } from "../Server/AllServers";
 import {
   hasHacknetServers,
   hasMaxNumberHacknetServers,
@@ -63,6 +78,20 @@ import {
   makeProduct as corpMakeProductFn,
 } from "../Corporation/Actions";
 import type { CorpResearchName } from "@nsdefs";
+import { FactionWork } from "../Work/FactionWork";
+import { ClassWork } from "../Work/ClassWork";
+import { CompanyWork } from "../Work/CompanyWork";
+import { Crimes } from "../Crime/Crimes";
+import { Locations } from "../Locations/Locations";
+import { FactionInfos } from "../Faction/FactionInfo";
+import {
+  purchaseRamForHomeComputer,
+  getCloudServerCost,
+  getCloudServerLimit,
+  getCloudServerMaxRam,
+} from "../Server/ServerPurchases";
+import { safelyCreateUniqueServer, getTorRouter } from "../Server/ServerHelpers";
+import { ServerConstants } from "../Server/data/Constants";
 
 /** Resolve a player hacknet node/server by index, or null if the index is out of range/invalid. */
 function resolveHacknetNode(index: unknown): HacknetNode | HacknetServer | null {
@@ -853,6 +882,281 @@ const actionRegistry: Record<string, ActionImpl> = {
       if (!bb) return { ok: false, message: "Player is not in Bladeburner" };
       const attempt = bb.startAction(null);
       return { ok: attempt.success === true, message: attempt.message };
+    },
+  },
+
+  // ─── Player work/crime/study/purchase actions (GG-1) ─────────────────────
+
+  /**
+   * startFactionWork { faction, workType: "hacking"|"field"|"security" }
+   * Mirrors the FactionRoot page: Player.startWork(new FactionWork({...})).
+   * validate() checks membership, gang-faction guard, and that the faction offers
+   * the requested work type (same flags the FactionRoot buttons check).
+   * singularity: true suppresses the finish dialog (same as NS singularity API).
+   */
+  startFactionWork: {
+    validate(args) {
+      if (typeof args.faction !== "string") return "Missing or invalid faction (must be a string)";
+      if (typeof args.workType !== "string") return "Missing or invalid workType (must be a string)";
+      const validWorkTypes = Object.values(FactionWorkType);
+      if (!validWorkTypes.includes(args.workType as FactionWorkType))
+        return `Invalid workType: ${args.workType as string}. Valid: ${validWorkTypes.join(", ")}`;
+      const factionName = args.faction as FactionName;
+      const faction = Factions[factionName] as Faction | undefined;
+      if (!faction) return `Unknown faction: ${args.faction as string}`;
+      if (!Player.factions.includes(factionName))
+        return `You are not a member of faction: ${args.faction as string}`;
+      if (Player.gang && Player.getGangName() === faction.name)
+        return `Cannot do faction work for your own gang faction`;
+      const info = FactionInfos[factionName];
+      const wt = args.workType as FactionWorkType;
+      if (wt === FactionWorkType.hacking && !info.offerHackingWork)
+        return `Faction ${args.faction as string} does not offer hacking work`;
+      if (wt === FactionWorkType.field && !info.offerFieldWork)
+        return `Faction ${args.faction as string} does not offer field work`;
+      if (wt === FactionWorkType.security && !info.offerSecurityWork)
+        return `Faction ${args.faction as string} does not offer security work`;
+      return null;
+    },
+    describe(args) {
+      return `Start ${args.workType as string} work for faction ${args.faction as string}`;
+    },
+    execute(args) {
+      Player.startWork(
+        new FactionWork({
+          singularity: true,
+          faction: args.faction as FactionName,
+          factionWorkType: args.workType as FactionWorkType,
+        }),
+      );
+      return { ok: true };
+    },
+  },
+
+  /**
+   * startCompanyWork { company }
+   * Mirrors the CompanyLocation page: Player.startWork(new CompanyWork({...})).
+   * validate() checks that the player has a job at the company.
+   */
+  startCompanyWork: {
+    validate(args) {
+      if (typeof args.company !== "string") return "Missing or invalid company (must be a string)";
+      if (!getEnumHelper("CompanyName").isMember(args.company))
+        return `Unknown company: ${args.company as string}`;
+      if (!Player.jobs[args.company as CompanyName])
+        return `You do not have a job at ${args.company as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Start work at company ${args.company as string}`;
+    },
+    execute(args) {
+      Player.startWork(
+        new CompanyWork({
+          singularity: true,
+          companyName: args.company as CompanyName,
+        }),
+      );
+      return { ok: true };
+    },
+  },
+
+  /**
+   * startClass { location, classType }
+   * Mirrors UniversityLocation and GymLocation pages: Player.startWork(new ClassWork({...})).
+   * location must be a University or Gym location in the player's current city.
+   * classType must be a valid UniversityClassType (for universities) or GymType (for gyms).
+   */
+  startClass: {
+    validate(args) {
+      if (typeof args.location !== "string") return "Missing or invalid location (must be a string)";
+      if (typeof args.classType !== "string") return "Missing or invalid classType (must be a string)";
+      const loc = Locations[args.location as LocationName];
+      if (!loc) return `Unknown location: ${args.location as string}`;
+      const isUniversity = loc.types.includes(LocationType.University);
+      const isGym = loc.types.includes(LocationType.Gym);
+      if (!isUniversity && !isGym)
+        return `Location ${args.location as string} is not a university or gym`;
+      if (loc.city !== null && loc.city !== Player.city)
+        return `Location ${args.location as string} is in ${loc.city as string}, but you are in ${Player.city}`;
+      const isValidUniversityCourse = getEnumHelper("UniversityClassType").isMember(args.classType);
+      const isValidGymExercise = getEnumHelper("GymType").isMember(args.classType);
+      if (!isValidUniversityCourse && !isValidGymExercise)
+        return `Invalid classType: ${args.classType as string}`;
+      if (isGym && !isValidGymExercise)
+        return `${args.classType as string} is not a valid gym exercise (valid: ${Object.values(GymType).join(", ")})`;
+      if (isUniversity && !isValidUniversityCourse)
+        return `${args.classType as string} is not a valid university course (valid: ${Object.values(UniversityClassType).join(", ")})`;
+      return null;
+    },
+    describe(args) {
+      return `Study ${args.classType as string} at ${args.location as string}`;
+    },
+    execute(args) {
+      const classType = (
+        getEnumHelper("UniversityClassType").isMember(args.classType)
+          ? getEnumHelper("UniversityClassType").getMember(args.classType, { alwaysMatch: true })
+          : getEnumHelper("GymType").getMember(args.classType, { alwaysMatch: true })
+      ) as ClassType;
+      Player.startWork(
+        new ClassWork({
+          singularity: true,
+          classType,
+          location: args.location as LocationName,
+        }),
+      );
+      return { ok: true };
+    },
+  },
+
+  /**
+   * commitCrime { crime: CrimeType }
+   * Mirrors the Slums page: Crime.commit() which calls Player.startWork(new CrimeWork({...})).
+   */
+  commitCrime: {
+    validate(args) {
+      if (!getEnumHelper("CrimeType").isMember(args.crime))
+        return `Unknown crime: ${String(args.crime)}. Valid: ${Object.values(CrimeType).join(", ")}`;
+      return null;
+    },
+    describe(args) {
+      return `Commit crime: ${String(args.crime)}`;
+    },
+    execute(args) {
+      const crimeType = getEnumHelper("CrimeType").getMember(args.crime, { alwaysMatch: true });
+      Crimes[crimeType].commit(1, null);
+      return { ok: true };
+    },
+  },
+
+  /**
+   * stopWork {}
+   * Mirrors the "Stop" button on the Work In Progress page: Player.finishWork(true).
+   * Always succeeds (no-op if not working).
+   */
+  stopWork: {
+    validate(_args) {
+      return null;
+    },
+    describe(_args) {
+      return "Stop current work";
+    },
+    execute(_args) {
+      Player.finishWork(true);
+      return { ok: true };
+    },
+  },
+
+  /**
+   * purchaseServer { hostname: string, ram: number }
+   * Mirrors PurchaseServerModal → purchaseServer (ServerPurchases.ts).
+   * execute() reimplements the core creation logic without dialogBoxCreate side-effects,
+   * since the original function pops a dialog on both success and failure paths.
+   */
+  purchaseServer: {
+    validate(args) {
+      if (typeof args.hostname !== "string" || (args.hostname as string).length === 0)
+        return "Missing or invalid hostname (must be a non-empty string)";
+      if (typeof args.ram !== "number" || !Number.isInteger(args.ram as number) || (args.ram as number) <= 0)
+        return "ram must be a positive integer";
+      const hostname = args.hostname as string;
+      const ram = args.ram as number;
+      if (hostname.startsWith("hacknet-node-") || hostname.startsWith("hacknet-server-"))
+        return `'${hostname}' is a reserved hostname`;
+      if (GetServer(hostname)) return `Hostname '${hostname}' is already in use`;
+      const cost = getCloudServerCost(ram);
+      if (!Number.isFinite(cost))
+        return `Invalid RAM: ${ram}. Must be a power of 2 within the server limit`;
+      if (Player.purchasedServers.length >= getCloudServerLimit())
+        return `Reached the maximum of ${getCloudServerLimit()} purchased servers`;
+      if (!Player.canAfford(cost)) return `Cannot afford server with ${ram}GB RAM (costs $${cost.toFixed(0)})`;
+      return null;
+    },
+    describe(args) {
+      return `Purchase server "${args.hostname as string}" with ${args.ram as number}GB RAM`;
+    },
+    execute(args) {
+      const hostname = args.hostname as string;
+      const ram = args.ram as number;
+      const cost = getCloudServerCost(ram);
+      if (!Number.isFinite(cost)) return { ok: false, message: "Invalid RAM value" };
+      if (!Player.canAfford(cost)) return { ok: false, message: "Insufficient funds" };
+      if (Player.purchasedServers.length >= getCloudServerLimit())
+        return { ok: false, message: "Maximum server count reached" };
+      try {
+        const newServ = safelyCreateUniqueServer({
+          adminRights: true,
+          hostname,
+          ip: createUniqueRandomIp(),
+          isConnectedTo: false,
+          maxRam: ram,
+          organizationName: "",
+          purchasedByPlayer: true,
+        });
+        AddToAllServers(newServ);
+        Player.purchasedServers.push(newServ.hostname);
+        const homeComputer = Player.getHomeComputer();
+        homeComputer.serversOnNetwork.push(newServ.hostname);
+        newServ.serversOnNetwork.push(homeComputer.hostname);
+        Player.loseMoney(cost, "servers");
+        return { ok: true, message: `Server '${newServ.hostname}' purchased` };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+
+  /**
+   * upgradeHomeRam {}
+   * Mirrors RamButton → purchaseRamForHomeComputer (ServerPurchases.ts).
+   * validate() catches all failure conditions so execute() never hits the dialogBoxCreate paths.
+   */
+  upgradeHomeRam: {
+    validate(_args) {
+      const home = Player.getHomeComputer();
+      if (
+        (Player.bitNodeOptions.restrictHomePCUpgrade && home.maxRam >= 128) ||
+        home.maxRam >= ServerConstants.HomeComputerMaxRam
+      ) {
+        return "Home computer RAM is already at its maximum";
+      }
+      const cost = Player.getUpgradeHomeRamCost();
+      if (!Player.canAfford(cost)) return `Cannot afford RAM upgrade (costs $${cost.toFixed(0)})`;
+      return null;
+    },
+    describe(_args) {
+      const home = Player.getHomeComputer();
+      return `Upgrade home RAM from ${home.maxRam}GB to ${home.maxRam * 2}GB`;
+    },
+    execute(_args) {
+      // validate() ensures this path never hits dialogBoxCreate.
+      purchaseRamForHomeComputer();
+      return { ok: true };
+    },
+  },
+
+  /**
+   * purchaseTor {}
+   * Mirrors TorButton → purchaseTorRouter (TorButton.tsx).
+   * execute() calls the underlying Player.loseMoney + getTorRouter() directly to avoid
+   * the success dialog that purchaseTorRouter() pops.
+   */
+  purchaseTor: {
+    validate(_args) {
+      if (Player.hasTorRouter()) return "You already have a TOR Router";
+      if (!Player.canAfford(CONSTANTS.TorRouterCost))
+        return `Cannot afford TOR Router (costs $${CONSTANTS.TorRouterCost.toFixed(0)})`;
+      return null;
+    },
+    describe(_args) {
+      return "Purchase TOR Router";
+    },
+    execute(_args) {
+      if (Player.hasTorRouter()) return { ok: false, message: "TOR Router already purchased" };
+      if (!Player.canAfford(CONSTANTS.TorRouterCost)) return { ok: false, message: "Cannot afford TOR Router" };
+      Player.loseMoney(CONSTANTS.TorRouterCost, "other");
+      getTorRouter();
+      return { ok: true };
     },
   },
 
