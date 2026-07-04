@@ -960,6 +960,7 @@ export interface CorpProductDto {
 export interface DivisionDto {
   name: string;
   industry: string;
+  makesProducts: boolean;
   cities: string[];
   products: CorpProductDto[];
   warehouses: { city: string; used: number; total: number }[];
@@ -1019,6 +1020,7 @@ export function serializeDivision(division: Division): DivisionDto {
   return {
     name: division.name,
     industry: division.industry,
+    makesProducts: division.makesProducts,
     cities: [...citySet],
     products,
     warehouses,

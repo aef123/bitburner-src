@@ -103,6 +103,7 @@ function makeStubDivision(overrides: Record<string, unknown> = {}): Division {
   return {
     name: "TestDiv",
     industry: "Agriculture",
+    makesProducts: false,
     products: new Map([
       [
         "DoneProduct",
@@ -129,6 +130,16 @@ describe("serializeDivision — structural stub", () => {
     const dto = serializeDivision(makeStubDivision());
     expect(dto.name).toBe("TestDiv");
     expect(dto.industry).toBe("Agriculture");
+  });
+
+  test("makesProducts is false when division cannot make products", () => {
+    const dto = serializeDivision(makeStubDivision({ makesProducts: false }));
+    expect(dto.makesProducts).toBe(false);
+  });
+
+  test("makesProducts is true when division can make products", () => {
+    const dto = serializeDivision(makeStubDivision({ makesProducts: true }));
+    expect(dto.makesProducts).toBe(true);
   });
 
   test("finished product has rating number, unfinished product has rating null", () => {
