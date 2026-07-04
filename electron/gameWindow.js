@@ -9,6 +9,22 @@ const storage = require("./storage");
 
 const openDevtools = process.argv.includes("--dev");
 
+/**
+ * Parse `--rfa-port=<n>` and `--rfa-address=<host>` from argv and return them as a plain
+ * object suitable for merging into the `query` passed to window.loadFile().
+ * Both flags are optional and additive — existing behaviour is unchanged when absent.
+ */
+function parseRfaArgs(argv) {
+  const query = {};
+  for (const arg of argv) {
+    const portMatch = /^--rfa-port=(\d+)$/.exec(arg);
+    if (portMatch) query.rfaPort = portMatch[1];
+    const addrMatch = /^--rfa-address=(.+)$/.exec(arg);
+    if (addrMatch) query.rfaAddress = addrMatch[1];
+  }
+  return query;
+}
+
 async function createWindow(killall) {
   const setStopProcessHandler = global.app_handlers.stopProcess;
   app.setAppUserModelId("Bitburner");
@@ -43,8 +59,11 @@ async function createWindow(killall) {
   if (tracker.state.isMaximized) window.maximize();
 
   window.removeMenu();
-  const noScripts = killall ? { query: { noScripts: killall } } : {};
-  window.loadFile("index.html", noScripts);
+  const rfaQuery = parseRfaArgs(process.argv);
+  const baseQuery = killall ? { noScripts: killall } : {};
+  const queryParams = { ...baseQuery, ...rfaQuery };
+  const loadOptions = Object.keys(queryParams).length > 0 ? { query: queryParams } : {};
+  window.loadFile("index.html", loadOptions);
   window.once("ready-to-show", () => {
     utils.setZoomFactor(window, utils.getZoomFactor());
   });

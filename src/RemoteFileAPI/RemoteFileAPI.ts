@@ -1,9 +1,11 @@
 import { Settings } from "../Settings/Settings";
 import { Remote } from "./Remote";
+import { applyRfaQueryOverrides } from "./RfaQueryOverrides";
 
 let server: Remote | undefined;
 
 export function newRemoteFileApiConnection(): void {
+  applyRfaQueryOverrides();
   if (server) server.stopConnection();
   if (Settings.RemoteFileApiPort === 0 || Settings.RemoteFileApiPort > 65535) return;
   server = new Remote(
