@@ -29,6 +29,7 @@ import {
   serializeScriptLog,
   serializeTerminal,
 } from "./StateSerializers";
+import { runTerminalCommand } from "./GameActionHandlers";
 
 type SuccessResult<T> = { success: true; params: T };
 type FailureResult = { success: false; errorResponse: RFAMessage };
@@ -344,6 +345,10 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
       result: serializeTerminal(afterIndex) as unknown as Record<string, unknown>,
       id: msg.id,
     });
+  },
+
+  runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {
+    return runTerminalCommand(msg);
   },
 };
 

@@ -12,8 +12,9 @@ import { HacknetServer } from "../Hacknet/HacknetServer";
 import { DarknetServer } from "../Server/DarknetServer";
 import { SpecialServers } from "../Server/data/SpecialServers";
 import { workerScripts } from "../Netscript/WorkerScripts";
+import { CONSTANTS } from "../Constants";
 import { Terminal } from "../Terminal";
-import { Output, Link } from "../Terminal/OutputTypes";
+import { Output, Link, RawOutput } from "../Terminal/OutputTypes";
 import { isCrimeWork } from "../Work/CrimeWork";
 import { isClassWork } from "../Work/ClassWork";
 import { isCreateProgramWork } from "../Work/CreateProgramWork";
@@ -196,13 +197,20 @@ function serializeCurrentWork(): HudState["currentWork"] {
   const work = Player.currentWork;
   if (!work) return null;
   let description = "";
+  let etaMs: number | null = null;
   if (isCrimeWork(work)) description = `Committing ${work.crimeType}`;
   else if (isClassWork(work)) description = work.getClass().youAreCurrently;
-  else if (isCreateProgramWork(work)) description = `Creating ${work.programName}`;
-  else if (isGraftingWork(work)) description = `Grafting ${work.augmentation}`;
-  else if (isFactionWork(work)) description = `Working for ${work.factionName}`;
+  else if (isCreateProgramWork(work)) {
+    description = `Creating ${work.programName}`;
+    const remaining = work.unitNeeded() - work.unitCompleted;
+    etaMs = work.unitRate > 0 ? Math.max(0, (remaining / work.unitRate) * CONSTANTS.MilliPerCycle) : null;
+  } else if (isGraftingWork(work)) {
+    description = `Grafting ${work.augmentation}`;
+    const remaining = work.unitNeeded() - work.unitCompleted;
+    etaMs = work.unitRate > 0 ? Math.max(0, (remaining / work.unitRate) * CONSTANTS.MilliPerCycle) : null;
+  } else if (isFactionWork(work)) description = `Working for ${work.factionName}`;
   else if (isCompanyWork(work)) description = `Working at ${work.companyName}`;
-  return { type: work.type, description, etaMs: null };
+  return { type: work.type, description, etaMs };
 }
 
 // --- Serializers ---
@@ -284,15 +292,21 @@ export function serializeRunningScripts(): ScriptsState {
   };
 }
 
+/**
+ * Map a single terminal output-history item to a JSON-pure TerminalEntry.
+ * Exported so GameActionHandlers can reuse it without duplicating the mapping logic.
+ */
+export function mapTerminalEntry(item: Output | Link | RawOutput): TerminalEntry {
+  if (item instanceof Output) return { kind: "output", text: item.text, color: item.color };
+  if (item instanceof Link) return { kind: "link", text: item.hostname };
+  // RawOutput — never attempt to serialize the ReactNode.
+  return { kind: "raw", text: "" };
+}
+
 export function serializeTerminal(afterIndex?: number): TerminalState {
   const history = Terminal.outputHistory;
   const start = afterIndex != null ? Math.max(0, Math.min(afterIndex, history.length)) : 0;
-  const entries: TerminalEntry[] = history.slice(start).map((item) => {
-    if (item instanceof Output) return { kind: "output", text: item.text, color: item.color };
-    if (item instanceof Link) return { kind: "link", text: item.hostname };
-    // RawOutput — never attempt to serialize the ReactNode.
-    return { kind: "raw", text: "" };
-  });
+  const entries: TerminalEntry[] = history.slice(start).map(mapTerminalEntry);
   return {
     cwdServer: currentServerName(),
     entries,

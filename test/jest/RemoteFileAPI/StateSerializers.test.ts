@@ -5,6 +5,7 @@ import {
   serializeScriptLog,
   serializeTerminal,
 } from "../../../src/RemoteFileAPI/StateSerializers";
+import { WorkType } from "../../../src/Work/Work";
 import {
   AddToAllServers,
   GetServerOrThrow,
@@ -38,7 +39,7 @@ function expectJsonPure(value: unknown): void {
  *   home ── darknode              (darknet server beyond gateway, must be excluded)
  *   home ── darkweb               (darknet gateway, must be included)
  *   orphan                        (never linked — must never appear)
- * Plus a back-edge n3 ── n1 to create a cycle.
+ * Plus a triangle home ── c1 ── c2 ── home to exercise the visited-set / cycle guard.
  */
 function buildNetwork(): void {
   prestigeAllServers();
@@ -110,7 +111,7 @@ describe("serializeNetwork (discovery-safe BFS)", () => {
   test("(c) a cycle does not hang the serializer", () => {
     // If BFS didn't guard visited hostnames, this would loop forever.
     const hosts = serializeNetwork().servers.map((s) => s.hostname);
-    // Each server appears exactly once despite the n3 -> n1 back-edge.
+    // Each server appears exactly once despite the home-c1-c2 triangle cycle.
     expect(new Set(hosts).size).toBe(hosts.length);
     expect(hosts).toEqual(expect.arrayContaining(["home", "n1", "n2", "n3"]));
   });
@@ -167,6 +168,72 @@ describe("serializeHud", () => {
     expect(hud.gangTerritory).toBeNull();
     expect(hud.numAugQueued).toBe(0);
     expectJsonPure(hud);
+  });
+
+  test("currentWork etaMs is null for non-timed work types (crime)", () => {
+    Player.currentWork = { type: WorkType.CRIME, crimeType: "robbery" } as never;
+    const hud = serializeHud();
+    expect(hud.currentWork).not.toBeNull();
+    expect(hud.currentWork?.etaMs).toBeNull();
+  });
+
+  test("currentWork etaMs is a positive number for CreateProgramWork with unitRate > 0", () => {
+    // unitRate > 0, unitCompleted < unitNeeded → should produce a finite positive etaMs.
+    Player.currentWork = {
+      type: WorkType.CREATE_PROGRAM,
+      programName: "BruteSSH.exe",
+      unitRate: 1000,
+      unitCompleted: 200,
+      unitNeeded: () => 1200,
+    } as never;
+    const hud = serializeHud();
+    expect(hud.currentWork).not.toBeNull();
+    expect(typeof hud.currentWork?.etaMs).toBe("number");
+    expect((hud.currentWork?.etaMs as number)).toBeGreaterThan(0);
+    expectJsonPure(hud);
+  });
+
+  test("currentWork etaMs is null for CreateProgramWork before first process() call (unitRate === 0)", () => {
+    Player.currentWork = {
+      type: WorkType.CREATE_PROGRAM,
+      programName: "BruteSSH.exe",
+      unitRate: 0,
+      unitCompleted: 0,
+      unitNeeded: () => 1000,
+    } as never;
+    const hud = serializeHud();
+    expect(hud.currentWork?.etaMs).toBeNull();
+  });
+
+  test("currentWork etaMs is a positive number for GraftingWork with unitRate > 0", () => {
+    Player.currentWork = {
+      type: WorkType.GRAFTING,
+      augmentation: "Targeting I",
+      unitRate: 500,
+      unitCompleted: 100,
+      unitNeeded: () => 900,
+    } as never;
+    const hud = serializeHud();
+    expect(hud.currentWork).not.toBeNull();
+    expect(typeof hud.currentWork?.etaMs).toBe("number");
+    expect((hud.currentWork?.etaMs as number)).toBeGreaterThan(0);
+    expectJsonPure(hud);
+  });
+
+  test("currentWork etaMs is null for GraftingWork before first process() call (unitRate === 0)", () => {
+    Player.currentWork = {
+      type: WorkType.GRAFTING,
+      augmentation: "Targeting I",
+      unitRate: 0,
+      unitCompleted: 0,
+      unitNeeded: () => 1000,
+    } as never;
+    const hud = serializeHud();
+    expect(hud.currentWork?.etaMs).toBeNull();
+  });
+
+  afterEach(() => {
+    Player.currentWork = null;
   });
 });
 

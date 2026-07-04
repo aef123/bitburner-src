@@ -34,7 +34,14 @@ type ResultType =
   | FileMetadata
   | FileMetadata[]
   | Record<string, unknown>;
-type FileDescription = FileData | FileContent | FileLocation | FileServer | SubscribeParams | UnsubscribeParams;
+type FileDescription =
+  | FileData
+  | FileContent
+  | FileLocation
+  | FileServer
+  | SubscribeParams
+  | UnsubscribeParams
+  | TerminalCommandParams;
 
 export interface FileData {
   filename: string;
@@ -102,4 +109,14 @@ export function isSubscribeParams(p: unknown): p is SubscribeParams {
 export function isUnsubscribeParams(p: unknown): p is UnsubscribeParams {
   const pp = p as UnsubscribeParams;
   return typeof pp.topic === "string";
+}
+
+/** Params for the runTerminalCommand action. */
+export interface TerminalCommandParams {
+  command: string;
+}
+
+export function isTerminalCommandParams(p: unknown): p is TerminalCommandParams {
+  const pp = p as TerminalCommandParams;
+  return typeof pp.command === "string";
 }
