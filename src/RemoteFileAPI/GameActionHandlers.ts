@@ -15,7 +15,18 @@ import { CONSTANTS } from "../Constants";
 import { CityName } from "../Locations/Enums";
 import { joinFaction } from "../Faction/FactionHelpers";
 import { Factions } from "../Faction/Factions";
-import { FactionName } from "@enums";
+import { FactionName, PositionType } from "@enums";
+import { GangMemberTasks } from "../Gang/GangMemberTasks";
+import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
+import { RecruitmentResult } from "../Gang/Gang";
+import {
+  buyStock as buyStockFn,
+  sellStock as sellStockFn,
+  shortStock as shortStockFn,
+  sellShort as sellShortFn,
+} from "../StockMarket/BuyingAndSelling";
+import { SymbolToStockMap } from "../StockMarket/StockMarket";
+import { getBuyTransactionCost } from "../StockMarket/StockMarketHelpers";
 
 /**
  * Run a terminal command string via Terminal.executeCommands and return the delta output.
@@ -132,6 +143,211 @@ const actionRegistry: Record<string, ActionImpl> = {
       const faction = Factions[name];
       if (!faction) return { ok: false, message: `Unknown faction: ${name}` };
       joinFaction(faction);
+      return { ok: true };
+    },
+  },
+
+  // ─── Gang actions (GD-1) ─────────────────────────────────────────────────
+
+  ascendGangMember: {
+    validate(args) {
+      if (typeof args.member !== "string") return "Missing or invalid member (must be a string)";
+      const gang = Player.gang;
+      if (!gang) return "Player is not in a gang";
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return `Gang member not found: ${args.member as string}`;
+      if (!member.canAscend()) return `Gang member ${args.member as string} cannot ascend (insufficient experience)`;
+      return null;
+    },
+    describe(args) {
+      return `Ascend gang member ${args.member as string}`;
+    },
+    execute(args) {
+      const gang = Player.gang;
+      if (!gang) return { ok: false, message: "Player is not in a gang" };
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return { ok: false, message: `Gang member not found: ${args.member as string}` };
+      gang.ascendMember(member);
+      return { ok: true };
+    },
+  },
+
+  setGangMemberTask: {
+    validate(args) {
+      if (typeof args.member !== "string") return "Missing or invalid member (must be a string)";
+      if (typeof args.task !== "string") return "Missing or invalid task (must be a string)";
+      const gang = Player.gang;
+      if (!gang) return "Player is not in a gang";
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return `Gang member not found: ${args.member as string}`;
+      if (!Object.hasOwn(GangMemberTasks, args.task as string)) return `Unknown task: ${args.task as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Set gang member ${args.member as string} task to ${args.task as string}`;
+    },
+    execute(args) {
+      const gang = Player.gang;
+      if (!gang) return { ok: false, message: "Player is not in a gang" };
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return { ok: false, message: `Gang member not found: ${args.member as string}` };
+      const success = member.assignToTask(args.task as string);
+      if (!success) return { ok: false, message: `Failed to assign task: ${args.task as string}` };
+      return { ok: true };
+    },
+  },
+
+  recruitGangMember: {
+    validate(args) {
+      if (typeof args.name !== "string" || (args.name as string).length === 0)
+        return "Missing or invalid name (must be a non-empty string)";
+      const gang = Player.gang;
+      if (!gang) return "Player is not in a gang";
+      const canRecruit = gang.canRecruitMember();
+      if (canRecruit !== RecruitmentResult.Success) return canRecruit;
+      if (gang.members.some((m) => m.name === (args.name as string)))
+        return `Name already in use: ${args.name as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Recruit gang member named ${args.name as string}`;
+    },
+    execute(args) {
+      const gang = Player.gang;
+      if (!gang) return { ok: false, message: "Player is not in a gang" };
+      const result = gang.recruitMember(args.name as string);
+      if (result !== RecruitmentResult.Success) return { ok: false, message: result };
+      return { ok: true };
+    },
+  },
+
+  buyGangEquipment: {
+    validate(args) {
+      if (typeof args.member !== "string") return "Missing or invalid member (must be a string)";
+      if (typeof args.equipment !== "string") return "Missing or invalid equipment (must be a string)";
+      const gang = Player.gang;
+      if (!gang) return "Player is not in a gang";
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return `Gang member not found: ${args.member as string}`;
+      const upg = GangMemberUpgrades[args.equipment as string];
+      if (!upg) return `Unknown equipment: ${args.equipment as string}`;
+      const cost = gang.getUpgradeCost(upg);
+      if (Player.money < cost)
+        return `Cannot afford equipment ${args.equipment as string} (costs $${cost.toFixed(0)})`;
+      return null;
+    },
+    describe(args) {
+      return `Buy equipment ${args.equipment as string} for gang member ${args.member as string}`;
+    },
+    execute(args) {
+      const gang = Player.gang;
+      if (!gang) return { ok: false, message: "Player is not in a gang" };
+      const member = gang.members.find((m) => m.name === (args.member as string));
+      if (!member) return { ok: false, message: `Gang member not found: ${args.member as string}` };
+      const upg = GangMemberUpgrades[args.equipment as string];
+      if (!upg) return { ok: false, message: `Unknown equipment: ${args.equipment as string}` };
+      const success = member.buyUpgrade(upg);
+      if (!success)
+        return { ok: false, message: `Cannot buy ${args.equipment as string} (may already be owned or unaffordable)` };
+      return { ok: true };
+    },
+  },
+
+  // ─── Stock actions (GD-1) ─────────────────────────────────────────────────
+
+  buyStock: {
+    validate(args) {
+      if (typeof args.symbol !== "string") return "Missing or invalid symbol (must be a string)";
+      if (typeof args.shares !== "number" || args.shares <= 0) return "shares must be a positive number";
+      if (!Player.hasWseAccount) return "Player does not have a WSE account";
+      if (!Player.hasTixApiAccess) return "Player does not have TIX API access";
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
+      const cost = getBuyTransactionCost(stock, args.shares as number, PositionType.Long);
+      if (cost === null || Player.money < cost)
+        return `Cannot afford to buy ${args.shares as number} shares of ${args.symbol as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Buy ${args.shares as number} shares of ${args.symbol as string}`;
+    },
+    execute(args) {
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return { ok: false, message: `Unknown stock symbol: ${args.symbol as string}` };
+      const ok = buyStockFn(stock, args.shares as number, null, { suppressDialog: true });
+      if (!ok) return { ok: false, message: `Failed to buy shares of ${args.symbol as string}` };
+      return { ok: true };
+    },
+  },
+
+  sellStock: {
+    validate(args) {
+      if (typeof args.symbol !== "string") return "Missing or invalid symbol (must be a string)";
+      if (typeof args.shares !== "number" || args.shares <= 0) return "shares must be a positive number";
+      if (!Player.hasWseAccount) return "Player does not have a WSE account";
+      if (!Player.hasTixApiAccess) return "Player does not have TIX API access";
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
+      if (stock.playerShares <= 0) return `No long shares of ${args.symbol as string} to sell`;
+      return null;
+    },
+    describe(args) {
+      return `Sell ${args.shares as number} shares of ${args.symbol as string}`;
+    },
+    execute(args) {
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return { ok: false, message: `Unknown stock symbol: ${args.symbol as string}` };
+      const ok = sellStockFn(stock, args.shares as number, null, { suppressDialog: true });
+      if (!ok) return { ok: false, message: `Failed to sell shares of ${args.symbol as string}` };
+      return { ok: true };
+    },
+  },
+
+  shortStock: {
+    validate(args) {
+      if (typeof args.symbol !== "string") return "Missing or invalid symbol (must be a string)";
+      if (typeof args.shares !== "number" || args.shares <= 0) return "shares must be a positive number";
+      if (!Player.hasWseAccount) return "Player does not have a WSE account";
+      if (!Player.hasTixApiAccess) return "Player does not have TIX API access";
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
+      const cost = getBuyTransactionCost(stock, args.shares as number, PositionType.Short);
+      if (cost === null || Player.money < cost)
+        return `Cannot afford to short ${args.shares as number} shares of ${args.symbol as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Short ${args.shares as number} shares of ${args.symbol as string}`;
+    },
+    execute(args) {
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return { ok: false, message: `Unknown stock symbol: ${args.symbol as string}` };
+      const ok = shortStockFn(stock, args.shares as number, null, { suppressDialog: true });
+      if (!ok) return { ok: false, message: `Failed to short shares of ${args.symbol as string}` };
+      return { ok: true };
+    },
+  },
+
+  /** coverShort maps to sellShort per protocol.md. */
+  coverShort: {
+    validate(args) {
+      if (typeof args.symbol !== "string") return "Missing or invalid symbol (must be a string)";
+      if (typeof args.shares !== "number" || args.shares <= 0) return "shares must be a positive number";
+      if (!Player.hasWseAccount) return "Player does not have a WSE account";
+      if (!Player.hasTixApiAccess) return "Player does not have TIX API access";
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return `Unknown stock symbol: ${args.symbol as string}`;
+      if (stock.playerShortShares <= 0) return `No short shares of ${args.symbol as string} to cover`;
+      return null;
+    },
+    describe(args) {
+      return `Cover short on ${args.shares as number} shares of ${args.symbol as string}`;
+    },
+    execute(args) {
+      const stock = SymbolToStockMap[args.symbol as string];
+      if (!stock) return { ok: false, message: `Unknown stock symbol: ${args.symbol as string}` };
+      const ok = sellShortFn(stock, args.shares as number, null, { suppressDialog: true });
+      if (!ok) return { ok: false, message: `Failed to cover short on ${args.symbol as string}` };
       return { ok: true };
     },
   },

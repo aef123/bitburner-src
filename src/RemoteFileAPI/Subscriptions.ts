@@ -6,6 +6,8 @@ import {
   serializeRunningScripts,
   serializeTerminal,
   serializeFactions,
+  serializeGang,
+  serializeStocks,
 } from "./StateSerializers";
 import { FactionInvitationEvents } from "../Faction/ui/FactionInvitationManager";
 import { SaveEvents } from "../SaveObject";
@@ -35,8 +37,8 @@ export const serializerRegistry: Record<Topic, () => unknown> = {
   network: serializeNetwork,
   scripts: serializeRunningScripts,
   factions: serializeFactions,
-  gang: () => null,
-  stocks: () => null,
+  gang: serializeGang,
+  stocks: serializeStocks,
   hacknet: () => null,
   sleeves: () => null,
   corporation: () => null,

@@ -26,6 +26,9 @@ import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Fact
 import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
 import { AugmentationName } from "@enums";
+import { AllGangs } from "../Gang/AllGangs";
+import { StockMarket } from "../StockMarket/StockMarket";
+import { Stock } from "../StockMarket/Stock";
 
 // --- Payload shapes (mirror docs/protocol.md) ---
 
@@ -434,6 +437,220 @@ export function serializeFactions(): FactionsState {
     rumors: [...Player.factionRumors],
     augQueue,
     priceMultiplier: finite(getGenericAugmentationPriceMultiplier()),
+  };
+}
+
+// --- Gang state shapes (mirror docs/protocol.md) ---
+
+export interface GangMemberDto {
+  name: string;
+  task: string;
+  stats: Record<"hack" | "str" | "def" | "dex" | "agi" | "cha", number>;
+  ascensionResults: Record<"hack" | "str" | "def" | "dex" | "agi" | "cha", number> | null;
+  moneyRate: number;
+  respectRate: number;
+  equipment: string[];
+}
+
+export interface GangState {
+  faction: string;
+  isHacking: boolean;
+  respect: number;
+  respectRate: number;
+  wanted: number;
+  wantedRate: number;
+  wantedPenalty: number;
+  moneyRate: number;
+  territory: number;
+  territoryClashChance: number;
+  power: number;
+  members: GangMemberDto[];
+  taskNames: string[];
+  otherGangs: { name: string; territory: number; power: number }[];
+}
+
+/**
+ * Serialize the player's gang state per docs/protocol.md GangState shape.
+ * Returns null if the player is not in a gang.
+ *
+ * Rates stored per-cycle are converted to per-second (×1000/MilliPerCycle).
+ * Non-finite values are coerced to 0 via finite().
+ */
+export function serializeGang(): GangState | null {
+  const gang = Player.gang;
+  if (!gang) return null;
+
+  const cycleToSec = 1000 / CONSTANTS.MilliPerCycle;
+
+  const members: GangMemberDto[] = gang.members.map((member) => {
+    const raw = member.canAscend() ? member.getAscensionResults() : null;
+    const ascensionResults = raw
+      ? {
+          hack: finite(raw.hack),
+          str: finite(raw.str),
+          def: finite(raw.def),
+          dex: finite(raw.dex),
+          agi: finite(raw.agi),
+          cha: finite(raw.cha),
+        }
+      : null;
+
+    return {
+      name: member.name,
+      task: member.task,
+      stats: {
+        hack: member.hack,
+        str: member.str,
+        def: member.def,
+        dex: member.dex,
+        agi: member.agi,
+        cha: member.cha,
+      },
+      ascensionResults,
+      moneyRate: finite(member.calculateMoneyGain(gang) * cycleToSec),
+      respectRate: finite(member.calculateRespectGain(gang) * cycleToSec),
+      equipment: member.upgrades.slice(),
+    };
+  });
+
+  const otherGangs = Object.entries(AllGangs)
+    .filter(([name]) => name !== gang.facName)
+    .map(([name, info]) => ({
+      name,
+      territory: finite(info.territory),
+      power: finite(info.power),
+    }));
+
+  return {
+    faction: gang.facName,
+    isHacking: gang.isHackingGang,
+    respect: finite(gang.respect),
+    respectRate: finite(gang.respectGainRate * cycleToSec),
+    wanted: finite(gang.wanted),
+    wantedRate: finite(gang.wantedGainRate * cycleToSec),
+    wantedPenalty: finite(gang.getWantedPenalty()),
+    moneyRate: finite(gang.moneyGainRate * cycleToSec),
+    territory: finite(gang.getTerritory()),
+    territoryClashChance: finite(gang.territoryClashChance),
+    power: finite(gang.getPower()),
+    members,
+    taskNames: gang.getAllTaskNames(),
+    otherGangs,
+  };
+}
+
+// --- Stocks state shapes (mirror docs/protocol.md) ---
+
+export interface StockDto {
+  symbol: string;
+  org: string;
+  price: number;
+  askPrice: number;
+  bidPrice: number;
+  playerShares: number;
+  playerAvgPx: number;
+  playerShortShares: number;
+  playerAvgShortPx: number;
+  maxShares: number;
+  /** null unless player has 4S Market Data (capability rule) */
+  forecast: number | null;
+  /** null unless player has 4S Market Data (capability rule) */
+  volatility: number | null;
+}
+
+export interface StocksState {
+  hasTixApi: boolean;
+  has4S: boolean;
+  portfolioValue: number;
+  positions: StockDto[];
+  watchable: StockDto[];
+  /** Per-symbol price history ring (~30 entries), updated on each push. For sparklines. */
+  history: Record<string, number[]>;
+}
+
+/** Bounded ring size for per-symbol price history. */
+const PRICE_RING_SIZE = 30;
+
+/**
+ * Module-level price history rings keyed by symbol. Seeded lazily on first serialization call
+ * for each symbol. Updated (price appended) on every serializeStocks() call, regardless of
+ * whether the payload changed (the subscription layer de-dupes the sends).
+ */
+const _priceHistory = new Map<string, number[]>();
+
+function recordStockPrice(symbol: string, price: number): void {
+  let ring = _priceHistory.get(symbol);
+  if (!ring) {
+    ring = [];
+    _priceHistory.set(symbol, ring);
+  }
+  ring.push(price);
+  if (ring.length > PRICE_RING_SIZE) ring.shift();
+}
+
+/**
+ * Serialize the stock market state per docs/protocol.md StocksState shape.
+ * Returns null if the player does not have a WSE account.
+ *
+ * CAPABILITY RULE: forecast and volatility fields are null unless the player owns 4S Market Data.
+ * The extension must never show forecast/volatility when has4S is false — do not strip on the
+ * extension side.
+ */
+export function serializeStocks(): StocksState | null {
+  if (!Player.hasWseAccount) return null;
+
+  const has4S = Player.has4SData;
+  const allStocks = (Object.values(StockMarket) as unknown[]).filter((v): v is Stock => v instanceof Stock);
+
+  let portfolioValue = 0;
+  const positions: StockDto[] = [];
+  const watchable: StockDto[] = [];
+
+  for (const stock of allStocks) {
+    // Update price history ring on every serialization call (seeded lazily).
+    recordStockPrice(stock.symbol, stock.price);
+
+    const dto: StockDto = {
+      symbol: stock.symbol,
+      org: stock.name,
+      price: finite(stock.price),
+      askPrice: finite(stock.getAskPrice()),
+      bidPrice: finite(stock.getBidPrice()),
+      playerShares: stock.playerShares,
+      playerAvgPx: finite(stock.playerAvgPx),
+      playerShortShares: stock.playerShortShares,
+      playerAvgShortPx: finite(stock.playerAvgShortPx),
+      maxShares: stock.maxShares,
+      // Capability rule: only expose forecast/volatility with 4S data.
+      forecast: has4S ? finite(stock.getAbsoluteForecast()) : null,
+      volatility: has4S ? finite(stock.mv) : null,
+    };
+
+    watchable.push(dto);
+
+    if (stock.playerShares > 0 || stock.playerShortShares > 0) {
+      positions.push(dto);
+      // Long position value at current price; short position as invested principal.
+      portfolioValue += finite(stock.playerShares * stock.price);
+      if (stock.playerShortShares > 0) {
+        portfolioValue += finite(stock.playerShortShares * stock.playerAvgShortPx);
+      }
+    }
+  }
+
+  // Snapshot current history rings into a plain Record for serialization.
+  const history: Record<string, number[]> = {};
+  for (const [symbol, ring] of _priceHistory) {
+    history[symbol] = ring.slice();
+  }
+
+  return {
+    hasTixApi: Player.hasTixApiAccess,
+    has4S,
+    portfolioValue: finite(portfolioValue),
+    positions,
+    watchable,
+    history,
   };
 }
 
