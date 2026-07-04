@@ -21,6 +21,11 @@ import { isCreateProgramWork } from "../Work/CreateProgramWork";
 import { isGraftingWork } from "../Work/GraftingWork";
 import { isFactionWork } from "../Work/FactionWork";
 import { isCompanyWork } from "../Work/CompanyWork";
+import { Factions } from "../Faction/Factions";
+import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Faction/FactionHelpers";
+import { Augmentations } from "../Augmentation/Augmentations";
+import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
+import { AugmentationName } from "@enums";
 
 // --- Payload shapes (mirror docs/protocol.md) ---
 
@@ -321,4 +326,135 @@ export function serializeScriptLog(pid: number, afterLine?: number): ScriptLogRe
   const start = afterLine != null ? Math.max(0, Math.min(afterLine, logs.length)) : 0;
   const lines = logs.slice(start).map((node) => (typeof node === "string" ? node : ""));
   return { pid, lines, startLine: start, running: ws != null };
+}
+
+// --- Factions state shapes (mirror docs/protocol.md) ---
+
+export interface AugmentDto {
+  name: string;
+  owned: boolean;
+  queued: boolean;
+  repReq: number;
+  price: number;
+  basePrice: number;
+  statsDescription: string;
+  prereqs: string[];
+  prereqsMet: boolean;
+}
+
+export interface FactionInfoDto {
+  name: string;
+  reputation: number;
+  favor: number;
+  augments: AugmentDto[];
+}
+
+export interface QueuedAug {
+  name: string;
+  /** Best-effort: the faction this aug was queued from. The game does not store the origin faction,
+   *  so this is the first joined faction that currently offers it, or "" if unknown. */
+  faction: string;
+}
+
+export interface FactionsState {
+  joined: FactionInfoDto[];
+  invitations: string[];
+  rumors: string[];
+  augQueue: QueuedAug[];
+  priceMultiplier: number;
+}
+
+export interface InstallPreview {
+  augs: { name: string; faction: string; price: number }[];
+  totalPrice: number;
+  effectSummary: string[];
+}
+
+/**
+ * Best-effort: return the first joined faction that currently offers this augmentation, or "" if none.
+ * The game does not store which faction an aug was purchased from (no production cancel/pop helper),
+ * so this is a heuristic based on current faction membership and offering lists.
+ */
+function resolveAugFaction(augName: AugmentationName): string {
+  for (const factionName of Player.factions) {
+    if (getFactionAugmentationsFiltered(Factions[factionName]).includes(augName)) {
+      return factionName;
+    }
+  }
+  return "";
+}
+
+/**
+ * Serialize the player's faction state per docs/protocol.md FactionsState shape.
+ *
+ * NFG (NeuroFluxGovernor) is repeatable and never permanently "owned" — it is intentionally
+ * not marked owned=true even when present in Player.augmentations, so it keeps appearing as
+ * purchasable in the extension UI.
+ */
+export function serializeFactions(): FactionsState {
+  const joined: FactionInfoDto[] = Player.factions.map((factionName) => {
+    const faction = Factions[factionName];
+    const augNames = getFactionAugmentationsFiltered(faction);
+    const augments: AugmentDto[] = augNames.map((augName) => {
+      const aug = Augmentations[augName];
+      const costs = getAugCost(aug);
+      // NFG is repeatable — do not mark it permanently owned; it must keep appearing as purchasable.
+      const isNFG = augName === AugmentationName.NeuroFluxGovernor;
+      const owned = isNFG ? false : Player.augmentations.some((a) => a.name === augName);
+      const queued = Player.queuedAugmentations.some((a) => a.name === augName);
+      return {
+        name: augName,
+        owned,
+        queued,
+        repReq: finite(costs.repCost),
+        price: finite(costs.moneyCost),
+        basePrice: finite(aug.baseCost),
+        statsDescription: aug.stats,
+        prereqs: aug.prereqs.slice(),
+        prereqsMet: hasAugmentationPrereqs(aug),
+      };
+    });
+    return {
+      name: factionName,
+      reputation: finite(faction.playerReputation),
+      favor: finite(faction.favor),
+      augments,
+    };
+  });
+
+  // Best-effort faction lookup for each queued aug (origin faction not stored in save)
+  const augQueue: QueuedAug[] = Player.queuedAugmentations.map((qa) => ({
+    name: qa.name,
+    faction: resolveAugFaction(qa.name),
+  }));
+
+  return {
+    joined,
+    invitations: Player.factionInvitations.slice(),
+    rumors: [...Player.factionRumors],
+    augQueue,
+    priceMultiplier: finite(getGenericAugmentationPriceMultiplier()),
+  };
+}
+
+/**
+ * Build an install preview for the currently queued augmentations.
+ *
+ * Prices are recomputed via getAugCost at the time of the call — the game does not persist
+ * the price paid at queue time, so the values shown reflect the current escalation order.
+ * effectSummary is a simple concatenation of each aug's stats field (v1 implementation).
+ */
+export function serializeInstallPreview(): InstallPreview {
+  const augs = Player.queuedAugmentations.map((qa) => {
+    const aug = Augmentations[qa.name];
+    const costs = getAugCost(aug);
+    return {
+      name: qa.name,
+      faction: resolveAugFaction(qa.name),
+      price: finite(costs.moneyCost),
+    };
+  });
+  const totalPrice = finite(augs.reduce((sum, a) => sum + a.price, 0));
+  const effectSummary = Player.queuedAugmentations.map((qa) => Augmentations[qa.name].stats);
+  return { augs, totalPrice, effectSummary };
 }

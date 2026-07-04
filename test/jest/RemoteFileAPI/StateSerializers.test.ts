@@ -4,8 +4,13 @@ import {
   serializeRunningScripts,
   serializeScriptLog,
   serializeTerminal,
+  serializeFactions,
+  serializeInstallPreview,
 } from "../../../src/RemoteFileAPI/StateSerializers";
 import { WorkType } from "../../../src/Work/Work";
+import { AugmentationName, FactionName } from "../../../src/Enums";
+import { Factions } from "../../../src/Faction/Factions";
+import { PlayerOwnedAugmentation } from "../../../src/Augmentation/PlayerOwnedAugmentation";
 import {
   AddToAllServers,
   GetServerOrThrow,
@@ -358,5 +363,157 @@ describe("serializeTerminal", () => {
     // busy reflects Terminal.action !== null
     Terminal.action = {} as unknown as typeof Terminal.action;
     expect(serializeTerminal().busy).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// serializeFactions / serializeInstallPreview
+// ---------------------------------------------------------------------------
+
+const TEST_FACTION = FactionName.CyberSec;
+
+/** Join CyberSec in the Factions singleton and add it to Player.factions. */
+function setupFactionMembership(): void {
+  const f = Factions[TEST_FACTION];
+  f.isMember = true;
+  f.playerReputation = 5000;
+  f.setFavor(10);
+  Player.factions = [TEST_FACTION];
+}
+
+/** Undo the Factions singleton side-effects from setupFactionMembership. */
+function teardownFactionMembership(): void {
+  const f = Factions[TEST_FACTION];
+  f.isMember = false;
+  f.playerReputation = 0;
+  f.setFavor(0);
+}
+
+describe("serializeFactions", () => {
+  beforeEach(() => {
+    setPlayer(new PlayerObject());
+    setupFactionMembership();
+  });
+
+  afterEach(() => {
+    teardownFactionMembership();
+  });
+
+  test("(a) joined faction has correct name, reputation, and favor", () => {
+    const state = serializeFactions();
+    expect(state.joined).toHaveLength(1);
+    const dto = state.joined[0];
+    expect(dto.name).toBe(TEST_FACTION);
+    expect(dto.reputation).toBe(5000);
+    expect(dto.favor).toBe(10);
+    expect(dto.augments.length).toBeGreaterThan(0);
+  });
+
+  test("(b) aug flags: owned/queued/prereqsMet are correct", () => {
+    // Install BitWire (no prereqs, offered by CyberSec)
+    Player.augmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    // Queue CSG1 (no prereqs, offered by CyberSec)
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.CranialSignalProcessorsG1));
+
+    const state = serializeFactions();
+    const dto = state.joined[0];
+
+    // BitWire installed → owned=true, not queued
+    const bitWire = dto.augments.find((a) => a.name === AugmentationName.BitWire);
+    expect(bitWire).toBeDefined();
+    expect(bitWire?.owned).toBe(true);
+    expect(bitWire?.queued).toBe(false);
+
+    // CSG1 queued but not installed → owned=false, queued=true
+    const csg1 = dto.augments.find((a) => a.name === AugmentationName.CranialSignalProcessorsG1);
+    expect(csg1).toBeDefined();
+    expect(csg1?.owned).toBe(false);
+    expect(csg1?.queued).toBe(true);
+
+    // CSG2 requires CSG1; CSG1 is queued so hasAugmentation returns true → prereqsMet=true
+    const csg2 = dto.augments.find((a) => a.name === AugmentationName.CranialSignalProcessorsG2);
+    expect(csg2).toBeDefined();
+    expect(csg2?.prereqsMet).toBe(true);
+    expect(csg2?.prereqs).toContain(AugmentationName.CranialSignalProcessorsG1);
+  });
+
+  test("(c) prereqsMet is false when prereq is neither installed nor queued", () => {
+    // CSG2 requires CSG1; neither is present
+    const state = serializeFactions();
+    const dto = state.joined[0];
+    const csg2 = dto.augments.find((a) => a.name === AugmentationName.CranialSignalProcessorsG2);
+    expect(csg2).toBeDefined();
+    expect(csg2?.prereqsMet).toBe(false);
+  });
+
+  test("(d) NFG is NOT marked owned=true even when present in Player.augmentations", () => {
+    // NFG is repeatable — should never appear as permanently owned
+    Player.augmentations.push(new PlayerOwnedAugmentation(AugmentationName.NeuroFluxGovernor));
+    const state = serializeFactions();
+    const dto = state.joined[0];
+    const nfg = dto.augments.find((a) => a.name === AugmentationName.NeuroFluxGovernor);
+    expect(nfg).toBeDefined();
+    expect(nfg?.owned).toBe(false); // Special NFG case: repeatable, always purchasable
+  });
+
+  test("(e) augQueue lists queued augs with best-effort faction lookup", () => {
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    const state = serializeFactions();
+    expect(state.augQueue).toHaveLength(1);
+    expect(state.augQueue[0].name).toBe(AugmentationName.BitWire);
+    // BitWire is offered by CyberSec (the only joined faction) → faction resolves to CyberSec
+    expect(state.augQueue[0].faction).toBe(TEST_FACTION);
+  });
+
+  test("(f) priceMultiplier is 1 with empty queue; increases when a non-SoA aug is queued", () => {
+    expect(serializeFactions().priceMultiplier).toBe(1);
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    expect(serializeFactions().priceMultiplier).toBeGreaterThan(1);
+  });
+
+  test("(g) serializeFactions output is JSON-pure", () => {
+    expectJsonPure(serializeFactions());
+  });
+});
+
+describe("serializeInstallPreview", () => {
+  beforeEach(() => {
+    setPlayer(new PlayerObject());
+    setupFactionMembership();
+  });
+
+  afterEach(() => {
+    teardownFactionMembership();
+  });
+
+  test("(a) empty queue → empty augs, totalPrice 0, empty effectSummary", () => {
+    const preview = serializeInstallPreview();
+    expect(preview.augs).toHaveLength(0);
+    expect(preview.totalPrice).toBe(0);
+    expect(preview.effectSummary).toHaveLength(0);
+  });
+
+  test("(b) totalPrice equals sum of individual aug prices; effectSummary has one line per aug", () => {
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.CranialSignalProcessorsG1));
+
+    const preview = serializeInstallPreview();
+    expect(preview.augs).toHaveLength(2);
+    const expectedTotal = preview.augs.reduce((sum, a) => sum + a.price, 0);
+    expect(preview.totalPrice).toBeCloseTo(expectedTotal);
+    expect(preview.effectSummary).toHaveLength(2);
+  });
+
+  test("(c) each aug entry has name, faction, and numeric price", () => {
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    const preview = serializeInstallPreview();
+    expect(preview.augs[0].name).toBe(AugmentationName.BitWire);
+    expect(typeof preview.augs[0].price).toBe("number");
+    expect(preview.augs[0].faction).toBe(TEST_FACTION);
+  });
+
+  test("(d) serializeInstallPreview output is JSON-pure", () => {
+    Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
+    expectJsonPure(serializeInstallPreview());
   });
 });
