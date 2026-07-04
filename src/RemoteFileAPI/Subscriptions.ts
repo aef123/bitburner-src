@@ -1,4 +1,11 @@
 import { GameCycleEvents } from "../engine";
+import { TerminalEvents, TerminalClearEvents } from "../Terminal/TerminalEvents";
+import {
+  serializeHud,
+  serializeNetwork,
+  serializeRunningScripts,
+  serializeTerminal,
+} from "./StateSerializers";
 
 export type Topic =
   | "hud"
@@ -15,12 +22,12 @@ export type Topic =
   | "go"
   | "events";
 
-/** Registry for topic serializers. GA-2 fills these in; GA-1 stubs everything as () => null. */
+/** Registry for topic serializers. GA-2 fills hud/network/scripts/terminal; later tasks fill the rest. */
 export const serializerRegistry: Record<Topic, () => unknown> = {
-  hud: () => null,
-  terminal: () => null,
-  network: () => null,
-  scripts: () => null,
+  hud: serializeHud,
+  terminal: () => serializeTerminal(),
+  network: serializeNetwork,
+  scripts: serializeRunningScripts,
   factions: () => null,
   gang: () => null,
   stocks: () => null,
@@ -32,12 +39,23 @@ export const serializerRegistry: Record<Topic, () => unknown> = {
   events: () => null,
 };
 
+const VALID_TOPICS = new Set<string>(Object.keys(serializerRegistry));
+
+/** Topics that push on their own game events (emitter-driven) rather than the polling loop. */
+const EVENT_TOPICS = new Set<Topic>(["terminal", "events"]);
+
+export function isValidTopic(topic: string): topic is Topic {
+  return VALID_TOPICS.has(topic);
+}
+
 type SubscriptionEntry = {
   send: (msg: object) => void;
   intervalMs: number;
   lastSentJson: string | null;
   seq: number;
   lastEmitTime: number;
+  /** Teardown for any emitter subscriptions (event topics). */
+  teardownExtra: (() => void) | null;
 };
 
 const subscriptions = new Map<Topic, SubscriptionEntry>();
@@ -54,13 +72,20 @@ export function getCurrentSend(): ((msg: object) => void) | null {
   return _currentSend;
 }
 
+function hasPolledTopics(): boolean {
+  for (const topic of subscriptions.keys()) {
+    if (!EVENT_TOPICS.has(topic)) return true;
+  }
+  return false;
+}
+
 function ensureGameCycleListener(): void {
   if (gameCycleUnsubscribe) return;
   gameCycleUnsubscribe = GameCycleEvents.subscribe(onGameCycle);
 }
 
 function releaseGameCycleListener(): void {
-  if (subscriptions.size === 0 && gameCycleUnsubscribe) {
+  if (!hasPolledTopics() && gameCycleUnsubscribe) {
     gameCycleUnsubscribe();
     gameCycleUnsubscribe = null;
   }
@@ -71,6 +96,7 @@ const MIN_INTERVAL_MS = 500;
 function onGameCycle(): void {
   const now = Date.now();
   for (const [topic, entry] of subscriptions) {
+    if (EVENT_TOPICS.has(topic)) continue; // event topics push on their own emitters
     if (now - entry.lastEmitTime < entry.intervalMs) continue;
     pushTopicIfChanged(topic, entry);
   }
@@ -87,6 +113,9 @@ function pushTopicIfChanged(topic: Topic, entry: SubscriptionEntry): void {
 }
 
 export function subscribeTopic(topic: Topic, intervalMs: number | undefined, send: (msg: object) => void): void {
+  // Re-subscribing to an active topic replaces the prior subscription (and tears down its emitters).
+  unsubscribeTopic(topic);
+
   const effectiveInterval = Math.max(intervalMs ?? 1000, MIN_INTERVAL_MS);
   const entry: SubscriptionEntry = {
     send,
@@ -94,22 +123,44 @@ export function subscribeTopic(topic: Topic, intervalMs: number | undefined, sen
     lastSentJson: null,
     seq: 0,
     lastEmitTime: 0,
+    teardownExtra: null,
   };
   subscriptions.set(topic, entry);
-  ensureGameCycleListener();
-  // Push initial snapshot immediately (always fires since lastSentJson starts as null)
+
+  if (topic === "terminal") {
+    // Event-driven: push on any terminal output change or clear.
+    const onTerminalEvent = () => pushTopicIfChanged(topic, entry);
+    const unsubOutput = TerminalEvents.subscribe(onTerminalEvent);
+    const unsubClear = TerminalClearEvents.subscribe(onTerminalEvent);
+    entry.teardownExtra = () => {
+      unsubOutput();
+      unsubClear();
+    };
+  } else if (!EVENT_TOPICS.has(topic)) {
+    ensureGameCycleListener();
+  }
+
+  // Push initial snapshot immediately (always fires since lastSentJson starts as null).
   pushTopicIfChanged(topic, entry);
 }
 
 export function unsubscribeTopic(topic: Topic): void {
+  const entry = subscriptions.get(topic);
+  if (!entry) return;
+  if (entry.teardownExtra) entry.teardownExtra();
   subscriptions.delete(topic);
   releaseGameCycleListener();
 }
 
 export function clearAllSubscriptions(): void {
+  for (const entry of subscriptions.values()) {
+    if (entry.teardownExtra) entry.teardownExtra();
+  }
   subscriptions.clear();
   if (gameCycleUnsubscribe) {
     gameCycleUnsubscribe();
     gameCycleUnsubscribe = null;
   }
+  // Drop the connection sender so no stale references survive a closed connection.
+  _currentSend = null;
 }

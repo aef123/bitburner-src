@@ -53,6 +53,24 @@ describe("Subscriptions", () => {
     expect(send).toHaveBeenCalledTimes(1); // unchanged payload — no second push
   });
 
+  test("throttle: changed payload does NOT push if a game cycle fires before the interval elapses", () => {
+    const send = jest.fn();
+    serializerRegistry.hud = () => ({ money: 100 });
+    subscribeTopic("hud", 1000, send); // initial push at systemTime 1000
+    expect(send).toHaveBeenCalledTimes(1);
+
+    // Payload changes, but only 400ms pass (< 1000ms interval) before the game cycle.
+    serializerRegistry.hud = () => ({ money: 200 });
+    jest.setSystemTime(1400);
+    GameCycleEvents.emit();
+    expect(send).toHaveBeenCalledTimes(1); // suppressed by throttle
+
+    // Once the interval elapses, the changed payload is pushed.
+    jest.setSystemTime(2001);
+    GameCycleEvents.emit();
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   test("changed payload triggers a push on game cycle", () => {
     const send = jest.fn();
     serializerRegistry.hud = () => ({ money: 100 });

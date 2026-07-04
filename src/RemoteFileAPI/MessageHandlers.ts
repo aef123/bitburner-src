@@ -21,7 +21,14 @@ import type { BaseServer } from "../Server/BaseServer";
 import type { ContentFilePath } from "../Paths/ContentFile";
 import { CONSTANTS } from "../Constants";
 import { commitHash } from "../utils/helpers/commitHash";
-import { subscribeTopic, unsubscribeTopic, getCurrentSend, type Topic } from "./Subscriptions";
+import { subscribeTopic, unsubscribeTopic, getCurrentSend, isValidTopic } from "./Subscriptions";
+import {
+  serializeHud,
+  serializeNetwork,
+  serializeRunningScripts,
+  serializeScriptLog,
+  serializeTerminal,
+} from "./StateSerializers";
 
 type SuccessResult<T> = { success: true; params: T };
 type FailureResult = { success: false; errorResponse: RFAMessage };
@@ -283,11 +290,14 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
     if (!validationResult.success) {
       return validationResult.errorResponse;
     }
+    if (!isValidTopic(validationResult.params.topic)) {
+      return getErrorResponse(`Unknown topic: ${validationResult.params.topic}`, msg);
+    }
     const send = getCurrentSend();
     if (!send) {
       return new RFAMessage({ error: "No active connection", id: msg.id });
     }
-    subscribeTopic(validationResult.params.topic as Topic, validationResult.params.intervalMs, send);
+    subscribeTopic(validationResult.params.topic, validationResult.params.intervalMs, send);
     return new RFAMessage({ result: "OK", id: msg.id });
   },
 
@@ -296,7 +306,53 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
     if (!validationResult.success) {
       return validationResult.errorResponse;
     }
-    unsubscribeTopic(validationResult.params.topic as Topic);
+    if (!isValidTopic(validationResult.params.topic)) {
+      return getErrorResponse(`Unknown topic: ${validationResult.params.topic}`, msg);
+    }
+    unsubscribeTopic(validationResult.params.topic);
     return new RFAMessage({ result: "OK", id: msg.id });
   },
+
+  getHud: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeHud() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getNetwork: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeNetwork() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getRunningScripts: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeRunningScripts() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getScriptLog: function (msg: RFAMessage): RFAMessage {
+    const validationResult = validateParams(isScriptLogParams, msg);
+    if (!validationResult.success) {
+      return validationResult.errorResponse;
+    }
+    const { pid, afterLine } = validationResult.params;
+    return new RFAMessage({
+      result: serializeScriptLog(pid, afterLine) as unknown as Record<string, unknown>,
+      id: msg.id,
+    });
+  },
+
+  getTerminalState: function (msg: RFAMessage): RFAMessage {
+    const rawParams = msg.params as unknown as { afterIndex?: unknown } | undefined;
+    const afterIndex = rawParams && typeof rawParams.afterIndex === "number" ? rawParams.afterIndex : undefined;
+    return new RFAMessage({
+      result: serializeTerminal(afterIndex) as unknown as Record<string, unknown>,
+      id: msg.id,
+    });
+  },
 };
+
+interface ScriptLogParams {
+  pid: number;
+  afterLine?: number;
+}
+
+function isScriptLogParams(p: unknown): p is ScriptLogParams {
+  const pp = p as ScriptLogParams;
+  return typeof pp.pid === "number" && (pp.afterLine === undefined || typeof pp.afterLine === "number");
+}
