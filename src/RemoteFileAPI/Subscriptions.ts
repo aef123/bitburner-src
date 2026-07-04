@@ -6,6 +6,11 @@ import {
   serializeRunningScripts,
   serializeTerminal,
 } from "./StateSerializers";
+import { FactionInvitationEvents } from "../Faction/ui/FactionInvitationManager";
+import { SaveEvents } from "../SaveObject";
+import { Player } from "@player";
+import { isCreateProgramWork } from "../Work/CreateProgramWork";
+import type { PlayerBaseWork } from "../Work/Work";
 
 export type Topic =
   | "hud"
@@ -46,6 +51,12 @@ const EVENT_TOPICS = new Set<Topic>(["terminal", "events"]);
 
 export function isValidTopic(topic: string): topic is Topic {
   return VALID_TOPICS.has(topic);
+}
+
+interface GameEventDto {
+  category: string;
+  message: string;
+  data?: Record<string, unknown>;
 }
 
 type SubscriptionEntry = {
@@ -102,6 +113,13 @@ function onGameCycle(): void {
   }
 }
 
+/** Push a single game event notification directly on the events topic (no deduplication). */
+function pushEventsNotification(entry: SubscriptionEntry, data: GameEventDto): void {
+  entry.seq++;
+  entry.lastEmitTime = Date.now();
+  entry.send({ jsonrpc: "2.0", method: "event", params: { topic: "events", seq: entry.seq, data } });
+}
+
 function pushTopicIfChanged(topic: Topic, entry: SubscriptionEntry): void {
   const data = serializerRegistry[topic]();
   const json = JSON.stringify(data);
@@ -135,6 +153,42 @@ export function subscribeTopic(topic: Topic, intervalMs: number | undefined, sen
     entry.teardownExtra = () => {
       unsubOutput();
       unsubClear();
+    };
+  } else if (topic === "events") {
+    // Faction invite events — only "New" type; "ClearAll" is internal UI state.
+    const unsubFactionInvite = FactionInvitationEvents.subscribe((event) => {
+      if (event.type !== "New") return;
+      pushEventsNotification(entry, {
+        category: "factionInvite",
+        message: `Received faction invitation from ${event.factionName}.`,
+        data: { faction: event.factionName },
+      });
+    });
+
+    // Save events — fires after every successful saveGame() call.
+    const unsubSave = SaveEvents.subscribe(() => {
+      pushEventsNotification(entry, { category: "save", message: "Game saved." });
+    });
+
+    // Work completion: edge-detect Player.currentWork → null transition on the game cycle.
+    // Capture the current work at subscription time so the first cycle is never a false positive.
+    let lastWork: PlayerBaseWork | null = Player.currentWork;
+    const unsubWork = GameCycleEvents.subscribe(() => {
+      const currentWork = Player.currentWork;
+      if (lastWork !== null && currentWork === null) {
+        const category = isCreateProgramWork(lastWork) ? "programComplete" : "workComplete";
+        pushEventsNotification(entry, {
+          category,
+          message: `${category === "programComplete" ? "Program" : "Work"} completed: ${lastWork.type}`,
+        });
+      }
+      lastWork = currentWork;
+    });
+
+    entry.teardownExtra = () => {
+      unsubFactionInvite();
+      unsubSave();
+      unsubWork();
     };
   } else if (!EVENT_TOPICS.has(topic)) {
     ensureGameCycleListener();

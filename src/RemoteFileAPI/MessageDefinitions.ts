@@ -41,7 +41,8 @@ type FileDescription =
   | FileServer
   | SubscribeParams
   | UnsubscribeParams
-  | TerminalCommandParams;
+  | TerminalCommandParams
+  | InvokeActionParams;
 
 export interface FileData {
   filename: string;
@@ -119,4 +120,15 @@ export interface TerminalCommandParams {
 export function isTerminalCommandParams(p: unknown): p is TerminalCommandParams {
   const pp = p as TerminalCommandParams;
   return typeof pp.command === "string";
+}
+
+/** Params for the invokeAction handler. */
+export interface InvokeActionParams {
+  action: string;
+  args: Record<string, unknown>;
+}
+
+export function isInvokeActionParams(p: unknown): p is InvokeActionParams {
+  const pp = p as InvokeActionParams;
+  return typeof pp.action === "string";
 }

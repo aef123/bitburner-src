@@ -29,7 +29,7 @@ import {
   serializeScriptLog,
   serializeTerminal,
 } from "./StateSerializers";
-import { runTerminalCommand } from "./GameActionHandlers";
+import { runTerminalCommand, invokeAction } from "./GameActionHandlers";
 
 type SuccessResult<T> = { success: true; params: T };
 type FailureResult = { success: false; errorResponse: RFAMessage };
@@ -349,6 +349,10 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
 
   runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {
     return runTerminalCommand(msg);
+  },
+
+  invokeAction: function (msg: RFAMessage): Promise<RFAMessage> {
+    return invokeAction(msg);
   },
 };
 

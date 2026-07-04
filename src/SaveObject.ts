@@ -29,6 +29,10 @@ import { handleGetSaveDataInfoError } from "./utils/ErrorHandler";
 import { isObject, assertObject } from "./utils/TypeAssertion";
 import { evaluateVersionCompatibility } from "./utils/SaveDataMigrationUtils";
 import { Reviver } from "./utils/GenericReviver";
+import { EventEmitter } from "./utils/EventEmitter";
+
+/** Fires after each successful game save. Used by the Remote File API "events" topic. Additive seam — no save behavior changed. */
+export const SaveEvents = new EventEmitter<[]>();
 import { populateDarknet } from "./DarkNet/controllers/NetworkGenerator";
 import { getDarkNetSave, loadDarkNet } from "./DarkNet/effects/SaveLoad";
 import { giveExportBonus } from "./ExportBonus";
@@ -218,6 +222,7 @@ export async function saveGame(emitToastEvent = true): Promise<void> {
     savedOn,
   };
   pushGameSaved(electronGameData);
+  SaveEvents.emit();
 
   if (emitToastEvent) {
     SnackbarEvents.emit("Game Saved!", ToastVariant.INFO, 2000);
