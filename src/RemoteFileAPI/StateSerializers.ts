@@ -1420,10 +1420,10 @@ export function serializeWorkOptions(): WorkOptionsState {
   // Companies where the player has a job
   const companies = Object.keys(Player.jobs);
 
-  // Server costs for all valid RAM tiers (powers of 2, from 2 up to node-limited max)
+  // Server costs for all valid RAM tiers (powers of 2, from 1 up to node-limited max)
   const maxRam = getCloudServerMaxRam();
   const purchaseServerCosts: ServerCostDto[] = [];
-  for (let ram = 2; ram <= maxRam; ram *= 2) {
+  for (let ram = 1; ram <= maxRam; ram *= 2) {
     const cost = getCloudServerCost(ram);
     if (Number.isFinite(cost) && cost > 0) {
       purchaseServerCosts.push({ ram, cost: finite(cost) });

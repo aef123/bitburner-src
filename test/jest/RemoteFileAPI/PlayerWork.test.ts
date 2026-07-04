@@ -105,9 +105,10 @@ describe("invokeAction — commitCrime", () => {
   test("commits the specified crime type", async () => {
     const r = await invoke("commitCrime", { crime: CrimeType.mug });
     expect(r.ok).toBe(true);
-    // CrimeWork exposes crimeType
-    const w = Player.currentWork as { type: string; crimeType?: string } | null;
+    // CrimeWork exposes crimeType and singularity
+    const w = Player.currentWork as { type: string; crimeType?: string; singularity?: boolean } | null;
     expect(w?.crimeType).toBe(CrimeType.mug);
+    expect(w?.singularity).toBe(true);
   });
 });
 
@@ -511,6 +512,13 @@ describe("serializeWorkOptions", () => {
     for (const { ram } of opts.purchaseServerCosts) {
       expect(ram & (ram - 1)).toBe(0); // power of 2 check
     }
+  });
+
+  test("purchaseServerCosts includes the 1GB tier", () => {
+    const opts = serializeWorkOptions();
+    const tier1 = opts.purchaseServerCosts.find((e) => e.ram === 1);
+    expect(tier1).toBeDefined();
+    expect(tier1?.cost).toBeGreaterThan(0);
   });
 
   test("torCost is a positive number", () => {

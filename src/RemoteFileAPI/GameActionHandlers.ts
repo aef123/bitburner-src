@@ -81,7 +81,7 @@ import type { CorpResearchName } from "@nsdefs";
 import { FactionWork } from "../Work/FactionWork";
 import { ClassWork } from "../Work/ClassWork";
 import { CompanyWork } from "../Work/CompanyWork";
-import { Crimes } from "../Crime/Crimes";
+import { CrimeWork } from "../Work/CrimeWork";
 import { Locations } from "../Locations/Locations";
 import { FactionInfos } from "../Faction/FactionInfo";
 import {
@@ -1024,7 +1024,7 @@ const actionRegistry: Record<string, ActionImpl> = {
     },
     execute(args) {
       const crimeType = getEnumHelper("CrimeType").getMember(args.crime, { alwaysMatch: true });
-      Crimes[crimeType].commit(1, null);
+      Player.startWork(new CrimeWork({ crimeType, singularity: true }));
       return { ok: true };
     },
   },
@@ -1152,8 +1152,6 @@ const actionRegistry: Record<string, ActionImpl> = {
       return "Purchase TOR Router";
     },
     execute(_args) {
-      if (Player.hasTorRouter()) return { ok: false, message: "TOR Router already purchased" };
-      if (!Player.canAfford(CONSTANTS.TorRouterCost)) return { ok: false, message: "Cannot afford TOR Router" };
       Player.loseMoney(CONSTANTS.TorRouterCost, "other");
       getTorRouter();
       return { ok: true };
