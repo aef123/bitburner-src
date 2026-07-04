@@ -5,6 +5,7 @@ import { ToastVariant } from "@enums";
 import { Settings } from "../Settings/Settings";
 import { EventEmitter } from "../utils/EventEmitter";
 import type { getRemoteFileApiConnectionStatus } from "./RemoteFileAPI";
+import { setCurrentSend, clearAllSubscriptions } from "./Subscriptions";
 
 const timeOutIds = new Set<number>();
 
@@ -23,6 +24,13 @@ export class Remote {
   constructor(ip: string, port: number) {
     this.ipaddr = ip;
     this.port = port;
+  }
+
+  public sendNotification(topic: string, seq: number, data: unknown): void {
+    if (this.connection?.readyState === WebSocket.OPEN) {
+      const msg = { jsonrpc: "2.0", method: "event", params: { topic, seq, data } };
+      this.connection.send(JSON.stringify(msg));
+    }
   }
 
   public stopConnection(): void {
@@ -63,6 +71,12 @@ export class Remote {
     this.connection.addEventListener("open", () => {
       successfullyConnected = true;
 
+      setCurrentSend((msg: object) => {
+        if (this.connection?.readyState === WebSocket.OPEN) {
+          this.connection.send(JSON.stringify(msg));
+        }
+      });
+
       SnackbarEvents.emit(
         `Remote API connection established on ${this.ipaddr}:${this.port}`,
         ToastVariant.SUCCESS,
@@ -71,6 +85,9 @@ export class Remote {
       RemoteFileApiConnectionEvents.emit("Online");
     });
     this.connection.addEventListener("close", (event) => {
+      // Always clean up subscriptions whenever the connection closes, intentional or not.
+      clearAllSubscriptions();
+
       /**
        * On Bitburner side, we may intentionally close the connection. For example, we do that before starting a new
        * connection. In this event handler, we do things that are only necessary when the connection is closed

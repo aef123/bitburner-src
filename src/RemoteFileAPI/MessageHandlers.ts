@@ -7,6 +7,8 @@ import {
   isFileServer,
   isFileLocation,
   isFileData,
+  isSubscribeParams,
+  isUnsubscribeParams,
   type FileData,
   type FileLocation,
   type FileServer,
@@ -17,6 +19,9 @@ import { getSaveData } from "../SaveObject";
 import { Player } from "@player";
 import type { BaseServer } from "../Server/BaseServer";
 import type { ContentFilePath } from "../Paths/ContentFile";
+import { CONSTANTS } from "../Constants";
+import { commitHash } from "../utils/helpers/commitHash";
+import { subscribeTopic, unsubscribeTopic, getCurrentSend, type Topic } from "./Subscriptions";
 
 type SuccessResult<T> = { success: true; params: T };
 type FailureResult = { success: false; errorResponse: RFAMessage };
@@ -259,5 +264,39 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
     }));
 
     return new RFAMessage({ result: servers, id: msg.id });
+  },
+
+  getGameInfo: function (msg: RFAMessage): RFAMessage {
+    const info: Record<string, unknown> = {
+      version: CONSTANTS.VersionString,
+      versionNumber: CONSTANTS.VersionNumber,
+      commitHash: commitHash(),
+      identifier: Player.identifier,
+      bitNodeN: Player.bitNodeN,
+      protocolVersion: 1,
+    };
+    return new RFAMessage({ result: info, id: msg.id });
+  },
+
+  subscribe: function (msg: RFAMessage): RFAMessage {
+    const validationResult = validateParams(isSubscribeParams, msg);
+    if (!validationResult.success) {
+      return validationResult.errorResponse;
+    }
+    const send = getCurrentSend();
+    if (!send) {
+      return new RFAMessage({ error: "No active connection", id: msg.id });
+    }
+    subscribeTopic(validationResult.params.topic as Topic, validationResult.params.intervalMs, send);
+    return new RFAMessage({ result: "OK", id: msg.id });
+  },
+
+  unsubscribe: function (msg: RFAMessage): RFAMessage {
+    const validationResult = validateParams(isUnsubscribeParams, msg);
+    if (!validationResult.success) {
+      return validationResult.errorResponse;
+    }
+    unsubscribeTopic(validationResult.params.topic as Topic);
+    return new RFAMessage({ result: "OK", id: msg.id });
   },
 };

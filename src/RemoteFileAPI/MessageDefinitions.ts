@@ -32,8 +32,9 @@ type ResultType =
       save: SaveData;
     }
   | FileMetadata
-  | FileMetadata[];
-type FileDescription = FileData | FileContent | FileLocation | FileServer;
+  | FileMetadata[]
+  | Record<string, unknown>;
+type FileDescription = FileData | FileContent | FileLocation | FileServer | SubscribeParams | UnsubscribeParams;
 
 export interface FileData {
   filename: string;
@@ -82,4 +83,23 @@ export function isFileContent(p: unknown): p is FileContent {
 export function isFileServer(p: unknown): p is FileServer {
   const pf = p as FileServer;
   return typeof pf.server === "string";
+}
+
+export interface SubscribeParams {
+  topic: string;
+  intervalMs?: number;
+}
+
+export interface UnsubscribeParams {
+  topic: string;
+}
+
+export function isSubscribeParams(p: unknown): p is SubscribeParams {
+  const pp = p as SubscribeParams;
+  return typeof pp.topic === "string";
+}
+
+export function isUnsubscribeParams(p: unknown): p is UnsubscribeParams {
+  const pp = p as UnsubscribeParams;
+  return typeof pp.topic === "string";
 }
