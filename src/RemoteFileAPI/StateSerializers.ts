@@ -39,6 +39,7 @@ import { calculateMoneyGainRate } from "../Hacknet/formulas/HacknetNodes";
 import { HacknetNodeConstants, HacknetServerConstants } from "../Hacknet/data/Constants";
 import type { Sleeve } from "../PersonObjects/Sleeve/Sleeve";
 import { SleeveWorkType } from "../PersonObjects/Sleeve/Work/Work";
+import type { Division } from "../Corporation/Division";
 
 // --- Payload shapes (mirror docs/protocol.md) ---
 
@@ -923,4 +924,120 @@ export function serializeSleeves(): SleeveDto[] {
       cha: sleeve.skills.charisma,
     },
   }));
+}
+
+// --- Corporation state shapes (mirror docs/protocol.md) ---
+
+export interface CorpProductDto {
+  name: string;
+  developmentProgress: number;
+  /**
+   * Aggregate rating (Division-weighted score). null for unfinished products
+   * (product.finished === false, i.e. developmentProgress < 100).
+   *
+   * NOTE: the game also computes an effectiveRating per city (product.cityData[city].effectiveRating),
+   * but product.rating is the representative aggregate value appropriate for summary views — it is
+   * not per-city and this is intentional; the protocol sends the aggregate.
+   */
+  rating: number | null;
+}
+
+export interface DivisionDto {
+  name: string;
+  industry: string;
+  cities: string[];
+  products: CorpProductDto[];
+  warehouses: { city: string; used: number; total: number }[];
+  offices: { city: string; employees: number; maxEmployees: number }[];
+}
+
+export interface CorpState {
+  name: string;
+  funds: number;
+  revenue: number;
+  expenses: number;
+  public: boolean;
+  /**
+   * Share price sent as a number always (it is 0 for private corporations).
+   * Protocol.md types it as number | null; the game field always exists,
+   * so we never send null — the extension should treat 0 as "private".
+   */
+  sharePrice: number | null;
+  divisions: DivisionDto[];
+  /** Per-division research points map. Keys are division names. */
+  researchPoints: Record<string, number>;
+}
+
+/**
+ * Serialize a single Division to DivisionDto. Exported for testing against structural stubs.
+ *
+ * Iterates products via division.products.values() (JSONMap), and warehouses/offices via
+ * Object.entries (PartialRecord — values may be undefined and are skipped).
+ * cities is the union of cities that have a warehouse or an office.
+ */
+export function serializeDivision(division: Division): DivisionDto {
+  const products: CorpProductDto[] = [];
+  for (const product of division.products.values()) {
+    products.push({
+      name: product.name,
+      developmentProgress: finite(product.developmentProgress),
+      rating: product.finished ? finite(product.rating) : null,
+    });
+  }
+
+  const warehouses: DivisionDto["warehouses"] = [];
+  for (const [city, warehouse] of Object.entries(division.warehouses)) {
+    if (!warehouse) continue;
+    warehouses.push({ city, used: finite(warehouse.sizeUsed), total: finite(warehouse.size) });
+  }
+
+  const offices: DivisionDto["offices"] = [];
+  for (const [city, office] of Object.entries(division.offices)) {
+    if (!office) continue;
+    offices.push({ city, employees: office.numEmployees, maxEmployees: office.size });
+  }
+
+  const citySet = new Set<string>();
+  for (const w of warehouses) citySet.add(w.city);
+  for (const o of offices) citySet.add(o.city);
+
+  return {
+    name: division.name,
+    industry: division.industry,
+    cities: [...citySet],
+    products,
+    warehouses,
+    offices,
+  };
+}
+
+/**
+ * Serialize the player's corporation state per docs/protocol.md CorpState shape.
+ * Returns null if the player has no corporation.
+ *
+ * Iterates corp.divisions via JSONMap.values(). researchPoints is a per-division
+ * Record keyed by division name.
+ */
+export function serializeCorporation(): CorpState | null {
+  const corp = Player.corporation;
+  if (!corp) return null;
+
+  const divisions: DivisionDto[] = [];
+  const researchPoints: Record<string, number> = {};
+
+  for (const division of corp.divisions.values()) {
+    divisions.push(serializeDivision(division));
+    researchPoints[division.name] = finite(division.researchPoints);
+  }
+
+  return {
+    name: corp.name,
+    funds: finite(corp.funds),
+    revenue: finite(corp.revenue),
+    expenses: finite(corp.expenses),
+    public: corp.public,
+    sharePrice: finite(corp.sharePrice),
+    divisions,
+    researchPoints,
+  };
 }

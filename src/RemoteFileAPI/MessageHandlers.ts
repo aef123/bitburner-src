@@ -35,6 +35,7 @@ import {
   serializeStocks,
   serializeHacknet,
   serializeSleeves,
+  serializeCorporation,
 } from "./StateSerializers";
 import { runTerminalCommand, invokeAction } from "./GameActionHandlers";
 
@@ -376,6 +377,10 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
 
   getSleevesState: function (msg: RFAMessage): RFAMessage {
     return new RFAMessage({ result: serializeSleeves() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  getCorporationState: function (msg: RFAMessage): RFAMessage {
+    return new RFAMessage({ result: serializeCorporation() as unknown as Record<string, unknown>, id: msg.id });
   },
 
   runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {

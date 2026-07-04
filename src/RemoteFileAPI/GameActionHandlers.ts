@@ -42,6 +42,14 @@ import {
   purchaseCacheUpgrade,
 } from "../Hacknet/HacknetHelpers";
 import { getEnumHelper } from "../utils/EnumHelper";
+import {
+  purchaseWarehouse as corpPurchaseWarehouseFn,
+  hireAdVert as corpHireAdVertFn,
+  buyTea as corpBuyTeaFn,
+  research as corpResearchFn,
+  makeProduct as corpMakeProductFn,
+} from "../Corporation/Actions";
+import type { CorpResearchName } from "@nsdefs";
 
 /** Resolve a player hacknet node/server by index, or null if the index is out of range/invalid. */
 function resolveHacknetNode(index: unknown): HacknetNode | HacknetServer | null {
@@ -456,6 +464,178 @@ const actionRegistry: Record<string, ActionImpl> = {
 
       if (!ok) return { ok: false, message: `Failed to purchase ${kind} upgrade (unaffordable or maxed)` };
       return { ok: true };
+    },
+  },
+
+  // ─── Corporation actions (GD-3) ──────────────────────────────────────────────
+
+  /**
+   * corpBuyWarehouse { division, city }
+   * Mirrors the Corp page "Expand to new city" warehouse button.
+   * Actions.purchaseWarehouse silently returns (no throw) on failure, so the validate() guard
+   * (corp exists, division exists) is the primary check; rely on try/catch for edge cases.
+   */
+  corpBuyWarehouse: {
+    validate(args) {
+      if (typeof args.division !== "string") return "Missing or invalid division (must be a string)";
+      if (typeof args.city !== "string") return "Missing or invalid city (must be a string)";
+      const corp = Player.corporation;
+      if (!corp) return "Player has no corporation";
+      if (!corp.divisions.has(args.division as string)) return `Division not found: ${args.division as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Buy warehouse in ${args.city as string} for division ${args.division as string}`;
+    },
+    execute(args) {
+      try {
+        const corp = Player.corporation;
+        if (!corp) return { ok: false, message: "Player has no corporation" };
+        const division = corp.divisions.get(args.division as string);
+        if (!division) return { ok: false, message: `Division not found: ${args.division as string}` };
+        corpPurchaseWarehouseFn(corp, division, args.city as CityName);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+
+  /**
+   * corpHireAdVert { division }
+   * Mirrors the Corp page "Hire AdVert" button.
+   * Actions.hireAdVert silently returns if the corp cannot afford it.
+   */
+  corpHireAdVert: {
+    validate(args) {
+      if (typeof args.division !== "string") return "Missing or invalid division (must be a string)";
+      const corp = Player.corporation;
+      if (!corp) return "Player has no corporation";
+      if (!corp.divisions.has(args.division as string)) return `Division not found: ${args.division as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Hire AdVert for division ${args.division as string}`;
+    },
+    execute(args) {
+      try {
+        const corp = Player.corporation;
+        if (!corp) return { ok: false, message: "Player has no corporation" };
+        const division = corp.divisions.get(args.division as string);
+        if (!division) return { ok: false, message: `Division not found: ${args.division as string}` };
+        corpHireAdVertFn(corp, division);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+
+  /**
+   * corpBuyTea { division, city }
+   * Mirrors the Corp page "Buy Tea" button for a specific office.
+   * Actions.buyTea returns boolean; we surface false as ok:false.
+   */
+  corpBuyTea: {
+    validate(args) {
+      if (typeof args.division !== "string") return "Missing or invalid division (must be a string)";
+      if (typeof args.city !== "string") return "Missing or invalid city (must be a string)";
+      const corp = Player.corporation;
+      if (!corp) return "Player has no corporation";
+      const division = corp.divisions.get(args.division as string);
+      if (!division) return `Division not found: ${args.division as string}`;
+      if (!division.offices[args.city as CityName])
+        return `No office in ${args.city as string} for division ${args.division as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Buy tea for office in ${args.city as string} (division ${args.division as string})`;
+    },
+    execute(args) {
+      try {
+        const corp = Player.corporation;
+        if (!corp) return { ok: false, message: "Player has no corporation" };
+        const division = corp.divisions.get(args.division as string);
+        if (!division) return { ok: false, message: `Division not found: ${args.division as string}` };
+        const office = division.offices[args.city as CityName];
+        if (!office) return { ok: false, message: `No office in ${args.city as string}` };
+        const ok = corpBuyTeaFn(corp, office);
+        if (!ok) return { ok: false, message: "Could not buy tea (insufficient funds or tea already ordered)" };
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+
+  /**
+   * corpResearch { division, research }
+   * Mirrors the Corp page "Research" button.
+   * Actions.research throws on insufficient research points, invalid prereqs, etc.
+   */
+  corpResearch: {
+    validate(args) {
+      if (typeof args.division !== "string") return "Missing or invalid division (must be a string)";
+      if (typeof args.research !== "string") return "Missing or invalid research (must be a string)";
+      const corp = Player.corporation;
+      if (!corp) return "Player has no corporation";
+      if (!corp.divisions.has(args.division as string)) return `Division not found: ${args.division as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Research ${args.research as string} for division ${args.division as string}`;
+    },
+    execute(args) {
+      try {
+        const corp = Player.corporation;
+        if (!corp) return { ok: false, message: "Player has no corporation" };
+        const division = corp.divisions.get(args.division as string);
+        if (!division) return { ok: false, message: `Division not found: ${args.division as string}` };
+        corpResearchFn(division, args.research as CorpResearchName);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+
+  /**
+   * corpMakeProduct { division, city, productName, designInvest, marketingInvest }
+   * Mirrors the Corp page "Develop Product" button.
+   * Actions.makeProduct throws on many conditions (no office in city, not a product industry,
+   * insufficient funds, name collision, at max products). All caught and returned as ok:false.
+   */
+  corpMakeProduct: {
+    validate(args) {
+      if (typeof args.division !== "string") return "Missing or invalid division (must be a string)";
+      if (typeof args.city !== "string") return "Missing or invalid city (must be a string)";
+      if (typeof args.productName !== "string") return "Missing or invalid productName (must be a string)";
+      const corp = Player.corporation;
+      if (!corp) return "Player has no corporation";
+      if (!corp.divisions.has(args.division as string)) return `Division not found: ${args.division as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Develop product ${args.productName as string} in ${args.city as string} (division ${args.division as string})`;
+    },
+    execute(args) {
+      try {
+        const corp = Player.corporation;
+        if (!corp) return { ok: false, message: "Player has no corporation" };
+        const division = corp.divisions.get(args.division as string);
+        if (!division) return { ok: false, message: `Division not found: ${args.division as string}` };
+        corpMakeProductFn(
+          corp,
+          division,
+          args.city as CityName,
+          args.productName as string,
+          typeof args.designInvest === "number" ? args.designInvest : 0,
+          typeof args.marketingInvest === "number" ? args.marketingInvest : 0,
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
     },
   },
 
