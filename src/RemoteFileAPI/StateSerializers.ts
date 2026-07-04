@@ -29,6 +29,16 @@ import { AugmentationName } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
 import { StockMarket } from "../StockMarket/StockMarket";
 import { Stock } from "../StockMarket/Stock";
+import { HacknetNode } from "../Hacknet/HacknetNode";
+import {
+  hasHacknetServers,
+  getCostOfNextHacknetNode,
+  getCostOfNextHacknetServer,
+} from "../Hacknet/HacknetHelpers";
+import { calculateMoneyGainRate } from "../Hacknet/formulas/HacknetNodes";
+import { HacknetNodeConstants, HacknetServerConstants } from "../Hacknet/data/Constants";
+import type { Sleeve } from "../PersonObjects/Sleeve/Sleeve";
+import { SleeveWorkType } from "../PersonObjects/Sleeve/Work/Work";
 
 // --- Payload shapes (mirror docs/protocol.md) ---
 
@@ -674,4 +684,243 @@ export function serializeInstallPreview(): InstallPreview {
   const totalPrice = finite(augs.reduce((sum, a) => sum + a.price, 0));
   const effectSummary = Player.queuedAugmentations.map((qa) => Augmentations[qa.name].stats);
   return { augs, totalPrice, effectSummary };
+}
+
+// --- Hacknet state shapes (mirror docs/protocol.md) ---
+
+export interface HacknetNodeDto {
+  index: number;
+  name: string;
+  level: number;
+  ram: number;
+  cores: number;
+  /** null in node mode; the server cache level in server mode. */
+  cache: number | null;
+  /** Money/sec (node mode) or hashes/sec (server mode). */
+  productionPerSec: number;
+}
+
+export interface HacknetBuy {
+  description: string;
+  cost: number;
+  /**
+   * Cost / money-gain-per-second for the upgrade. null in server mode, where production is hashes
+   * (not money) and a dollar payback is not meaningful — the capability/discovery rule keeps us
+   * from fabricating a metric the game does not show.
+   */
+  paybackSeconds: number | null;
+  action: { kind: "node" | "level" | "ram" | "core" | "cache"; index: number };
+}
+
+export interface HacknetState {
+  isServers: boolean;
+  totalProductionPerSec: number;
+  hashes: { current: number; capacity: number } | null;
+  nodes: HacknetNodeDto[];
+  bestBuys: HacknetBuy[];
+}
+
+/** How many best-buy entries to expose (ROI-ranked). */
+const MAX_BEST_BUYS = 8;
+
+/**
+ * Serialize the player's hacknet state per docs/protocol.md HacknetState shape.
+ *
+ * bestBuys is derived (the game has no ROI helper): for each node×axis (level/ram/core, +cache in
+ * server mode) plus "buy new node", we compute the upgrade cost via the game's calculate*UpgradeCost
+ * formulas and, in node mode, the money-gain delta via calculateMoneyGainRate. paybackSeconds =
+ * cost / moneyDeltaPerSec, sorted ascending (best ROI first) and capped at MAX_BEST_BUYS. In server
+ * mode paybackSeconds is null (production is hashes, not money) and buys are ordered by cost ascending.
+ */
+export function serializeHacknet(): HacknetState {
+  const isServers = hasHacknetServers();
+  const prodMult = Player.mults.hacknet_node_money;
+  const levelCostMult = Player.mults.hacknet_node_level_cost;
+  const ramCostMult = Player.mults.hacknet_node_ram_cost;
+  const coreCostMult = Player.mults.hacknet_node_core_cost;
+
+  const nodes: HacknetNodeDto[] = [];
+  const buys: HacknetBuy[] = [];
+  let totalProductionPerSec = 0;
+
+  for (let index = 0; index < Player.hacknetNodes.length; index++) {
+    const ref = Player.hacknetNodes[index];
+
+    if (!isServers) {
+      // Node mode: entries are HacknetNode objects.
+      const node = ref instanceof HacknetNode ? ref : null;
+      if (!node) continue;
+      const current = node.moneyGainRatePerSecond;
+      totalProductionPerSec += finite(current);
+      nodes.push({
+        index,
+        name: node.name,
+        level: node.level,
+        ram: node.ram,
+        cores: node.cores,
+        cache: null,
+        productionPerSec: finite(current),
+      });
+
+      // Upgrade candidates (skip maxed axes — those cost Infinity).
+      if (node.level < HacknetNodeConstants.MaxLevel) {
+        const cost = node.calculateLevelUpgradeCost(1, levelCostMult);
+        const delta = calculateMoneyGainRate(node.level + 1, node.ram, node.cores, prodMult) - current;
+        pushMoneyBuy(buys, `${node.name}: Level ${node.level} → ${node.level + 1}`, cost, delta, "level", index);
+      }
+      if (node.ram < HacknetNodeConstants.MaxRam) {
+        const cost = node.calculateRamUpgradeCost(1, ramCostMult);
+        const delta = calculateMoneyGainRate(node.level, node.ram * 2, node.cores, prodMult) - current;
+        pushMoneyBuy(buys, `${node.name}: RAM ${node.ram} → ${node.ram * 2}GB`, cost, delta, "ram", index);
+      }
+      if (node.cores < HacknetNodeConstants.MaxCores) {
+        const cost = node.calculateCoreUpgradeCost(1, coreCostMult);
+        const delta = calculateMoneyGainRate(node.level, node.ram, node.cores + 1, prodMult) - current;
+        pushMoneyBuy(buys, `${node.name}: Cores ${node.cores} → ${node.cores + 1}`, cost, delta, "core", index);
+      }
+    } else {
+      // Server mode: entries are hostnames pointing at HacknetServer instances.
+      const server = typeof ref === "string" ? GetServer(ref) : ref;
+      if (!(server instanceof HacknetServer)) continue;
+      totalProductionPerSec += finite(server.hashRate);
+      nodes.push({
+        index,
+        name: server.hostname,
+        level: server.level,
+        ram: server.maxRam,
+        cores: server.cores,
+        cache: server.cache,
+        productionPerSec: finite(server.hashRate),
+      });
+
+      // Server-mode buys: payback is null (hashes, not money); ordered by cost only.
+      if (server.level < HacknetServerConstants.MaxLevel) {
+        const cost = server.calculateLevelUpgradeCost(1, levelCostMult);
+        pushCostBuy(buys, `${server.hostname}: Level ${server.level} → ${server.level + 1}`, cost, "level", index);
+      }
+      if (server.maxRam < HacknetServerConstants.MaxRam) {
+        const cost = server.calculateRamUpgradeCost(1, ramCostMult);
+        pushCostBuy(buys, `${server.hostname}: RAM ${server.maxRam} → ${server.maxRam * 2}GB`, cost, "ram", index);
+      }
+      if (server.cores < HacknetServerConstants.MaxCores) {
+        const cost = server.calculateCoreUpgradeCost(1, coreCostMult);
+        pushCostBuy(buys, `${server.hostname}: Cores ${server.cores} → ${server.cores + 1}`, cost, "core", index);
+      }
+      if (server.cache < HacknetServerConstants.MaxCache) {
+        const cost = server.calculateCacheUpgradeCost(1);
+        pushCostBuy(buys, `${server.hostname}: Cache ${server.cache} → ${server.cache + 1}`, cost, "cache", index);
+      }
+    }
+  }
+
+  // "Buy new node/server" candidate.
+  if (isServers) {
+    const cost = getCostOfNextHacknetServer();
+    pushCostBuy(buys, "Buy new Hacknet Server", cost, "node", -1);
+  } else {
+    const cost = getCostOfNextHacknetNode();
+    const delta = calculateMoneyGainRate(1, 1, 1, prodMult);
+    pushMoneyBuy(buys, "Buy new Hacknet Node", cost, delta, "node", -1);
+  }
+
+  // Rank: by ascending payback in node mode (best ROI first), by ascending cost in server mode.
+  buys.sort((a, b) => {
+    if (a.paybackSeconds !== null && b.paybackSeconds !== null) return a.paybackSeconds - b.paybackSeconds;
+    return a.cost - b.cost;
+  });
+
+  const hashes = isServers
+    ? { current: finite(Player.hashManager.hashes), capacity: finite(Player.hashManager.capacity) }
+    : null;
+
+  return {
+    isServers,
+    totalProductionPerSec: finite(totalProductionPerSec),
+    hashes,
+    nodes,
+    bestBuys: buys.slice(0, MAX_BEST_BUYS),
+  };
+}
+
+/** Push a money-payback buy (node mode). Skips non-finite/zero cost or non-positive money delta. */
+function pushMoneyBuy(
+  buys: HacknetBuy[],
+  description: string,
+  cost: number,
+  moneyDeltaPerSec: number,
+  kind: HacknetBuy["action"]["kind"],
+  index: number,
+): void {
+  if (!Number.isFinite(cost) || cost <= 0 || moneyDeltaPerSec <= 0) return;
+  buys.push({ description, cost, paybackSeconds: finite(cost / moneyDeltaPerSec), action: { kind, index } });
+}
+
+/** Push a cost-only buy (server mode — no meaningful money payback). Skips non-finite/zero cost. */
+function pushCostBuy(
+  buys: HacknetBuy[],
+  description: string,
+  cost: number,
+  kind: HacknetBuy["action"]["kind"],
+  index: number,
+): void {
+  if (!Number.isFinite(cost) || cost <= 0) return;
+  buys.push({ description, cost, paybackSeconds: null, action: { kind, index } });
+}
+
+// --- Sleeve state shapes (mirror docs/protocol.md) ---
+
+export interface SleeveDto {
+  index: number;
+  task: string;
+  shock: number;
+  sync: number;
+  city: string;
+  stats: Record<"hack" | "str" | "def" | "dex" | "agi" | "cha", number>;
+}
+
+/** Short, human-readable label for a sleeve's current work (discriminated by SleeveWorkType). */
+function sleeveTaskLabel(sleeve: Sleeve): string {
+  const work = sleeve.currentWork;
+  if (!work) return "Idle";
+  switch (work.type) {
+    case SleeveWorkType.CRIME:
+      return "Crime";
+    case SleeveWorkType.CLASS:
+      return "Class";
+    case SleeveWorkType.COMPANY:
+      return "Company";
+    case SleeveWorkType.FACTION:
+      return "Faction";
+    case SleeveWorkType.RECOVERY:
+      return "Recovery";
+    case SleeveWorkType.SYNCHRO:
+      return "Synchro";
+    case SleeveWorkType.BLADEBURNER:
+      return "Bladeburner";
+    case SleeveWorkType.INFILTRATE:
+      return "Infiltrate";
+    case SleeveWorkType.SUPPORT:
+      return "Support";
+    default:
+      return "Idle";
+  }
+}
+
+/** Serialize the player's sleeves per docs/protocol.md SleeveDto[] shape (empty array if none). */
+export function serializeSleeves(): SleeveDto[] {
+  return Player.sleeves.map((sleeve, index) => ({
+    index,
+    task: sleeveTaskLabel(sleeve),
+    shock: finite(sleeve.shock),
+    sync: finite(sleeve.sync),
+    city: sleeve.city,
+    stats: {
+      hack: sleeve.skills.hacking,
+      str: sleeve.skills.strength,
+      def: sleeve.skills.defense,
+      dex: sleeve.skills.dexterity,
+      agi: sleeve.skills.agility,
+      cha: sleeve.skills.charisma,
+    },
+  }));
 }

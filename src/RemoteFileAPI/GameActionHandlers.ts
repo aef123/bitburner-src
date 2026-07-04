@@ -27,6 +27,35 @@ import {
 } from "../StockMarket/BuyingAndSelling";
 import { SymbolToStockMap } from "../StockMarket/StockMarket";
 import { getBuyTransactionCost } from "../StockMarket/StockMarketHelpers";
+import { HacknetNode } from "../Hacknet/HacknetNode";
+import { HacknetServer } from "../Hacknet/HacknetServer";
+import { GetServer } from "../Server/AllServers";
+import {
+  hasHacknetServers,
+  hasMaxNumberHacknetServers,
+  getCostOfNextHacknetNode,
+  getCostOfNextHacknetServer,
+  purchaseHacknet,
+  purchaseLevelUpgrade,
+  purchaseRamUpgrade,
+  purchaseCoreUpgrade,
+  purchaseCacheUpgrade,
+} from "../Hacknet/HacknetHelpers";
+import { getEnumHelper } from "../utils/EnumHelper";
+
+/** Resolve a player hacknet node/server by index, or null if the index is out of range/invalid. */
+function resolveHacknetNode(index: unknown): HacknetNode | HacknetServer | null {
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= Player.hacknetNodes.length) {
+    return null;
+  }
+  const ref = Player.hacknetNodes[index];
+  if (ref instanceof HacknetNode) return ref;
+  const server = typeof ref === "string" ? GetServer(ref) : ref;
+  return server instanceof HacknetServer ? server : null;
+}
+
+/** The upgrade kinds hacknetPurchase understands. */
+const HACKNET_KINDS = new Set(["node", "level", "ram", "core", "cache"]);
 
 /**
  * Run a terminal command string via Terminal.executeCommands and return the delta output.
@@ -349,6 +378,187 @@ const actionRegistry: Record<string, ActionImpl> = {
       const ok = sellShortFn(stock, args.shares as number, null, { suppressDialog: true });
       if (!ok) return { ok: false, message: `Failed to cover short on ${args.symbol as string}` };
       return { ok: true };
+    },
+  },
+
+  // ─── Hacknet actions (GD-2) ───────────────────────────────────────────────
+
+  /**
+   * hacknetPurchase { kind: "node"|"level"|"ram"|"core"|"cache", index?: number }.
+   * Mirrors the Hacknet page buttons: purchaseHacknet / purchase{Level,Ram,Core,Cache}Upgrade.
+   * validate() is a read-only mirror of each purchase function's own guards (existence, affordability,
+   * not-maxed, cache-only-in-server-mode); execute() calls the exact game function.
+   */
+  hacknetPurchase: {
+    validate(args) {
+      const kind = args.kind;
+      if (typeof kind !== "string" || !HACKNET_KINDS.has(kind)) {
+        return `Invalid kind: ${String(kind)}. Valid kinds: ${[...HACKNET_KINDS].join(", ")}`;
+      }
+      const isServers = hasHacknetServers();
+
+      if (kind === "node") {
+        if (isServers) {
+          if (hasMaxNumberHacknetServers()) return "Already at the maximum number of Hacknet Servers";
+          const cost = getCostOfNextHacknetServer();
+          if (!Number.isFinite(cost) || Player.money < cost) return "Cannot afford a new Hacknet Server";
+        } else {
+          const cost = getCostOfNextHacknetNode();
+          if (!Number.isFinite(cost) || Player.money < cost) return "Cannot afford a new Hacknet Node";
+        }
+        return null;
+      }
+
+      const node = resolveHacknetNode(args.index);
+      if (!node) return `No hacknet node/server at index: ${String(args.index)}`;
+
+      if (kind === "cache") {
+        if (!(node instanceof HacknetServer)) return "Cache upgrades are only available for Hacknet Servers";
+        const cost = node.calculateCacheUpgradeCost(1);
+        if (!Number.isFinite(cost) || cost <= 0) return "Cache is already at maximum";
+        if (Player.money < cost) return "Cannot afford the cache upgrade";
+        return null;
+      }
+
+      let cost: number;
+      if (kind === "level") cost = node.calculateLevelUpgradeCost(1, Player.mults.hacknet_node_level_cost);
+      else if (kind === "ram") cost = node.calculateRamUpgradeCost(1, Player.mults.hacknet_node_ram_cost);
+      else cost = node.calculateCoreUpgradeCost(1, Player.mults.hacknet_node_core_cost);
+
+      if (!Number.isFinite(cost) || cost <= 0) return `${kind} is already at maximum`;
+      if (Player.money < cost) return `Cannot afford the ${kind} upgrade`;
+      return null;
+    },
+    describe(args) {
+      const kind = args.kind as string;
+      if (kind === "node") return hasHacknetServers() ? "Purchase a new Hacknet Server" : "Purchase a new Hacknet Node";
+      return `Purchase ${kind} upgrade for hacknet node #${args.index as number}`;
+    },
+    execute(args) {
+      const kind = args.kind as string;
+      if (kind === "node") {
+        const result = purchaseHacknet();
+        if (result < 0) return { ok: false, message: "Failed to purchase a new hacknet node/server" };
+        return { ok: true };
+      }
+
+      const node = resolveHacknetNode(args.index);
+      if (!node) return { ok: false, message: `No hacknet node/server at index: ${String(args.index)}` };
+
+      let ok: boolean;
+      if (kind === "level") ok = purchaseLevelUpgrade(node);
+      else if (kind === "ram") ok = purchaseRamUpgrade(node);
+      else if (kind === "core") ok = purchaseCoreUpgrade(node);
+      else if (kind === "cache") {
+        if (!(node instanceof HacknetServer)) return { ok: false, message: "Cache upgrades require a Hacknet Server" };
+        ok = purchaseCacheUpgrade(node);
+      } else return { ok: false, message: `Unknown kind: ${kind}` };
+
+      if (!ok) return { ok: false, message: `Failed to purchase ${kind} upgrade (unaffordable or maxed)` };
+      return { ok: true };
+    },
+  },
+
+  // ─── Sleeve actions (GD-2) ────────────────────────────────────────────────
+
+  /**
+   * setSleeveTask { index: number, task: SleeveTaskSpec } where SleeveTaskSpec is a tagged union:
+   *   {type:"recovery"} | {type:"sync"} | {type:"crime", crime} | {type:"faction", faction, workType} |
+   *   {type:"company", company} | {type:"gym", gym, stat} | {type:"university", uni, class} | {type:"idle"}.
+   * Mirrors the Sleeves page: calls the matching sleeve.* method. validate() checks the index range and
+   * that enum params (crime/workType/stat/class/company/faction) are members; the sleeve methods return
+   * bool for the rest (e.g. wrong city, faction not offered), which becomes ok:false.
+   */
+  setSleeveTask: {
+    validate(args) {
+      if (typeof args.index !== "number" || !Number.isInteger(args.index)) return "Missing or invalid index";
+      if (args.index < 0 || args.index >= Player.sleeves.length) return `No sleeve at index: ${String(args.index)}`;
+      const task = args.task;
+      if (typeof task !== "object" || task === null) return "Missing or invalid task spec";
+      const spec = task as Record<string, unknown>;
+      switch (spec.type) {
+        case "recovery":
+        case "sync":
+        case "synchronize":
+        case "idle":
+          return null;
+        case "crime":
+          return getEnumHelper("CrimeType").isMember(spec.crime) ? null : `Invalid crime: ${String(spec.crime)}`;
+        case "faction":
+          if (!getEnumHelper("FactionName").isMember(spec.faction)) return `Invalid faction: ${String(spec.faction)}`;
+          if (!getEnumHelper("FactionWorkType").isMember(spec.workType))
+            return `Invalid workType: ${String(spec.workType)}`;
+          return null;
+        case "company":
+          return getEnumHelper("CompanyName").isMember(spec.company)
+            ? null
+            : `Invalid company: ${String(spec.company)}`;
+        case "gym":
+          if (typeof spec.gym !== "string") return "Missing or invalid gym";
+          return getEnumHelper("GymType").isMember(spec.stat) ? null : `Invalid stat: ${String(spec.stat)}`;
+        case "university":
+          if (typeof spec.uni !== "string") return "Missing or invalid uni";
+          return getEnumHelper("UniversityClassType").isMember(spec.class)
+            ? null
+            : `Invalid class: ${String(spec.class)}`;
+        default:
+          return `Unknown task type: ${String(spec.type)}`;
+      }
+    },
+    describe(args) {
+      const spec = args.task as Record<string, unknown>;
+      return `Set sleeve #${args.index as number} task to ${String(spec.type)}`;
+    },
+    execute(args) {
+      const sleeve = Player.sleeves[args.index as number];
+      if (!sleeve) return { ok: false, message: `No sleeve at index: ${String(args.index)}` };
+      const spec = args.task as Record<string, unknown>;
+      try {
+        let ok: boolean;
+        switch (spec.type) {
+          case "recovery":
+            ok = sleeve.shockRecovery();
+            break;
+          case "sync":
+          case "synchronize":
+            ok = sleeve.synchronize();
+            break;
+          case "idle":
+            sleeve.stopWork();
+            ok = true;
+            break;
+          case "crime":
+            ok = sleeve.commitCrime(getEnumHelper("CrimeType").getMember(spec.crime, { alwaysMatch: true }));
+            break;
+          case "faction":
+            ok = sleeve.workForFaction(
+              getEnumHelper("FactionName").getMember(spec.faction, { alwaysMatch: true }),
+              getEnumHelper("FactionWorkType").getMember(spec.workType, { alwaysMatch: true }),
+            );
+            break;
+          case "company":
+            ok = sleeve.workForCompany(getEnumHelper("CompanyName").getMember(spec.company, { alwaysMatch: true }));
+            break;
+          case "gym":
+            ok = sleeve.workoutAtGym(
+              spec.gym as string,
+              getEnumHelper("GymType").getMember(spec.stat, { alwaysMatch: true }),
+            );
+            break;
+          case "university":
+            ok = sleeve.takeUniversityCourse(
+              spec.uni as string,
+              getEnumHelper("UniversityClassType").getMember(spec.class, { alwaysMatch: true }),
+            );
+            break;
+          default:
+            return { ok: false, message: `Unknown task type: ${String(spec.type)}` };
+        }
+        if (!ok) return { ok: false, message: `Sleeve refused task: ${String(spec.type)}` };
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: `Failed to set sleeve task: ${e instanceof Error ? e.message : String(e)}` };
+      }
     },
   },
 };
