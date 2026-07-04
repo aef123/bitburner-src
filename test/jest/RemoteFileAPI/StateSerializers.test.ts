@@ -1,3 +1,4 @@
+import React from "react";
 import {
   serializeHud,
   serializeNetwork,
@@ -6,6 +7,8 @@ import {
   serializeTerminal,
   serializeFactions,
   serializeInstallPreview,
+  mapTerminalEntry,
+  reactNodeToText,
 } from "../../../src/RemoteFileAPI/StateSerializers";
 import { WorkType } from "../../../src/Work/Work";
 import { AugmentationName, FactionName } from "../../../src/Enums";
@@ -515,5 +518,124 @@ describe("serializeInstallPreview", () => {
   test("(d) serializeInstallPreview output is JSON-pure", () => {
     Player.queuedAugmentations.push(new PlayerOwnedAugmentation(AugmentationName.BitWire));
     expectJsonPure(serializeInstallPreview());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reactNodeToText + mapTerminalEntry (RawOutput)
+// ---------------------------------------------------------------------------
+
+describe("reactNodeToText / mapTerminalEntry RawOutput", () => {
+  const savedTimestamps = Settings.TimestampsFormat;
+
+  beforeEach(() => {
+    Settings.TimestampsFormat = "";
+  });
+  afterEach(() => {
+    Settings.TimestampsFormat = savedTimestamps;
+  });
+
+  // --- reactNodeToText unit tests ---
+
+  test("null/undefined/boolean yield empty string", () => {
+    expect(reactNodeToText(null)).toBe("");
+    expect(reactNodeToText(undefined)).toBe("");
+    expect(reactNodeToText(true)).toBe("");
+    expect(reactNodeToText(false)).toBe("");
+  });
+
+  test("string is returned as-is", () => {
+    expect(reactNodeToText("hello")).toBe("hello");
+  });
+
+  test("number is coerced to string", () => {
+    expect(reactNodeToText(42)).toBe("42");
+    expect(reactNodeToText(0)).toBe("0");
+  });
+
+  test("flat array of strings is joined with spaces (empties skipped)", () => {
+    expect(reactNodeToText(["foo", null, "bar", undefined, false, "baz"])).toBe("foo bar baz");
+  });
+
+  test("React element: single string child yields that string", () => {
+    const el = React.createElement("span", null, "leaf");
+    expect(reactNodeToText(el)).toBe("leaf");
+  });
+
+  test("React element: array of string children yields space-joined text", () => {
+    const el = React.createElement("div", null, "alpha", " ", "beta");
+    // Children are ["alpha", " ", "beta"]; space parts are non-empty so all three join
+    const text = reactNodeToText(el);
+    expect(text).toContain("alpha");
+    expect(text).toContain("beta");
+  });
+
+  test("nested React elements: leaf strings are extracted in order", () => {
+    // <div><span>foo</span><span>bar</span></div>
+    const node = React.createElement(
+      "div",
+      null,
+      React.createElement("span", null, "foo"),
+      React.createElement("span", null, "bar"),
+    );
+    const text = reactNodeToText(node);
+    expect(text).toContain("foo");
+    expect(text).toContain("bar");
+    // foo appears before bar
+    expect(text.indexOf("foo")).toBeLessThan(text.indexOf("bar"));
+  });
+
+  test("mixed array of strings and React elements yields all leaf text", () => {
+    // Simulates a SegmentGrid-like structure: array of per-file span elements
+    const node = [
+      React.createElement("span", { key: "1" }, "script.js"),
+      "plaintext",
+      React.createElement("span", { key: "2" }, React.createElement("em", null, "folder/")),
+    ] as React.ReactNode;
+    const text = reactNodeToText(node);
+    expect(text).toContain("script.js");
+    expect(text).toContain("plaintext");
+    expect(text).toContain("folder/");
+  });
+
+  test("depth cap: deeply nested elements do not throw and return a string", () => {
+    // Build a 20-deep chain — exceeds the REACT_TEXT_MAX_DEPTH cap of 15
+    let deep: React.ReactNode = "leaf";
+    for (let i = 0; i < 20; i++) {
+      deep = React.createElement("div", null, deep);
+    }
+    const text = reactNodeToText(deep);
+    expect(typeof text).toBe("string");
+    // "leaf" may be unreachable past cap — that's acceptable; must not throw
+  });
+
+  test("React element with no children yields empty string", () => {
+    const el = React.createElement("br", null);
+    expect(reactNodeToText(el)).toBe("");
+  });
+
+  // --- mapTerminalEntry integration ---
+
+  test("mapTerminalEntry: RawOutput(null) → { kind:'raw', text:'' }", () => {
+    const entry = mapTerminalEntry(new RawOutput(null));
+    expect(entry).toEqual({ kind: "raw", text: "" });
+  });
+
+  test("mapTerminalEntry: RawOutput(string) → { kind:'raw', text: that string }", () => {
+    const entry = mapTerminalEntry(new RawOutput("hello world"));
+    expect(entry).toEqual({ kind: "raw", text: "hello world" });
+  });
+
+  test("mapTerminalEntry: RawOutput with nested spans (ls-style) yields filename text", () => {
+    // Reproduce the SegmentGrid children that `ls` produces: an array of per-file span elements
+    const fileNames = ["hack.js", "grow.js", "weaken.js"];
+    const children = fileNames.map((name) => React.createElement("span", { key: name }, name));
+    const grid = React.createElement("div", null, ...children);
+    const entry = mapTerminalEntry(new RawOutput(grid));
+    expect(entry.kind).toBe("raw");
+    for (const name of fileNames) {
+      expect(entry.text).toContain(name);
+    }
+    expectJsonPure(entry);
   });
 });

@@ -137,6 +137,52 @@ export interface ScriptLogResult {
   running: boolean;
 }
 
+// --- React node → plain text extractor ---
+
+const REACT_TEXT_MAX_DEPTH = 15;
+const REACT_TEXT_MAX_LEN = 8192;
+
+/**
+ * Recursively extract plain text from a React node (or any unknown value).
+ *
+ * - string/number → String(node)
+ * - boolean/null/undefined → ""
+ * - Array → map children, skip empty parts, join with " "
+ * - React element (object with .props.children) → recurse into children
+ * - Depth cap of 15 and total length cap of 8 192 chars prevent runaway traversal.
+ * - Never throws; all branches are wrapped in try/catch.
+ *
+ * Used by mapTerminalEntry so that RawOutput entries (e.g. from `ls`/`scan` which
+ * call Terminal.printRaw with SegmentGrid/span trees) produce readable plain text
+ * for remote clients instead of empty strings.
+ */
+export function reactNodeToText(node: unknown, depth = 0): string {
+  try {
+    if (depth > REACT_TEXT_MAX_DEPTH) return "";
+    if (node === null || node === undefined || typeof node === "boolean") return "";
+    if (typeof node === "string") return node.slice(0, REACT_TEXT_MAX_LEN);
+    if (typeof node === "number") return String(node);
+    if (Array.isArray(node)) {
+      const parts: string[] = [];
+      for (const child of node) {
+        const part = reactNodeToText(child, depth + 1);
+        if (part) parts.push(part);
+      }
+      return parts.join(" ").slice(0, REACT_TEXT_MAX_LEN);
+    }
+    // React element: plain object with a `props` property containing `children`.
+    if (typeof node === "object" && "props" in (node as object)) {
+      const props = (node as { props?: unknown }).props;
+      if (props !== null && props !== undefined && typeof props === "object" && "children" in (props as object)) {
+        return reactNodeToText((props as { children: unknown }).children, depth + 1);
+      }
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 // --- Helpers ---
 
 /** Coerce non-finite numbers (NaN/Infinity) to 0 so payloads stay JSON-pure and stable. */
@@ -324,8 +370,10 @@ export function serializeRunningScripts(): ScriptsState {
 export function mapTerminalEntry(item: Output | Link | RawOutput): TerminalEntry {
   if (item instanceof Output) return { kind: "output", text: item.text, color: item.color };
   if (item instanceof Link) return { kind: "link", text: item.hostname };
-  // RawOutput — never attempt to serialize the ReactNode.
-  return { kind: "raw", text: "" };
+  // RawOutput: extract plain text from the React node tree so remote clients see filenames
+  // from `ls`/`scan` (which call Terminal.printRaw(<SegmentGrid>…</SegmentGrid>)) instead
+  // of empty strings.
+  return { kind: "raw", text: reactNodeToText(item.raw) };
 }
 
 export function serializeTerminal(afterIndex?: number): TerminalState {
