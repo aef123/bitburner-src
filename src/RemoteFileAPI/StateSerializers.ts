@@ -23,9 +23,10 @@ import { isFactionWork } from "../Work/FactionWork";
 import { isCompanyWork } from "../Work/CompanyWork";
 import { Factions } from "../Faction/Factions";
 import { getFactionAugmentationsFiltered, hasAugmentationPrereqs } from "../Faction/FactionHelpers";
+import { FactionInfos } from "../Faction/FactionInfo";
 import { Augmentations } from "../Augmentation/Augmentations";
 import { getAugCost, getGenericAugmentationPriceMultiplier } from "../Augmentation/AugmentationHelpers";
-import { AugmentationName, GoColor, CityName, BladeburnerActionType, LocationType, UniversityClassType, GymType, CrimeType } from "@enums";
+import { AugmentationName, GoColor, CityName, BladeburnerActionType, LocationType, UniversityClassType, GymType, CrimeType, FactionWorkType, CompanyName } from "@enums";
 import { AllGangs } from "../Gang/AllGangs";
 import { Go } from "../Go/Go";
 import { simpleBoardFromBoard, getPreviousMove } from "../Go/boardAnalysis/boardAnalysis";
@@ -34,7 +35,7 @@ import { Cities } from "../Locations/Cities";
 import { Locations } from "../Locations/Locations";
 import { Crimes } from "../Crime/Crimes";
 import { Classes } from "../Work/ClassWork";
-import { calculateCost as calculateClassCost } from "../Work/Formulas";
+import { calculateCost as calculateClassCost, calculateFactionRep, calculateFactionExp } from "../Work/Formulas";
 import { getCloudServerCost, getCloudServerMaxRam } from "../Server/ServerPurchases";
 import { GangMemberUpgrades } from "../Gang/GangMemberUpgrades";
 import { StockMarket } from "../StockMarket/StockMarket";
@@ -46,11 +47,14 @@ import {
   getCostOfNextHacknetServer,
 } from "../Hacknet/HacknetHelpers";
 import { calculateMoneyGainRate } from "../Hacknet/formulas/HacknetNodes";
+import { calculateHashGainRate } from "../Hacknet/formulas/HacknetServers";
 import { HacknetNodeConstants, HacknetServerConstants } from "../Hacknet/data/Constants";
 import { ServerConstants } from "../Server/data/Constants";
 import type { Sleeve } from "../PersonObjects/Sleeve/Sleeve";
 import { SleeveWorkType } from "../PersonObjects/Sleeve/Work/Work";
 import type { Division } from "../Corporation/Division";
+import { Companies } from "../Company/Companies";
+import { CompanyPositions } from "../Company/CompanyPositions";
 
 // --- Payload shapes (mirror docs/protocol.md) ---
 
@@ -415,11 +419,31 @@ export interface AugmentDto {
   prereqsMet: boolean;
 }
 
+/** Per-work-type gain rates for a faction, computed from the same formulas as the WIP screen. */
+export interface FactionWorkRate {
+  type: "hacking" | "field" | "security";
+  /** Whether the faction offers this work type (FactionInfo.offer* flag). */
+  available: boolean;
+  /** Reputation gain per second (includes player multipliers and share bonus). */
+  repPerSec: number;
+  /** Exp gain per second for each stat. */
+  expPerSec: {
+    hacking: number;
+    strength: number;
+    defense: number;
+    dexterity: number;
+    agility: number;
+    charisma: number;
+  };
+}
+
 export interface FactionInfoDto {
   name: string;
   reputation: number;
   favor: number;
   augments: AugmentDto[];
+  /** Work-type rates for each of the three faction work types (always all three entries). */
+  workRates: FactionWorkRate[];
 }
 
 export interface QueuedAug {
@@ -464,6 +488,12 @@ function resolveAugFaction(augName: AugmentationName): string {
  * not marked owned=true even when present in Player.augmentations, so it keeps appearing as
  * purchasable in the extension UI.
  */
+/** Cycles-per-second constant for converting per-cycle rates to per-second. */
+const GAME_CPS = 1000 / CONSTANTS.MilliPerCycle;
+
+/** The three faction work types in a stable order. */
+const FACTION_WORK_TYPES = [FactionWorkType.hacking, FactionWorkType.field, FactionWorkType.security] as const;
+
 export function serializeFactions(): FactionsState {
   const joined: FactionInfoDto[] = Player.factions.map((factionName) => {
     const faction = Factions[factionName];
@@ -487,11 +517,38 @@ export function serializeFactions(): FactionsState {
         prereqsMet: hasAugmentationPrereqs(aug),
       };
     });
+
+    // Work rates per type: same formulas as FactionWork.getReputationRate/getExpRates.
+    const info = FactionInfos[factionName];
+    const workRates: FactionWorkRate[] = FACTION_WORK_TYPES.map((wt) => {
+      const repPerCycle = calculateFactionRep(Player, wt, faction.favor);
+      const expStats = calculateFactionExp(Player, wt);
+      return {
+        type: wt as "hacking" | "field" | "security",
+        available:
+          wt === FactionWorkType.hacking
+            ? info.offerHackingWork
+            : wt === FactionWorkType.field
+            ? info.offerFieldWork
+            : info.offerSecurityWork,
+        repPerSec: finite(repPerCycle * GAME_CPS),
+        expPerSec: {
+          hacking: finite(expStats.hackExp * GAME_CPS),
+          strength: finite(expStats.strExp * GAME_CPS),
+          defense: finite(expStats.defExp * GAME_CPS),
+          dexterity: finite(expStats.dexExp * GAME_CPS),
+          agility: finite(expStats.agiExp * GAME_CPS),
+          charisma: finite(expStats.chaExp * GAME_CPS),
+        },
+      };
+    });
+
     return {
       name: factionName,
       reputation: finite(faction.playerReputation),
       favor: finite(faction.favor),
       augments,
+      workRates,
     };
   });
 
@@ -762,6 +819,15 @@ export function serializeInstallPreview(): InstallPreview {
 
 // --- Hacknet state shapes (mirror docs/protocol.md) ---
 
+/** A purchase-quote for upgrading one axis of a hacknet node/server by qty steps. */
+export interface HacknetUpgradeQuote {
+  qty: number;
+  /** Dollar cost for the upgrade. */
+  cost: number;
+  /** Production delta per second: $/s in node mode, hashes/s in server mode. */
+  deltaPerSec: number;
+}
+
 export interface HacknetNodeDto {
   index: number;
   name: string;
@@ -772,6 +838,12 @@ export interface HacknetNodeDto {
   cache: number | null;
   /** Money/sec (node mode) or hashes/sec (server mode). */
   productionPerSec: number;
+  /**
+   * Per-axis upgrade quotes for qty 1/5/10/max. null if the axis is already at cap (or
+   * cache in node mode, which has no cache). Quotes are for the game-rule cap remaining —
+   * max = levels-to-cap, regardless of player affordability.
+   */
+  upgrades: Record<"level" | "ram" | "core" | "cache", HacknetUpgradeQuote[] | null>;
 }
 
 export interface HacknetBuy {
@@ -826,6 +898,32 @@ export function serializeHacknet(): HacknetState {
       if (!node) continue;
       const current = node.moneyGainRatePerSecond;
       totalProductionPerSec += finite(current);
+
+      // Upgrade quotes per axis (qty 1/5/10/max).
+      const nodeLevelMax = HacknetNodeConstants.MaxLevel - node.level;
+      const nodeRamMax = node.ram < HacknetNodeConstants.MaxRam
+        ? Math.round(Math.log2(HacknetNodeConstants.MaxRam / node.ram)) : 0;
+      const nodeCoreMax = HacknetNodeConstants.MaxCores - node.cores;
+
+      const upgrades: HacknetNodeDto["upgrades"] = {
+        level: buildUpgradeQuotes(
+          nodeLevelMax,
+          (q) => node.calculateLevelUpgradeCost(q, levelCostMult),
+          (q) => calculateMoneyGainRate(node.level + q, node.ram, node.cores, prodMult) - current,
+        ),
+        ram: buildUpgradeQuotes(
+          nodeRamMax,
+          (q) => node.calculateRamUpgradeCost(q, ramCostMult),
+          (q) => calculateMoneyGainRate(node.level, node.ram * Math.pow(2, q), node.cores, prodMult) - current,
+        ),
+        core: buildUpgradeQuotes(
+          nodeCoreMax,
+          (q) => node.calculateCoreUpgradeCost(q, coreCostMult),
+          (q) => calculateMoneyGainRate(node.level, node.ram, node.cores + q, prodMult) - current,
+        ),
+        cache: null, // node mode has no cache
+      };
+
       nodes.push({
         index,
         name: node.name,
@@ -834,6 +932,7 @@ export function serializeHacknet(): HacknetState {
         cores: node.cores,
         cache: null,
         productionPerSec: finite(current),
+        upgrades,
       });
 
       // Upgrade candidates (skip maxed axes — those cost Infinity).
@@ -856,7 +955,40 @@ export function serializeHacknet(): HacknetState {
       // Server mode: entries are hostnames pointing at HacknetServer instances.
       const server = typeof ref === "string" ? GetServer(ref) : ref;
       if (!(server instanceof HacknetServer)) continue;
-      totalProductionPerSec += finite(server.hashRate);
+      const srvHashRate = server.hashRate;
+      totalProductionPerSec += finite(srvHashRate);
+
+      // Upgrade quotes per axis for server mode.
+      const srvLevelMax = HacknetServerConstants.MaxLevel - server.level;
+      const srvRamMax = server.maxRam < HacknetServerConstants.MaxRam
+        ? Math.round(Math.log2(HacknetServerConstants.MaxRam / server.maxRam)) : 0;
+      const srvCoreMax = HacknetServerConstants.MaxCores - server.cores;
+      const srvCacheMax = HacknetServerConstants.MaxCache - server.cache;
+
+      const srvUpgrades: HacknetNodeDto["upgrades"] = {
+        level: buildUpgradeQuotes(
+          srvLevelMax,
+          (q) => server.calculateLevelUpgradeCost(q, levelCostMult),
+          (q) => calculateHashGainRate(server.level + q, server.ramUsed, server.maxRam, server.cores, prodMult) - srvHashRate,
+        ),
+        ram: buildUpgradeQuotes(
+          srvRamMax,
+          (q) => server.calculateRamUpgradeCost(q, ramCostMult),
+          (q) => calculateHashGainRate(server.level, server.ramUsed, server.maxRam * Math.pow(2, q), server.cores, prodMult) - srvHashRate,
+        ),
+        core: buildUpgradeQuotes(
+          srvCoreMax,
+          (q) => server.calculateCoreUpgradeCost(q, coreCostMult),
+          (q) => calculateHashGainRate(server.level, server.ramUsed, server.maxRam, server.cores + q, prodMult) - srvHashRate,
+        ),
+        // Cache upgrade increases hash capacity, not production rate; deltaPerSec is 0.
+        cache: buildUpgradeQuotes(
+          srvCacheMax,
+          (q) => server.calculateCacheUpgradeCost(q),
+          (_q) => 0,
+        ),
+      };
+
       nodes.push({
         index,
         name: server.hostname,
@@ -864,7 +996,8 @@ export function serializeHacknet(): HacknetState {
         ram: server.maxRam,
         cores: server.cores,
         cache: server.cache,
-        productionPerSec: finite(server.hashRate),
+        productionPerSec: finite(srvHashRate),
+        upgrades: srvUpgrades,
       });
 
       // Server-mode buys: payback is null (hashes, not money); ordered by cost only.
@@ -939,6 +1072,40 @@ function pushCostBuy(
 ): void {
   if (!Number.isFinite(cost) || cost <= 0) return;
   buys.push({ description, cost, paybackSeconds: null, action: { kind, index } });
+}
+
+/**
+ * Build the upgrade-quote array for one hacknet axis (level/ram/core/cache).
+ *
+ * @param maxQty  Remaining steps to the game cap (e.g. MaxLevel − node.level).
+ * @param computeCost  Returns the cost for a given qty (may return Infinity if capped).
+ * @param computeDelta Returns the production-rate delta per second for a given qty.
+ * @returns Array of quotes for qty in {1,5,10,maxQty} (deduped, filtered to valid range),
+ *          or null if maxQty <= 0 (axis already at cap).
+ */
+function buildUpgradeQuotes(
+  maxQty: number,
+  computeCost: (qty: number) => number,
+  computeDelta: (qty: number) => number,
+): HacknetUpgradeQuote[] | null {
+  if (maxQty <= 0) return null;
+  // Unique candidates within range, sorted ascending.
+  const seen = new Set<number>();
+  const qtys: number[] = [];
+  for (const q of [1, 5, 10, maxQty]) {
+    if (q > 0 && q <= maxQty && !seen.has(q)) {
+      seen.add(q);
+      qtys.push(q);
+    }
+  }
+  qtys.sort((a, b) => a - b);
+  const quotes: HacknetUpgradeQuote[] = [];
+  for (const qty of qtys) {
+    const cost = computeCost(qty);
+    if (!Number.isFinite(cost) || cost <= 0) continue;
+    quotes.push({ qty, cost: finite(cost), deltaPerSec: finite(computeDelta(qty)) });
+  }
+  return quotes.length > 0 ? quotes : null;
 }
 
 // --- Sleeve state shapes (mirror docs/protocol.md) ---
@@ -1238,6 +1405,54 @@ export interface CityWorldState {
   travelCost: number;
 }
 
+// --- CityDetailState (getCityDetail) ─────────────────────────────────────────
+
+/** Detailed info for a single location within a city, enriched with player state. */
+export interface CityLocationDetail {
+  name: string;
+  /** LocationType enum string values. */
+  types: string[];
+  /**
+   * Company info when this location has LocationType.Company. null otherwise.
+   * canApply lists entry-level (isStartingJob) positions offered by this company
+   * with ok=true when the player currently satisfies the requirements.
+   */
+  company: {
+    hasJob: boolean;
+    jobTitle: string | null;
+    canApply: { position: string; ok: boolean }[];
+    repRequirementNote: string | null;
+  } | null;
+  /**
+   * Infiltration metadata when the location has infiltrationData. null otherwise.
+   * reward is null: it is time-dependent and requires runtime game state.
+   */
+  infiltration: {
+    difficulty: number;
+    maxClearanceLevel: number;
+    startingSecurityLevel: number;
+    reward: { tradeRep: number; sellCash: number } | null;
+  } | null;
+  /**
+   * Which purchasable things this location offers that the extension exposes.
+   * Every TechVendor location offers all four: "tor", "homeRam", "homeCores", "servers".
+   */
+  purchases: ("tor" | "homeRam" | "homeCores" | "servers")[];
+  /**
+   * University or gym trainer info. null for non-trainer locations.
+   * costMult is location.costMult (affects class/gym price).
+   */
+  trainer: { kind: "university" | "gym"; costMult: number } | null;
+}
+
+/** getCityDetail response. */
+export interface CityDetailState {
+  city: string;
+  /** true when this city is the player's current city. */
+  current: boolean;
+  locations: CityLocationDetail[];
+}
+
 /**
  * Serialize the static city/world layout per docs/protocol.md CityWorldState shape.
  *
@@ -1263,6 +1478,85 @@ export function serializeCity(): CityWorldState {
     };
   });
   return { cities, travelCost: CONSTANTS.TravelCost };
+}
+
+/**
+ * Serialize detailed city info for one city per docs/protocol.md CityDetailState shape.
+ *
+ * Defaults to the player's current city if `requestedCity` is absent or unrecognised.
+ * Enriches each location with company job state, infiltration metadata, purchase flags,
+ * and trainer info. Company lookup: location.name cast to CompanyName (mirroring the game's
+ * CompanyLocation component). TechVendor locations always offer tor/homeRam/homeCores/servers.
+ */
+export function serializeCityDetail(requestedCity?: string): CityDetailState {
+  const playerCity = Player.city;
+  const cityName: CityName =
+    requestedCity !== undefined && Object.values(CityName).includes(requestedCity as CityName)
+      ? (requestedCity as CityName)
+      : playerCity;
+
+  const city = Cities[cityName];
+  const locations: CityLocationDetail[] = city.locations.map((locName) => {
+    const location = Locations[locName];
+    if (!location) {
+      return { name: locName, types: [], company: null, infiltration: null, purchases: [], trainer: null };
+    }
+
+    const types = location.types.map((t) => String(t));
+
+    // Company info — mirrors CompanyLocation component: Companies[location.name].
+    let company: CityLocationDetail["company"] = null;
+    if (location.types.includes(LocationType.Company)) {
+      const companyName = locName as unknown as CompanyName;
+      const comp = Companies[companyName];
+      if (comp) {
+        const hasJob = Player.jobs[companyName] !== undefined;
+        const jobTitle = (Player.jobs[companyName] as string | undefined) ?? null;
+        // Expose isStartingJob positions (entry points per field track) that this company offers.
+        const canApply = Object.values(CompanyPositions)
+          .filter((pos) => pos.isStartingJob && comp.hasPosition(pos))
+          .map((pos) => ({
+            position: pos.name as string,
+            ok: Player.isQualified(comp, pos),
+          }));
+        company = {
+          hasJob,
+          jobTitle,
+          canApply,
+          repRequirementNote: null,
+        };
+      }
+    }
+
+    // Infiltration metadata — reward is null (time-dependent, requires runtime game state).
+    let infiltration: CityLocationDetail["infiltration"] = null;
+    if (location.infiltrationData) {
+      infiltration = {
+        difficulty: finite(location.infiltrationData.startingSecurityLevel),
+        maxClearanceLevel: location.infiltrationData.maxClearanceLevel,
+        startingSecurityLevel: finite(location.infiltrationData.startingSecurityLevel),
+        reward: null,
+      };
+    }
+
+    // Purchases — every TechVendor offers all four.
+    const purchases: CityLocationDetail["purchases"] = [];
+    if (location.types.includes(LocationType.TechVendor)) {
+      purchases.push("tor", "homeRam", "homeCores", "servers");
+    }
+
+    // Trainer info from costMult.
+    let trainer: CityLocationDetail["trainer"] = null;
+    if (location.types.includes(LocationType.University)) {
+      trainer = { kind: "university", costMult: location.costMult };
+    } else if (location.types.includes(LocationType.Gym)) {
+      trainer = { kind: "gym", costMult: location.costMult };
+    }
+
+    return { name: locName, types, company, infiltration, purchases, trainer };
+  });
+
+  return { city: cityName, current: cityName === playerCity, locations };
 }
 
 /**
@@ -1361,6 +1655,11 @@ export interface WorkOptionsState {
   currentWork: { type: string; description: string; etaMs: number | null } | null;
   /** Cost to double home computer RAM. 0 if already at max. */
   homeRamUpgradeCost: number;
+  /**
+   * Cost to add one core to the home computer. null when already at maximum
+   * (cpuCores >= 8, or restrictHomePCUpgrade is on).
+   */
+  homeCoreUpgradeCost: number | null;
   /** Costs for purchasing a new cloud server at each valid RAM tier. */
   purchaseServerCosts: ServerCostDto[];
   /** TOR Router purchase cost (CONSTANTS.TorRouterCost). */
@@ -1436,6 +1735,10 @@ export function serializeWorkOptions(): WorkOptionsState {
     home.maxRam >= ServerConstants.HomeComputerMaxRam;
   const homeRamUpgradeCost = atMaxRam ? 0 : finite(Player.getUpgradeHomeRamCost());
 
+  // Home core upgrade cost: null when at maximum (cpuCores >= 8 or restricted).
+  const atMaxCores = Player.bitNodeOptions.restrictHomePCUpgrade || home.cpuCores >= 8;
+  const homeCoreUpgradeCost = atMaxCores ? null : finite(Player.getUpgradeHomeCoresCost());
+
   return {
     universities,
     gyms,
@@ -1443,6 +1746,7 @@ export function serializeWorkOptions(): WorkOptionsState {
     companies,
     currentWork: serializeCurrentWork(),
     homeRamUpgradeCost,
+    homeCoreUpgradeCost,
     purchaseServerCosts,
     torCost: CONSTANTS.TorRouterCost,
     hasTor: Player.hasTorRouter(),

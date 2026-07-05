@@ -33,6 +33,7 @@ import {
   LocationType,
   LocationName,
   CompanyName,
+  JobName,
   CrimeType,
   UniversityClassType,
   GymType,
@@ -84,6 +85,10 @@ import { CompanyWork } from "../Work/CompanyWork";
 import { CrimeWork } from "../Work/CrimeWork";
 import { Locations } from "../Locations/Locations";
 import { FactionInfos } from "../Faction/FactionInfo";
+import { Companies } from "../Company/Companies";
+import { CompanyPositions } from "../Company/CompanyPositions";
+import { Router } from "../ui/GameRoot";
+import { ComplexPage } from "../ui/Enums";
 import {
   purchaseRamForHomeComputer,
   getCloudServerCost,
@@ -511,8 +516,9 @@ const actionRegistry: Record<string, ActionImpl> = {
   // ─── Hacknet actions (GD-2) ───────────────────────────────────────────────
 
   /**
-   * hacknetPurchase { kind: "node"|"level"|"ram"|"core"|"cache", index?: number }.
+   * hacknetPurchase { kind: "node"|"level"|"ram"|"core"|"cache", index?: number, qty?: number }.
    * Mirrors the Hacknet page buttons: purchaseHacknet / purchase{Level,Ram,Core,Cache}Upgrade.
+   * qty (default 1) is passed as `levels` to the upgrade functions (which handle over-cap internally).
    * validate() is a read-only mirror of each purchase function's own guards (existence, affordability,
    * not-maxed, cache-only-in-server-mode); execute() calls the exact game function.
    */
@@ -521,6 +527,11 @@ const actionRegistry: Record<string, ActionImpl> = {
       const kind = args.kind;
       if (typeof kind !== "string" || !HACKNET_KINDS.has(kind)) {
         return `Invalid kind: ${String(kind)}. Valid kinds: ${[...HACKNET_KINDS].join(", ")}`;
+      }
+      // qty is optional — default 1. Must be a positive integer if provided.
+      const qty = args.qty === undefined ? 1 : args.qty;
+      if (typeof qty !== "number" || !Number.isInteger(qty) || qty < 1) {
+        return "qty must be a positive integer";
       }
       const isServers = hasHacknetServers();
 
@@ -541,16 +552,16 @@ const actionRegistry: Record<string, ActionImpl> = {
 
       if (kind === "cache") {
         if (!(node instanceof HacknetServer)) return "Cache upgrades are only available for Hacknet Servers";
-        const cost = node.calculateCacheUpgradeCost(1);
+        const cost = node.calculateCacheUpgradeCost(qty as number);
         if (!Number.isFinite(cost) || cost <= 0) return "Cache is already at maximum";
         if (Player.money < cost) return "Cannot afford the cache upgrade";
         return null;
       }
 
       let cost: number;
-      if (kind === "level") cost = node.calculateLevelUpgradeCost(1, Player.mults.hacknet_node_level_cost);
-      else if (kind === "ram") cost = node.calculateRamUpgradeCost(1, Player.mults.hacknet_node_ram_cost);
-      else cost = node.calculateCoreUpgradeCost(1, Player.mults.hacknet_node_core_cost);
+      if (kind === "level") cost = node.calculateLevelUpgradeCost(qty as number, Player.mults.hacknet_node_level_cost);
+      else if (kind === "ram") cost = node.calculateRamUpgradeCost(qty as number, Player.mults.hacknet_node_ram_cost);
+      else cost = node.calculateCoreUpgradeCost(qty as number, Player.mults.hacknet_node_core_cost);
 
       if (!Number.isFinite(cost) || cost <= 0) return `${kind} is already at maximum`;
       if (Player.money < cost) return `Cannot afford the ${kind} upgrade`;
@@ -558,11 +569,13 @@ const actionRegistry: Record<string, ActionImpl> = {
     },
     describe(args) {
       const kind = args.kind as string;
+      const qty = typeof args.qty === "number" ? args.qty : 1;
       if (kind === "node") return hasHacknetServers() ? "Purchase a new Hacknet Server" : "Purchase a new Hacknet Node";
-      return `Purchase ${kind} upgrade for hacknet node #${args.index as number}`;
+      return `Purchase ${kind}×${qty} upgrade for hacknet node #${args.index as number}`;
     },
     execute(args) {
       const kind = args.kind as string;
+      const qty = typeof args.qty === "number" ? args.qty : 1;
       if (kind === "node") {
         const result = purchaseHacknet();
         if (result < 0) return { ok: false, message: "Failed to purchase a new hacknet node/server" };
@@ -573,12 +586,12 @@ const actionRegistry: Record<string, ActionImpl> = {
       if (!node) return { ok: false, message: `No hacknet node/server at index: ${String(args.index)}` };
 
       let ok: boolean;
-      if (kind === "level") ok = purchaseLevelUpgrade(node);
-      else if (kind === "ram") ok = purchaseRamUpgrade(node);
-      else if (kind === "core") ok = purchaseCoreUpgrade(node);
+      if (kind === "level") ok = purchaseLevelUpgrade(node, qty);
+      else if (kind === "ram") ok = purchaseRamUpgrade(node, qty);
+      else if (kind === "core") ok = purchaseCoreUpgrade(node, qty);
       else if (kind === "cache") {
         if (!(node instanceof HacknetServer)) return { ok: false, message: "Cache upgrades require a Hacknet Server" };
-        ok = purchaseCacheUpgrade(node);
+        ok = purchaseCacheUpgrade(node, qty);
       } else return { ok: false, message: `Unknown kind: ${kind}` };
 
       if (!ok) return { ok: false, message: `Failed to purchase ${kind} upgrade (unaffordable or maxed)` };
@@ -1257,6 +1270,105 @@ const actionRegistry: Record<string, ActionImpl> = {
         return { ok: true };
       } catch (e) {
         return { ok: false, message: `Failed to set sleeve task: ${e instanceof Error ? e.message : String(e)}` };
+      }
+    },
+  },
+
+  // ─── GI-1: home cores, job application, navigate ─────────────────────────
+
+  /**
+   * upgradeHomeCores {}
+   * Mirrors CoresButton (Locations/ui/CoresButton.tsx): Player.getUpgradeHomeCoresCost() + cpuCores++.
+   * validate() catches all failure conditions so execute() never hits the UI dialog paths.
+   */
+  upgradeHomeCores: {
+    validate(_args) {
+      const home = Player.getHomeComputer();
+      if (Player.bitNodeOptions.restrictHomePCUpgrade || home.cpuCores >= 8) {
+        return "Home computer cores are already at maximum";
+      }
+      const cost = Player.getUpgradeHomeCoresCost();
+      if (!Player.canAfford(cost)) return `Cannot afford core upgrade (costs $${cost.toFixed(0)})`;
+      return null;
+    },
+    describe(_args) {
+      const home = Player.getHomeComputer();
+      return `Upgrade home cores from ${home.cpuCores} to ${home.cpuCores + 1}`;
+    },
+    execute(_args) {
+      const home = Player.getHomeComputer();
+      if (Player.bitNodeOptions.restrictHomePCUpgrade || home.cpuCores >= 8) {
+        return { ok: false, message: "Home computer cores are already at maximum" };
+      }
+      const cost = Player.getUpgradeHomeCoresCost();
+      if (!Player.canAfford(cost)) return { ok: false, message: "Cannot afford core upgrade" };
+      Player.loseMoney(cost, "servers");
+      home.cpuCores++;
+      return { ok: true };
+    },
+  },
+
+  /**
+   * applyForJob { company: CompanyName, position: JobName }
+   * Mirrors ApplyToJobButton (Company/ui/ApplyToJobButton.tsx): Player.applyForJob(company, position).
+   * The `position` arg must be a JobName string (e.g. from canApply in getCityDetail).
+   */
+  applyForJob: {
+    validate(args) {
+      if (typeof args.company !== "string") return "Missing or invalid company (must be a string)";
+      if (typeof args.position !== "string") return "Missing or invalid position (must be a string)";
+      if (!getEnumHelper("CompanyName").isMember(args.company))
+        return `Unknown company: ${args.company as string}`;
+      const companyName = args.company as CompanyName;
+      const comp = Companies[companyName];
+      if (!comp) return `Unknown company: ${args.company as string}`;
+      if (!getEnumHelper("JobName").isMember(args.position))
+        return `Unknown position: ${args.position as string}`;
+      const jobName = getEnumHelper("JobName").getMember(args.position, { alwaysMatch: true });
+      const position = CompanyPositions[jobName];
+      if (!position) return `Unknown position: ${args.position as string}`;
+      if (!comp.hasPosition(position)) return `Company ${args.company as string} does not have position ${args.position as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Apply for position ${args.position as string} at ${args.company as string}`;
+    },
+    execute(args) {
+      const companyName = args.company as CompanyName;
+      const comp = Companies[companyName];
+      if (!comp) return { ok: false, message: `Unknown company: ${args.company as string}` };
+      const jobName = getEnumHelper("JobName").getMember(args.position, { alwaysMatch: true });
+      const position = CompanyPositions[jobName];
+      if (!position) return { ok: false, message: `Unknown position: ${args.position as string}` };
+      const result = Player.applyForJob(comp, position);
+      return { ok: result.success, message: result.message };
+    },
+  },
+
+  /**
+   * openLocationInGame { location: LocationName }
+   * Navigates the game UI to the given location page, mirroring a city-map click.
+   * Mirrors City.tsx: Router.toPage(Page.Location, { location }).
+   * The `[vscode]` terminal echo happens in the dispatcher before this runs.
+   */
+  openLocationInGame: {
+    validate(args) {
+      if (typeof args.location !== "string") return "Missing or invalid location (must be a string)";
+      const loc = Locations[args.location as string];
+      if (!loc) return `Unknown location: ${args.location as string}`;
+      return null;
+    },
+    describe(args) {
+      return `Open location ${args.location as string} in game`;
+    },
+    execute(args) {
+      const loc = Locations[args.location as string];
+      if (!loc) return { ok: false, message: `Unknown location: ${args.location as string}` };
+      try {
+        Router.toPage(ComplexPage.Location, { location: loc });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
       }
     },
   },

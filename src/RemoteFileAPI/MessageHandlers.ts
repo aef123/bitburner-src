@@ -40,6 +40,7 @@ import {
   serializeBladeburner,
   serializeCity,
   serializeWorkOptions,
+  serializeCityDetail,
 } from "./StateSerializers";
 import { runTerminalCommand, invokeAction } from "./GameActionHandlers";
 
@@ -401,6 +402,17 @@ export const RFARequestHandler: Record<string, (message: RFAMessage) => RFAMessa
 
   getWorkOptions: function (msg: RFAMessage): RFAMessage {
     return new RFAMessage({ result: serializeWorkOptions() as unknown as Record<string, unknown>, id: msg.id });
+  },
+
+  /**
+   * getCityDetail { city?: string } → CityDetailState
+   * Returns detailed location info for the given city (defaults to player's current city).
+   * One-shot only; no subscription topic.
+   */
+  getCityDetail: function (msg: RFAMessage): RFAMessage {
+    const rawParams = msg.params as unknown as { city?: unknown } | undefined;
+    const city = rawParams && typeof rawParams.city === "string" ? rawParams.city : undefined;
+    return new RFAMessage({ result: serializeCityDetail(city) as unknown as Record<string, unknown>, id: msg.id });
   },
 
   runTerminalCommand: function (msg: RFAMessage): Promise<RFAMessage> {
