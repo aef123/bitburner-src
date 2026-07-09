@@ -1,7 +1,8 @@
 /**
  * Tests for the pure selectors behind the redesigned Faction Augmentations screen (Task W7):
- *   - partitionAugs: Purchasable/Locked/Owned tab partition (union = old page's lists; NFG always
- *     purchasable; queued counts as owned),
+ *   - partitionAugs: Purchasable/Locked/Owned section partition (union preserves the input; NFG is
+ *     classified by its REAL escalating rep requirement and is never owned; queued counts as
+ *     owned),
  *   - getUnlockProgress: locked progress math,
  *   - getEffectSummary: one-line stats join,
  *   - getQueueDisplayItems/getQueueTotal: install-queue reconstruction replays getAugCost —
@@ -51,9 +52,10 @@ describe("partitionAugs", () => {
     faction.playerReputation = 0;
     const atZero = partitionAugs(faction, augs);
     expect(atZero.owned).toHaveLength(0);
-    // With zero rep, nothing except (possibly) NFG is purchasable.
+    // With zero rep, only zero-rep-cost augs (if any) are purchasable — including NFG (user
+    // report: the old "NFG is always purchasable" special case lied about its real rep state).
     for (const augName of atZero.purchasable) {
-      expect(augName).toBe(AugmentationName.NeuroFluxGovernor);
+      expect(getAugCost(Augmentations[augName]).repCost).toBeLessThanOrEqual(0);
     }
     expect([...atZero.purchasable, ...atZero.locked, ...atZero.owned].sort()).toEqual([...augs].sort());
 
@@ -63,14 +65,34 @@ describe("partitionAugs", () => {
     expect(atMax.purchasable.sort()).toEqual([...augs].sort());
   });
 
-  it("keeps NFG purchasable regardless of reputation (old page's special case)", () => {
+  it("classifies NFG by its real rep requirement: locked below, purchasable at/above", () => {
     const faction = Factions[FactionName.CyberSec];
     const augs = getFactionAugmentationsFiltered(faction);
-    if (!augs.includes(AugmentationName.NeuroFluxGovernor)) return; // faction fixture must offer NFG
+    if (!augs.includes(AugmentationName.NeuroFluxGovernor)) throw new Error("Fixture faction must offer NFG");
+    const nfgRepCost = getAugCost(Augmentations[AugmentationName.NeuroFluxGovernor]).repCost;
+    expect(nfgRepCost).toBeGreaterThan(0); // fixture sanity: NFG level 1 is rep-gated
+
     faction.playerReputation = 0;
+    const below = partitionAugs(faction, augs);
+    expect(below.locked).toContain(AugmentationName.NeuroFluxGovernor);
+    expect(below.purchasable).not.toContain(AugmentationName.NeuroFluxGovernor);
+
+    faction.playerReputation = nfgRepCost;
+    const atCost = partitionAugs(faction, augs);
+    expect(atCost.purchasable).toContain(AugmentationName.NeuroFluxGovernor);
+    expect(atCost.locked).not.toContain(AugmentationName.NeuroFluxGovernor);
+  });
+
+  it("never marks NFG owned; its escalating rep cost re-locks it at higher levels", () => {
+    const faction = Factions[FactionName.CyberSec];
+    const augs = getFactionAugmentationsFiltered(faction);
+    if (!augs.includes(AugmentationName.NeuroFluxGovernor)) throw new Error("Fixture faction must offer NFG");
+    // Exactly level 1's requirement, then own level 1: level 2's requirement escalates past it.
+    faction.playerReputation = getAugCost(Augmentations[AugmentationName.NeuroFluxGovernor]).repCost;
+    Player.augmentations.push(new PlayerOwnedAugmentation(AugmentationName.NeuroFluxGovernor));
     const partition = partitionAugs(faction, augs);
-    expect(partition.purchasable).toContain(AugmentationName.NeuroFluxGovernor);
-    expect(partition.locked).not.toContain(AugmentationName.NeuroFluxGovernor);
+    expect(partition.owned).not.toContain(AugmentationName.NeuroFluxGovernor);
+    expect(partition.locked).toContain(AugmentationName.NeuroFluxGovernor);
   });
 
   it("moves installed AND queued augs to owned, exactly like the old page's owned list", () => {

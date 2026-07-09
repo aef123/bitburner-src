@@ -2,10 +2,9 @@
  * Pure (non-React) selectors for the redesigned Faction Augmentations screen (design-notes-1B).
  *
  * Honesty notes (nothing here invents data the game doesn't already expose):
- *  - the Purchasable/Locked/Owned partition uses the exact "purchasable" filter the old
- *    AugmentationsPage used (NFG is always purchasable; owned = installed OR queued), splitting
- *    the old purchasable list into rep-met vs rep-locked using getAugCost — the same rep numbers
- *    the old rows displayed,
+ *  - the Purchasable/Locked/Owned partition classifies every aug — including NFG — by its real
+ *    current rep state via getAugCost (the same rep numbers the cards display); owned = installed
+ *    OR queued, except NFG which levels infinitely and is therefore never "owned",
  *  - the install-queue reconstruction replays the game's own price formula (getAugCost) over the
  *    queue order: queuedAugmentations only ever grows between installs, so the i-th non-SoA queued
  *    item was bought at generic multiplier base^i (base = getBaseAugmentationPriceMultiplier(),
@@ -30,19 +29,25 @@ import { CONSTANTS } from "../../Constants";
 // ─── Tab partition ────────────────────────────────────────────────────────
 
 export interface AugTabPartition {
-  /** Unowned augs whose rep requirement is met (affordable or not) + NFG, always. */
+  /** Unowned augs whose rep requirement is met (affordable or not). */
   purchasable: AugmentationName[];
   /** Unowned augs whose rep requirement is not met yet. */
   locked: AugmentationName[];
-  /** Installed or queued augs — the old page's "owned" list, unchanged. */
+  /** Installed or queued augs — the old page's "owned" list, unchanged (never contains NFG). */
   owned: AugmentationName[];
 }
 
 /**
  * Splits a faction's aug list (already faction-filtered/sorted/text-filtered by the caller) into
- * the three tabs. The union of purchasable+locked equals the old page's "purchasable" list
- * verbatim; owned matches its "owned" list verbatim. NFG keeps its special case: always
- * purchasable, never locked or owned (the old page did exactly this).
+ * the three sections. Owned matches the old page's "owned" list verbatim; everything else lands in
+ * purchasable or locked based on its ACTUAL current rep requirement (getAugCost — the same numbers
+ * the cards display).
+ *
+ * NFG special handling: it levels infinitely, so it is never "owned" — but it is otherwise
+ * classified like any other aug. The old page's "NFG is always purchasable" special case is gone:
+ * a user reported "NeuroFlux Governor - Level 12" shown as purchasable when its escalated rep
+ * requirement was not actually met. getAugCost already returns the per-level escalated rep cost,
+ * so rep-unmet NFG now lands in locked with an honest unlock progress bar.
  */
 export function partitionAugs(faction: Faction, augNames: AugmentationName[]): AugTabPartition {
   const purchasable: AugmentationName[] = [];
@@ -51,12 +56,10 @@ export function partitionAugs(faction: Faction, augNames: AugmentationName[]): A
   for (const augName of augNames) {
     const aug = Augmentations[augName];
     if (!aug) continue;
-    if (augName === AugmentationName.NeuroFluxGovernor) {
-      purchasable.push(augName);
-      continue;
-    }
     const isOwned =
-      Player.augmentations.some((a) => a.name === augName) || Player.queuedAugmentations.some((a) => a.name === augName);
+      augName !== AugmentationName.NeuroFluxGovernor &&
+      (Player.augmentations.some((a) => a.name === augName) ||
+        Player.queuedAugmentations.some((a) => a.name === augName));
     if (isOwned) {
       owned.push(augName);
       continue;

@@ -1,10 +1,13 @@
 /**
  * Faction Augmentations screen (UI refresh Task W7, design-notes-1B).
  *
- * Layout: context strip (faction name + rep/favor/price-multiplier cluster) → tabs
- * Purchasable/Locked/Owned with count badges → 2-col purchasable cards / dimmed locked cards with
- * unlock progress / owned chip cloud → install-queue sidebar (312px) reconstructing the price
- * snowball from the game's own multiplier constant.
+ * Layout: context strip (faction name + rep/favor/price-multiplier cluster) → one continuous list
+ * in fixed section order — PURCHASABLE (2-col cards) then LOCKED (dimmed cards with unlock
+ * progress) then OWNED (chip cloud) — each under a slim eyebrow header with a count. The user
+ * asked for this over the earlier tab layout ("I'd rather you have them all in a list, sorted by
+ * purchasable, then locked, then owned"); sections are differentiated by the existing color
+ * treatments. The install-queue sidebar (312px) reconstructs the price snowball from the game's
+ * own multiplier constant. The text filter and sort pills apply across all sections.
  *
  * The purchase flow is the old page's, verbatim: the Buy button either opens
  * PurchaseAugmentationModal or (with Settings.SuppressBuyAugmentationConfirmation) calls
@@ -56,8 +59,6 @@ import {
   type MultiplierTone,
 } from "./augmentationsPageHelpers";
 import { canPurchaseAugNow } from "./factionsScreenHelpers";
-
-type AugTab = "purchasable" | "locked" | "owned";
 
 const OWNED_COLLAPSED_COUNT = 6;
 
@@ -149,47 +150,18 @@ const useStyles = makeStyles()((theme: Theme) => {
     statValueRep: {
       color: accentCyan,
     },
-    // Tab bar
-    tabRow: {
-      display: "flex",
-      alignItems: "center",
-      gap: "2px",
-      borderBottom: `1px solid ${borderDefault}`,
-      marginBottom: "14px",
-    },
-    tab: {
-      fontFamily: "inherit",
-      fontSize: typeScale.body,
-      fontWeight: 500,
-      color: theme.colors.textSecondary,
-      background: "none",
-      border: "none",
-      borderBottom: "2px solid transparent",
-      padding: "9px 14px",
-      cursor: "pointer",
-      transition: "color 120ms ease-out",
-      "&:hover": {
-        color: theme.colors.textBody,
-      },
-    },
-    tabActive: {
-      fontWeight: 600,
-      color: accentCyan,
-      borderBottomColor: accentCyan,
-      "&:hover": {
-        color: accentCyan,
-      },
-    },
-    tabBadge: {
+    // Section headers (eyebrow style — the color difference is the section boundary)
+    sectionHeader: {
       fontFamily: mono,
-      fontSize: typeScale.caption,
-      backgroundColor: theme.colors.bgPanelDeep,
-      borderRadius: "10px",
-      padding: "2px 7px",
-      marginLeft: "4px",
+      fontSize: typeScale.eyebrow,
+      fontWeight: 600,
+      letterSpacing: ".12em",
+      textTransform: "uppercase",
+      color: theme.colors.textTertiary,
+      marginBottom: "10px",
     },
-    tabBadgeActive: {
-      backgroundColor: theme.colors.bgActive,
+    sectionHeaderPurchasable: {
+      color: accentCyan,
     },
     filterInput: {
       fontFamily: "inherit",
@@ -795,13 +767,17 @@ function LockedCard({ faction, augName }: { faction: Faction; augName: Augmentat
   if (!aug) return null;
   const repCost = getAugCost(aug).repCost;
   const percent = getUnlockProgress(faction, augName);
+  // NFG can be rep-locked too (its rep cost escalates per level) — keep its level naming here.
+  const displayName = `${aug.name}${
+    aug.name === AugmentationName.NeuroFluxGovernor ? ` - Level ${aug.getLevel() + 1}` : ""
+  }`;
 
   return (
     <div className={classes.lockedCard} data-locked-card={augName}>
       <Lock className={classes.lockIcon} />
       <div className={classes.lockedText}>
         <AugDescriptionTooltip aug={aug}>
-          <div className={classes.lockedName}>{aug.name}</div>
+          <div className={classes.lockedName}>{displayName}</div>
         </AugDescriptionTooltip>
         <div className={classes.lockedEffect}>{getEffectSummary(aug)}</div>
       </div>
@@ -1072,7 +1048,6 @@ export function AugmentationsPage({ faction }: { faction: Faction }): React.Reac
   const { classes, cx } = useStyles();
   const rerender = useRerender(400);
   const [filterText, setFilterText] = useState("");
-  const [activeTab, setActiveTab] = useState<AugTab>("purchasable");
 
   const matches = (s1: string, s2: string) => s1.toLowerCase().includes(s2.toLowerCase());
   const factionAugs = useMemo(() => getFactionAugmentationsFiltered(faction), [faction]);
@@ -1117,11 +1092,6 @@ export function AugmentationsPage({ faction }: { faction: Faction }): React.Reac
 
   const augs = getAugsSorted();
   const partition = partitionAugs(faction, augs);
-  const tabs: { id: AugTab; label: string; count: number }[] = [
-    { id: "purchasable", label: "Purchasable", count: partition.purchasable.length },
-    { id: "locked", label: "Locked", count: partition.locked.length },
-    { id: "owned", label: "Owned", count: partition.owned.length },
-  ];
 
   return (
     <div className={classes.page} data-augmentations-page>
@@ -1151,37 +1121,6 @@ export function AugmentationsPage({ faction }: { faction: Faction }): React.Reac
           <StatCluster faction={faction} />
         </div>
 
-        <div className={classes.tabRow}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={cx(classes.tab, activeTab === tab.id && classes.tabActive)}
-              data-tab={tab.id}
-              aria-pressed={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-              <span
-                className={cx(classes.tabBadge, activeTab === tab.id && classes.tabBadgeActive)}
-                data-tab-count={tab.id}
-              >
-                {tab.count}
-              </span>
-            </button>
-          ))}
-          <span className={classes.stripSpacer} />
-          <input
-            className={classes.filterInput}
-            value={filterText}
-            onChange={(event) => setFilterText(event.target.value)}
-            autoFocus
-            spellCheck={false}
-            placeholder="Filter augmentations"
-            data-filter-input
-          />
-        </div>
-
         <div className={classes.toolbar}>
           <span className={classes.toolbarLabel}>Sort by</span>
           {sortOrder.map((order) => (
@@ -1196,31 +1135,49 @@ export function AugmentationsPage({ faction }: { faction: Faction }): React.Reac
               {sortLabels[order]}
             </button>
           ))}
+          <span className={classes.stripSpacer} />
+          <input
+            className={classes.filterInput}
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            autoFocus
+            spellCheck={false}
+            placeholder="Filter augmentations"
+            data-filter-input
+          />
         </div>
 
-        {activeTab === "purchasable" &&
-          (partition.purchasable.length > 0 ? (
-            <div className={classes.cardGrid}>
-              {partition.purchasable.map((augName) => (
-                <PurchasableCard key={augName} faction={faction} augName={augName} rerender={rerender} />
-              ))}
-            </div>
-          ) : (
-            <Typography className={classes.emptyText}>No augmentations available for purchase.</Typography>
-          ))}
+        {/* One continuous list: purchasable, then locked, then owned (user-requested order). */}
+        <div className={cx(classes.sectionHeader, classes.sectionHeaderPurchasable)} data-section-header="purchasable">
+          Purchasable ({partition.purchasable.length})
+        </div>
+        {partition.purchasable.length > 0 ? (
+          <div className={classes.cardGrid}>
+            {partition.purchasable.map((augName) => (
+              <PurchasableCard key={augName} faction={faction} augName={augName} rerender={rerender} />
+            ))}
+          </div>
+        ) : (
+          <Typography className={classes.emptyText}>No augmentations available for purchase.</Typography>
+        )}
 
-        {activeTab === "locked" &&
-          (partition.locked.length > 0 ? (
-            <div className={classes.lockedList}>
-              {partition.locked.map((augName) => (
-                <LockedCard key={augName} faction={faction} augName={augName} />
-              ))}
-            </div>
-          ) : (
-            <Typography className={classes.emptyText}>No locked augmentations — every requirement is met.</Typography>
-          ))}
+        <div className={classes.sectionHeader} data-section-header="locked">
+          Locked ({partition.locked.length})
+        </div>
+        {partition.locked.length > 0 ? (
+          <div className={classes.lockedList}>
+            {partition.locked.map((augName) => (
+              <LockedCard key={augName} faction={faction} augName={augName} />
+            ))}
+          </div>
+        ) : (
+          <Typography className={classes.emptyText}>No locked augmentations — every requirement is met.</Typography>
+        )}
 
-        {activeTab === "owned" && <OwnedCloud augNames={partition.owned} />}
+        <div className={classes.sectionHeader} data-section-header="owned">
+          Owned ({partition.owned.length})
+        </div>
+        <OwnedCloud augNames={partition.owned} />
       </div>
 
       <InstallQueueSidebar />

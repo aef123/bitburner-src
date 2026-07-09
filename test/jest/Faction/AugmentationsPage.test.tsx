@@ -4,8 +4,12 @@
  * initGameEnvironment/setupBasicTestingEnvironment.
  *
  * Covers:
- *   - tab badges match the Purchasable/Locked/Owned partition,
+ *   - section headers carry the Purchasable/Locked/Owned counts and render in that fixed order
+ *     (single sorted list — the tabs were removed on user request),
  *   - READY vs CAN'T AFFORD card states driven by money,
+ *   - NFG is classified by its real state: purchasable-but-CAN'T-AFFORD when rep is met and money
+ *     is short, locked with rep progress when rep is unmet (user report: it was always shown
+ *     purchasable),
  *   - canPurchaseAugNow is the single purchasability source (spy flips every card),
  *   - locked cards render unlock progress from current rep / rep cost,
  *   - owned chip cloud collapses to 6 chips and expands via "+ N more",
@@ -91,25 +95,51 @@ function cyberSecAugsByRep(): AugmentationName[] {
     .sort((a, b) => getAugCost(Augmentations[a]).repCost - getAugCost(Augmentations[b]).repCost);
 }
 
-describe("tab counts", () => {
-  it("badges match the Purchasable/Locked/Owned partition", () => {
+describe("section headers and order", () => {
+  it("headers carry the Purchasable/Locked/Owned partition counts (no NFG special case)", () => {
     const faction = Factions[FactionName.CyberSec];
     const augs = cyberSecAugsByRep();
     expect(augs.length).toBeGreaterThanOrEqual(2);
     // Rep exactly at the cheapest requirement: at least one purchasable, at least one locked.
     faction.playerReputation = getAugCost(Augmentations[augs[0]]).repCost;
     const all = getFactionAugmentationsFiltered(faction);
+    // Every aug — NFG included — counts by its real rep state.
     const purchasableCount = all.filter(
-      (a) =>
-        a === AugmentationName.NeuroFluxGovernor ||
-        faction.playerReputation >= getAugCost(Augmentations[a]).repCost,
+      (a) => faction.playerReputation >= getAugCost(Augmentations[a]).repCost,
     ).length;
     const lockedCount = all.length - purchasableCount;
 
     const root = renderPage();
-    expect(root.querySelector('[data-tab-count="purchasable"]')?.textContent).toBe(String(purchasableCount));
-    expect(root.querySelector('[data-tab-count="locked"]')?.textContent).toBe(String(lockedCount));
-    expect(root.querySelector('[data-tab-count="owned"]')?.textContent).toBe("0");
+    expect(root.querySelector('[data-section-header="purchasable"]')?.textContent).toBe(
+      `Purchasable (${purchasableCount})`,
+    );
+    expect(root.querySelector('[data-section-header="locked"]')?.textContent).toBe(`Locked (${lockedCount})`);
+    expect(root.querySelector('[data-section-header="owned"]')?.textContent).toBe("Owned (0)");
+  });
+
+  it("renders all three sections in one list: purchasable before locked before owned", () => {
+    const faction = Factions[FactionName.CyberSec];
+    const augs = cyberSecAugsByRep();
+    expect(augs.length).toBeGreaterThanOrEqual(3);
+    // Populate all three sections: own the cheapest, meet the second's rep, leave the last locked.
+    Player.queueAugmentation(augs[0]);
+    faction.playerReputation = getAugCost(Augmentations[augs[1]]).repCost;
+    expect(getAugCost(Augmentations[augs[augs.length - 1]]).repCost).toBeGreaterThan(faction.playerReputation);
+
+    const root = renderPage();
+    const purchasableCard = root.querySelector(`[data-aug-card="${augs[1]}"]`);
+    const lockedCard = root.querySelector(`[data-locked-card="${augs[augs.length - 1]}"]`);
+    const ownedChip = root.querySelector(`[data-owned-chip="${augs[0]}"]`);
+    expect(purchasableCard).not.toBeNull();
+    expect(lockedCard).not.toBeNull();
+    expect(ownedChip).not.toBeNull();
+    // DOM order is the requested fixed order: purchasable, then locked, then owned.
+    const follows = (earlier: Element | null, later: Element | null) =>
+      !!earlier && !!later && (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(follows(purchasableCard, lockedCard)).toBe(true);
+    expect(follows(lockedCard, ownedChip)).toBe(true);
+    // The old tabs are gone — nothing to click through.
+    expect(root.querySelector("[data-tab]")).toBeNull();
   });
 });
 
@@ -146,6 +176,18 @@ describe("purchasable card states", () => {
     expect(spy).toHaveBeenCalled();
   });
 
+  it("shows NFG as purchasable with CAN'T AFFORD when rep is met but money is short", () => {
+    // User report: NFG appeared purchasable ("READY"-adjacent) when it actually was not.
+    const faction = Factions[FactionName.CyberSec];
+    faction.playerReputation = 1e12;
+    Player.money = 0;
+    const root = renderPage();
+    const nfgCard = root.querySelector(`[data-aug-card="${AugmentationName.NeuroFluxGovernor}"]`);
+    expect(nfgCard).not.toBeNull();
+    expect(nfgCard?.querySelector("[data-aug-status]")?.getAttribute("data-aug-status")).toBe("cant-afford");
+    expect(root.querySelector(`[data-locked-card="${AugmentationName.NeuroFluxGovernor}"]`)).toBeNull();
+  });
+
   it("Buy opens the existing PurchaseAugmentationModal (confirmation not suppressed)", () => {
     const faction = Factions[FactionName.CyberSec];
     faction.playerReputation = 1e12;
@@ -167,8 +209,26 @@ describe("locked cards", () => {
     const repCost = getAugCost(Augmentations[target]).repCost;
     faction.playerReputation = repCost / 4;
     const root = renderPage();
-    click(root.querySelector('[data-tab="locked"]'));
     const fill = root.querySelector(`[data-unlock-fill="${target}"]`);
+    if (!(fill instanceof HTMLElement)) throw new Error("Expected an unlock progress fill element");
+    expect(parseFloat(fill.style.width)).toBeCloseTo(25, 5);
+  });
+
+  it("locks NFG with rep progress when its escalating rep requirement is unmet", () => {
+    const faction = Factions[FactionName.CyberSec];
+    const nfg = AugmentationName.NeuroFluxGovernor;
+    const repCost = getAugCost(Augmentations[nfg]).repCost;
+    expect(repCost).toBeGreaterThan(0); // fixture sanity: NFG level 1 is rep-gated
+    faction.playerReputation = repCost / 4;
+    Player.money = 1e15; // money alone must not make it purchasable
+
+    const root = renderPage();
+    expect(root.querySelector(`[data-aug-card="${nfg}"]`)).toBeNull();
+    const lockedCard = root.querySelector(`[data-locked-card="${nfg}"]`);
+    expect(lockedCard).not.toBeNull();
+    // Keeps its "- Level N+1" naming even while locked.
+    expect(lockedCard?.textContent).toContain(`${nfg} - Level 1`);
+    const fill = root.querySelector(`[data-unlock-fill="${nfg}"]`);
     if (!(fill instanceof HTMLElement)) throw new Error("Expected an unlock progress fill element");
     expect(parseFloat(fill.style.width)).toBeCloseTo(25, 5);
   });
@@ -186,8 +246,7 @@ describe("owned chip cloud", () => {
     for (const augName of augs) Player.queueAugmentation(augName);
 
     const root = renderPage(FactionName.NiteSec);
-    expect(root.querySelector('[data-tab-count="owned"]')?.textContent).toBe(String(augs.length));
-    click(root.querySelector('[data-tab="owned"]'));
+    expect(root.querySelector('[data-section-header="owned"]')?.textContent).toBe(`Owned (${augs.length})`);
     expect(root.querySelectorAll("[data-owned-chip]")).toHaveLength(6);
     const expander = root.querySelector("[data-owned-expander]");
     expect(expander?.textContent).toBe(`+ ${augs.length - 6} more`);
