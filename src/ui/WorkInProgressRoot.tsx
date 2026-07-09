@@ -483,7 +483,9 @@ export function WorkInProgressRoot(): React.ReactElement {
   return (
     <Container
       maxWidth="md"
-      sx={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "calc(100vh - 16px)" }}
+      // 100% of the shell content pane (which owns scrolling), not 100vh — the pane is shorter
+      // than the viewport by the TopBar, so viewport units would overflow and clip the buttons.
+      sx={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}
     >
       <Paper sx={{ p: 1, mb: 1 }}>
         <Typography variant="h6">{workInfo.title}</Typography>

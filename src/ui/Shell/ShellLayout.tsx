@@ -15,8 +15,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   /**
    * Shell grid per design notes 1A: 60px icon rail spanning the full height, 52px top bar spanning
    * the content and HUD columns, content + 272px docked HUD below. When the HUD is collapsed the
-   * third column animates to 0 (160ms per the global interaction rules) and the floating Overview
-   * takes over (GameRoot owns that switch).
+   * third column animates to 0 (160ms per the global interaction rules) and the HUD is simply
+   * hidden — the TopBar reopen button restores it (no floating fallback).
    */
   shell: {
     display: "grid",
@@ -121,7 +121,7 @@ export function ShellLayout({ page, save, killScripts, children }: ShellLayoutPr
       <main ref={contentRef} className={classes.content}>
         {children}
       </main>
-      {/* The Hud unmounts while collapsed so its script-hook DOM ids never duplicate the floating overview's. */}
+      {/* The Hud unmounts while collapsed so the script-hook DOM ids exist at most once in the document. */}
       <div className={classes.hudCell}>{!hudCollapsed && <Hud save={save} killScripts={killScripts} />}</div>
       <PalettePortal state={paletteState} />
     </div>

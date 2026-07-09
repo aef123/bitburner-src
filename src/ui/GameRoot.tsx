@@ -12,7 +12,6 @@ import { InteractiveTutorialRoot } from "./InteractiveTutorial/InteractiveTutori
 import { ITutorialEvents } from "./InteractiveTutorial/ITutorialEvents";
 
 import { prestigeWorkerScripts } from "../NetscriptWorker";
-import { Settings } from "../Settings/Settings";
 import { dialogBoxCreate } from "./React/DialogBox";
 import { GetAllServers } from "../Server/AllServers";
 import { StockMarket } from "../StockMarket/StockMarket";
@@ -21,7 +20,6 @@ import type { IRouter, PageContext, PageWithContext } from "./Router";
 import { isSimplePage, Page } from "./Router";
 import { Overview } from "./React/Overview";
 import { ShellLayout } from "./Shell/ShellLayout";
-import { HudToggleEvents } from "./Shell/hudEvents";
 import { AugmentationsRoot } from "../Augmentation/ui/AugmentationsRoot";
 import { DevMenuRoot } from "../DevMenu";
 import { BladeburnerRoot } from "../Bladeburner/ui/BladeburnerRoot";
@@ -52,7 +50,6 @@ import { StockMarketRoot } from "../StockMarket/ui/StockMarketRoot";
 import { BitverseRoot } from "../BitNode/ui/BitverseRoot";
 import { StaneksGiftRoot } from "../CotMG/ui/StaneksGiftRoot";
 import { staneksGift } from "../CotMG/Helper";
-import { CharacterOverview } from "./React/CharacterOverview";
 import { BladeburnerCinematic } from "../Bladeburner/ui/BladeburnerCinematic";
 import { Unclickable } from "../Exploits/Unclickable";
 import { Snackbar, SnackbarProvider } from "./React/Snackbar";
@@ -218,11 +215,6 @@ export function GameRoot(): React.ReactElement {
     return ITutorialEvents.subscribe(rerender);
   }, [rerender]);
 
-  // Rerender when the docked HUD collapses/restores, so the floating Overview switch below stays in sync.
-  useEffect(() => {
-    return HudToggleEvents.subscribe(rerender);
-  }, [rerender]);
-
   function killAllScripts(): void {
     for (const server of GetAllServers(true)) {
       server.runningScriptMap.clear();
@@ -338,7 +330,6 @@ export function GameRoot(): React.ReactElement {
     }
     case Page.Work: {
       mainPage = <WorkInProgressRoot />;
-      withSidebar = false;
       break;
     }
     case Page.Terminal: {
@@ -544,23 +535,15 @@ export function GameRoot(): React.ReactElement {
           <HistoryProvider>
             <SnackbarProvider>
               {/*
-               * The floating Overview widget renders only when the docked HUD can't stand in for it:
-               * shell-less pages (e.g. focused work), a collapsed HUD, or the interactive tutorial
-               * (whose content lives inside the Overview frame in both modes). Otherwise the docked
-               * HUD in ShellLayout owns the overview content — never both at once, so the
-               * script-injection hook ids stay unique.
+               * The interactive tutorial is the ONLY thing that still rides in the floating
+               * Overview frame (draggable, collapsible). Every shell page gets the docked HUD in
+               * ShellLayout instead, and the remaining full-bleed pages (Recovery, BitVerse,
+               * Infiltration, BladeburnerCinematic, ImportSave) are deliberately distraction-free.
+               * A collapsed HUD is simply hidden — the TopBar reopen button restores it; there is
+               * no floating fallback. The docked HUD owns the script-injection hook ids
+               * (overview-*-hook); the tutorial frame renders none, so the ids never duplicate.
                */}
-              {(ITutorial.isRunning || Settings.HudCollapsed || !withSidebar) && (
-                <Overview mode={ITutorial.isRunning ? "tutorial" : "overview"}>
-                  {(parentOpen) =>
-                    !ITutorial.isRunning ? (
-                      <CharacterOverview parentOpen={parentOpen} save={saveGameHandler} killScripts={killAllScripts} />
-                    ) : (
-                      <InteractiveTutorialRoot />
-                    )
-                  }
-                </Overview>
-              )}
+              {ITutorial.isRunning && <Overview mode="tutorial">{() => <InteractiveTutorialRoot />}</Overview>}
               {withSidebar ? (
                 <ShellLayout page={pageWithContext.page} save={saveGameHandler} killScripts={killAllScripts}>
                   {mainPage}

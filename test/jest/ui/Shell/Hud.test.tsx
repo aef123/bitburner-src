@@ -1,5 +1,6 @@
 /**
- * Tests for the docked HUD panel (Task 4).
+ * Tests for the docked HUD panel — since W3 retired the floating overview, this is the ONLY
+ * overview UI on shell pages (the wiring matrix lives in test/jest/ui/GameRootOverview.test.tsx).
  *
  * Follows the established Shell test pattern (see IconRail.test.tsx):
  * ReactDOM + ThemeProvider, initGameEnvironment/setupBasicTestingEnvironment.
