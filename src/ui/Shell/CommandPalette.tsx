@@ -255,6 +255,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Recompute visible results and ranking whenever query or open state changes.
   // `open` must be a dependency: PalettePortal keeps this component mounted, and on reopen
@@ -280,6 +281,14 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   useEffect(() => {
     setSelectedIndex((prev) => (results.length === 0 ? 0 : Math.min(prev, results.length - 1)));
   }, [results.length]);
+
+  // Scroll selected row into view on keyboard navigation.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const selected = list.querySelector<HTMLElement>("[aria-selected='true']");
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
 
   const confirmSelection = useCallback(
     (index: number) => {
@@ -349,7 +358,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
       </div>
 
       {/* Result list */}
-      <div className={classes.resultList} role="listbox" aria-label="Navigation results">
+      <div ref={listRef} className={classes.resultList} role="listbox" aria-label="Navigation results">
         {results.length === 0 && query && <div className={classes.emptyMessage}>No pages match "{query}"</div>}
         {results.map((result, index) => {
           const isSelected = index === selectedIndex;

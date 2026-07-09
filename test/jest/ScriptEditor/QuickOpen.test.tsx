@@ -20,11 +20,13 @@ import { initGameEnvironment, setupBasicTestingEnvironment } from "../Utilities"
 
 const testTheme = createTheme({ colors: Settings.theme });
 
-let container: HTMLDivElement | null = null;
-
+// jsdom does not implement scrollIntoView — stub it so the scroll-into-view effect doesn't throw.
 beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
   initGameEnvironment();
 });
+
+let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
   setupBasicTestingEnvironment();

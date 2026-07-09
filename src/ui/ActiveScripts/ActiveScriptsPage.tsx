@@ -26,7 +26,7 @@ import { Settings } from "../../Settings/Settings";
 import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { isPositiveInteger } from "../../types";
 import { formatExp, formatMoney, formatRam } from "../formatNumber";
-import { aggregateNetworkRam, totalExpRate } from "./networkRam";
+import { aggregateNetworkRam, totalExpRate, totalMoneyRate } from "./networkRam";
 import { NetworkRamBar } from "./NetworkRamBar";
 import { ServerGroup } from "./ServerGroup";
 
@@ -246,9 +246,9 @@ export function ActiveScriptsPage(props: IProps): React.ReactElement {
     hostCount = hosts.size;
   }
   const expRate = totalExpRate([...workerScripts.values()].map((ws) => ws.scriptRef));
-  // Existing whole-game money rate (same figure the old ScriptProduction card showed).
-  let moneyRate = Player.scriptProdSinceLastAug / (Player.playtimeSinceLastAug / 1000);
-  if (!Number.isFinite(moneyRate)) moneyRate = 0;
+  // Live money rate: same per-script sum the group rows use (onlineMoneyMade / onlineRunningTime),
+  // so the header total always equals the sum of the visible group income figures.
+  const moneyRate = totalMoneyRate([...workerScripts.values()].map((ws) => ws.scriptRef));
 
   return (
     <>

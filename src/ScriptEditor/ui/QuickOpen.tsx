@@ -172,6 +172,7 @@ export function QuickOpen({ open, currentHostname, onOpenFile, onClose }: QuickO
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Collect the honest file set once per opening (files rarely change mid-keystroke; reopening
   // re-collects). Entry order = current server first, then accessible servers alphabetically.
@@ -196,6 +197,14 @@ export function QuickOpen({ open, currentHostname, onOpenFile, onClose }: QuickO
   useEffect(() => {
     setSelectedIndex((prev) => (results.length === 0 ? 0 : Math.min(prev, results.length - 1)));
   }, [results.length]);
+
+  // Scroll selected row into view on keyboard navigation.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const selected = list.querySelector<HTMLElement>("[aria-selected='true']");
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
 
   if (!open) {
     return null;
@@ -256,7 +265,7 @@ export function QuickOpen({ open, currentHostname, onOpenFile, onClose }: QuickO
             spellCheck={false}
           />
         </div>
-        <div className={classes.resultList} role="listbox" aria-label="File results">
+        <div ref={listRef} className={classes.resultList} role="listbox" aria-label="File results">
           {results.length === 0 && <div className={classes.empty}>No files match "{query}"</div>}
           {results.map((result, index) => (
             <button

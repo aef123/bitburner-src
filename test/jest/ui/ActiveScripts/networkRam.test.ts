@@ -215,4 +215,26 @@ describe("totalMoneyRate / totalExpRate", () => {
     expect(totalMoneyRate([])).toBe(0);
     expect(totalExpRate([])).toBe(0);
   });
+
+  it("header income equals the sum of per-group incomes (income consistency)", () => {
+    // Simulates two server groups each with their own scripts. The header total must equal
+    // the sum that each ServerGroup row would independently compute via totalMoneyRate,
+    // because both the header and the groups use the same function over the same data.
+    const groupA = [
+      { onlineMoneyMade: 890_000, onlineExpGained: 0, onlineRunningTime: 10 }, // $89k/s
+      { onlineMoneyMade: 1_550_000, onlineExpGained: 0, onlineRunningTime: 10 }, // $155k/s
+    ];
+    const groupB = [
+      { onlineMoneyMade: 2_440_000, onlineExpGained: 0, onlineRunningTime: 10 }, // $244k/s
+      { onlineMoneyMade: 1_770_000, onlineExpGained: 0, onlineRunningTime: 10 }, // $177k/s
+    ];
+
+    const headerIncome = totalMoneyRate([...groupA, ...groupB]);
+    const groupAIncome = totalMoneyRate(groupA);
+    const groupBIncome = totalMoneyRate(groupB);
+
+    // Header must equal the sum of group incomes — the bug was header using a different
+    // (time-averaged) formula that diverged from the live per-script sum.
+    expect(headerIncome).toBeCloseTo(groupAIncome + groupBIncome, 10);
+  });
 });

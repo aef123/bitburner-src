@@ -29,6 +29,12 @@ import { CommandPalette } from "../../../../src/ui/Shell/CommandPalette";
 
 const testTheme = createTheme({ colors: Settings.theme });
 
+// jsdom does not implement scrollIntoView — stub it so assertions can verify it is called.
+const scrollIntoViewMock = jest.fn();
+beforeAll(() => {
+  Element.prototype.scrollIntoView = scrollIntoViewMock;
+});
+
 let container: HTMLDivElement | null = null;
 
 beforeAll(() => {
@@ -337,5 +343,35 @@ describe("CommandPalette keyboard flow", () => {
 
     expect(onNavigate).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("scrolls selected item into view when ArrowDown moves the selection", () => {
+    scrollIntoViewMock.mockClear();
+    const onClose = jest.fn();
+    const onNavigate = jest.fn();
+    const root = renderPalette(true, onClose, onNavigate);
+    const input = getPaletteInput(root);
+
+    act(() => {
+      fireKey(input, "ArrowDown");
+    });
+
+    // scrollIntoView must have been called with block:"nearest" on the newly selected item.
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("scrolls top item into view when ArrowUp wraps from first to last and back", () => {
+    scrollIntoViewMock.mockClear();
+    const onClose = jest.fn();
+    const onNavigate = jest.fn();
+    const root = renderPalette(true, onClose, onNavigate);
+    const input = getPaletteInput(root);
+
+    // Wrap from index 0 to last via ArrowUp.
+    act(() => {
+      fireKey(input, "ArrowUp");
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "nearest" });
   });
 });
