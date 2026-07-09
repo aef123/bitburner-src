@@ -136,12 +136,7 @@ describe("rankResults — ranking", () => {
   });
 
   it("stable tiebreak: nav order preserved for items with equal match position", () => {
-    // Query "al" is a substring of both "Terminal" (navIndex 0, at position 5 "termin[al]") and
-    // "Stats" does not match, but "City" does not either. Let's use "i" which appears at
-    // position 2 in "City" (navIndex 4) and position 6 in "Factions" (navIndex 3 in this set).
-    // More reliably: use two items that both have the substring at the SAME position.
-    // "act" is at pos 0 in... actually let's just test the navIndex tiebreak directly.
-    // Create two items with the same match position and verify navIndex order.
+    // Two items matching the query at the same position must fall back to navIndex order.
     const same = [
       makeItem("abcTest", "X", 10),
       makeItem("abcFoo", "Y", 5),

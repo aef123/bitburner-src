@@ -218,6 +218,14 @@ export const formatMoney = (n: number, useExponentialFormForSmallValue = false):
     : `${Settings.CurrencySymbol}${value}`;
 };
 
+/** Money in full (unsuffixed) form — used for exact-value tooltips on formatted money displays. */
+export const formatMoneyNoSuffix = (n: number): string => {
+  const value = formatNumberNoSuffix(n, 2);
+  return Settings.CurrencySymbolAfterValue
+    ? `${value}${Settings.CurrencySymbol}`
+    : `${Settings.CurrencySymbol}${value}`;
+};
+
 /** Display a decimal number with increased precision (5 fractional digits) */
 export const formatRespect = (n: number) => formatNumber(n, 5);
 export const formatWanted = formatRespect;

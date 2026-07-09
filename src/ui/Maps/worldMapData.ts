@@ -91,25 +91,25 @@ export const worldMapCities: Record<CityName, WorldMapCityDatum> = {
     center: { x: 559, y: 259 },
     label: { x: 522, y: 280 },
     flavor: "Best university (ZB Institute) · Millenium Gym · OmniTek, NWO",
-    neutralBadge: "visited",
+    neutralBadge: "nothing new",
   },
   [CityName.Chongqing]: {
     center: { x: 779, y: 249 },
     label: { x: 746, y: 266 },
     flavor: "KuaiGong International · Solaris Space Systems · few distractions",
-    neutralBadge: "visited",
+    neutralBadge: "nothing new",
   },
   [CityName.NewTokyo]: {
     center: { x: 829, y: 329 },
     label: { x: 796, y: 346 },
     flavor: "DefComm · VitaLife · Noodle Bar",
-    neutralBadge: "visited",
+    neutralBadge: "nothing new",
   },
   [CityName.Ishima]: {
     center: { x: 719, y: 399 },
     label: { x: 690, y: 416 },
     flavor: "Storm Technologies · Nova Medical · Omega Software",
-    neutralBadge: "visited",
+    neutralBadge: "nothing new",
   },
 };
 

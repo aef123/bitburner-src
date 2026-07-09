@@ -52,12 +52,12 @@ const useStyles = makeStyles()((theme: Theme) => {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Hollow center per design notes: nested circle matching the HUD panel background.
+    // Hollow center per design notes: nested circle matching the card background (bgPanel, same as `card`).
     ringInner: {
       width: "34px",
       height: "34px",
       borderRadius: "50%",
-      backgroundColor: theme.colors.bgSidebar,
+      backgroundColor: theme.colors.bgPanel,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",

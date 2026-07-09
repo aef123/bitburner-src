@@ -180,6 +180,37 @@ describe("membership and invitations", () => {
   });
 });
 
+describe("faction enemies", () => {
+  // Enemy pairs from FactionInfo.tsx `enemies`: joining a faction bans the player from all of
+  // its enemies (FactionHelpers.joinFaction), so an enemy membership makes a faction unjoinable.
+  it("a Sector-12 member with $50m does not see Volhaven as joinable (S12 is Volhaven's enemy)", () => {
+    const intel = getCityIntel(CityName.Volhaven, input({ money: 50e6, factions: [FactionName.Sector12] }));
+    expect(intel.joinableFactions).toEqual([]);
+    expect(intel.factions).toEqual([]);
+  });
+
+  it("a Sector-12 member with $50m still sees Aevum as joinable (S12 is not on Aevum's enemy list)", () => {
+    const intel = getCityIntel(CityName.Aevum, input({ money: 50e6, factions: [FactionName.Sector12] }));
+    expect(intel.joinableFactions).toEqual([FactionName.Aevum]);
+  });
+
+  it("a Volhaven member with $50m sees no other city faction as joinable (Volhaven is everyone's enemy)", () => {
+    const intel = getAllCityIntel(input({ money: 50e6, factions: [FactionName.Volhaven] }));
+    for (const city of ALL_CITIES) {
+      if (city === CityName.Volhaven) continue;
+      expect(intel[city].joinableFactions).toEqual([]);
+    }
+  });
+
+  it("membership in a non-enemy faction does not block joinability", () => {
+    // Tian Di Hui has no enemies; all six city factions stay joinable at 50e6.
+    const intel = getAllCityIntel(input({ money: 50e6, factions: [FactionName.TianDiHui] }));
+    for (const city of ALL_CITIES) {
+      expect(intel[city].joinableFactions).toHaveLength(1);
+    }
+  });
+});
+
 describe("training venues", () => {
   it("knows each city's best gym and university from LocationsMetadata", () => {
     const intel = getAllCityIntel(input());

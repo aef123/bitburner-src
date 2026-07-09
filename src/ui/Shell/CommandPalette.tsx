@@ -391,11 +391,11 @@ export interface PaletteState {
 
 export function usePaletteState(): PaletteState {
   const [isOpen, setIsOpen] = useState(false);
-  return {
-    isOpen,
-    open: useCallback(() => setIsOpen(true), []),
-    close: useCallback(() => setIsOpen(false), []),
-  };
+  const open = useCallback(() => setIsOpen(true), []);
+  const close = useCallback(() => setIsOpen(false), []);
+  // Stable object identity: consumers (e.g. ShellLayout's document keydown listener) depend on
+  // this value, so a fresh object every render would re-register the listener every render.
+  return useMemo(() => ({ isOpen, open, close }), [isOpen, open, close]);
 }
 
 /**

@@ -78,8 +78,8 @@ export function IconRail({ page, className }: { page: Page; className?: string }
         const isLast = index === navigationSections.length - 1;
         return (
           <React.Fragment key={section.label}>
-            {isLast && <div className={classes.spacer} />}
-            {index > 0 && <div className={classes.separator} />}
+            {/* Per the mock, the bottom-pinned Help group gets the flex spacer but no separator. */}
+            {isLast ? <div className={classes.spacer} /> : index > 0 && <div className={classes.separator} />}
             {section.items
               .filter(isItemVisible)
               .map((item) => (

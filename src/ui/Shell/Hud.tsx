@@ -22,7 +22,7 @@ import { currentNodeMults } from "../../BitNode/BitNodeMultipliers";
 import { calculateSkillProgress } from "../../PersonObjects/formulas/skill";
 import { RemoteFileApiConnectionStatus } from "../../GameOptions/ui/RemoteFileApiConnectionStatus";
 import { Settings } from "../../Settings/Settings";
-import { formatExp, formatMoney, formatSkill } from "../formatNumber";
+import { formatExp, formatMoney, formatMoneyNoSuffix, formatNumberNoSuffix, formatSkill } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 import { KillScriptsModal } from "../React/KillScriptsModal";
 import { ActionCard } from "./ActionCard";
@@ -234,7 +234,12 @@ function SkillValue({ row }: { row: HudSkillRow }): React.ReactElement {
       </Tooltip>
     );
   }
-  return <span>{formatSkill(Player.skills[row.skill])}</span>;
+  // Exact value on hover per the global interaction rules (formatSkill collapses to suffixes at 1e9).
+  return (
+    <Tooltip title={formatNumberNoSuffix(Player.skills[row.skill])}>
+      <span>{formatSkill(Player.skills[row.skill])}</span>
+    </Tooltip>
+  );
 }
 
 interface SkillRowColors {
@@ -336,9 +341,12 @@ export function Hud({ save, killScripts }: { save: () => void; killScripts: () =
       <div className={classes.moneyBlock}>
         <div>
           <div className={classes.moneyLabel}>Money</div>
-          <div className={classes.moneyValue}>
-            {formatMoney(Player.money)} <span id="overview-money-hook" className={classes.hook} />
-          </div>
+          {/* Formatted numbers show their exact value on hover, per the global interaction rules. */}
+          <Tooltip title={formatMoneyNoSuffix(Player.money)}>
+            <div className={classes.moneyValue}>
+              {formatMoney(Player.money)} <span id="overview-money-hook" className={classes.hook} />
+            </div>
+          </Tooltip>
           <div className={rate < 0 ? classes.moneyRateNegative : classes.moneyRatePositive}>
             {rate < 0 ? "" : "+"}
             {formatMoney(rate)}/s

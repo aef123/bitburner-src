@@ -9,7 +9,7 @@ import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
 import type { Page } from "../Router";
 import { getNavigationSectionForPage } from "../../Sidebar/navigationItems";
-import { formatHp, formatMoney } from "../formatNumber";
+import { formatHp, formatMoney, formatMoneyNoSuffix, formatNumberNoSuffix } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 import type { PaletteState } from "./CommandPalette";
 import { setHudCollapsed } from "./hudEvents";
@@ -188,11 +188,16 @@ export function TopBar({
         <span className={classes.searchPlaceholder}>Jump to anything…</span>
         <kbd className={classes.kbd}>{isMacPlatform() ? "⌘K" : "Ctrl K"}</kbd>
       </button>
-      <span className={classes.money}>{formatMoney(Player.money)}</span>
-      <span className={classes.hpPill}>
-        HP {formatHp(Player.hp.current)}
-        <span className={classes.hpMax}>/{formatHp(Player.hp.max)}</span>
-      </span>
+      {/* Formatted numbers show their exact value on hover, per the global interaction rules. */}
+      <Tooltip title={formatMoneyNoSuffix(Player.money)}>
+        <span className={classes.money}>{formatMoney(Player.money)}</span>
+      </Tooltip>
+      <Tooltip title={`${formatNumberNoSuffix(Player.hp.current)} / ${formatNumberNoSuffix(Player.hp.max)} HP`}>
+        <span className={classes.hpPill}>
+          HP {formatHp(Player.hp.current)}
+          <span className={classes.hpMax}>/{formatHp(Player.hp.max)}</span>
+        </span>
+      </Tooltip>
       {hudCollapsed && (
         <Tooltip title="Show overview panel">
           <button

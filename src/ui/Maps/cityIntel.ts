@@ -68,6 +68,27 @@ const CITY_FACTION_THRESHOLDS: Record<CityName, { faction: FactionName; money: n
 };
 
 /**
+ * Enemy lists of the plain city factions. Joining a faction bans the player from
+ * all of its enemies (FactionHelpers.joinFaction sets isBanned), so a city faction
+ * is not joinable while the player is a member of any of its enemies.
+ * Source of truth: src/Faction/FactionInfo.tsx `enemies`.
+ */
+const CITY_FACTION_ENEMIES: Record<CityName, readonly FactionName[]> = {
+  [CityName.Aevum]: [FactionName.Chongqing, FactionName.NewTokyo, FactionName.Ishima, FactionName.Volhaven],
+  [CityName.Chongqing]: [FactionName.Sector12, FactionName.Aevum, FactionName.Volhaven],
+  [CityName.Ishima]: [FactionName.Sector12, FactionName.Aevum, FactionName.Volhaven],
+  [CityName.NewTokyo]: [FactionName.Sector12, FactionName.Aevum, FactionName.Volhaven],
+  [CityName.Sector12]: [FactionName.Chongqing, FactionName.NewTokyo, FactionName.Ishima, FactionName.Volhaven],
+  [CityName.Volhaven]: [
+    FactionName.Chongqing,
+    FactionName.Sector12,
+    FactionName.NewTokyo,
+    FactionName.Aevum,
+    FactionName.Ishima,
+  ],
+};
+
+/**
  * Factions whose inviteReqs include locatedInCity/locatedInSomeCity plus further
  * (stat/karma) requirements we deliberately do not evaluate.
  * Source of truth: src/Faction/FactionInfo.tsx inviteReqs.
@@ -118,7 +139,12 @@ export function getCityIntel(city: CityName, input: CityIntelInput): CityIntel {
       factions.push({ name, standing: "member" });
     } else if (input.factionInvitations.includes(name)) {
       factions.push({ name, standing: "invited" });
-    } else if (name === cityFaction.faction && input.money >= cityFaction.money) {
+    } else if (
+      name === cityFaction.faction &&
+      input.money >= cityFaction.money &&
+      // Joining an enemy of this faction banned the player from it (see CITY_FACTION_ENEMIES).
+      !CITY_FACTION_ENEMIES[city].some((enemy) => input.factions.includes(enemy))
+    ) {
       factions.push({ name, standing: "joinable" });
     }
     // Otherwise the faction is omitted entirely — we don't leak rumor-gated factions.

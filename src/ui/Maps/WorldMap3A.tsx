@@ -264,11 +264,12 @@ const useStyles = makeStyles()((theme: Theme) => {
       backgroundColor: accentCyan,
       flex: "none",
     },
-    legendDotVisited: {
+    // Matches the slate node stroke (textTertiary) so the legend swatch is honest about node color.
+    legendDotQuiet: {
       width: "8px",
       height: "8px",
       borderRadius: "50%",
-      backgroundColor: theme.colors.textSecondary,
+      backgroundColor: textTertiary,
       flex: "none",
     },
     legendArcs: {
@@ -509,7 +510,7 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
             <span className={classes.legendDotSignal} /> has something for you now
           </span>
           <span className={classes.legendItem}>
-            <span className={classes.legendDotVisited} /> visited
+            <span className={classes.legendDotQuiet} /> nothing new
           </span>
           <span className={cx(classes.legendItem, classes.legendArcs)}>— arcs show ticket routes</span>
         </div>
