@@ -161,4 +161,59 @@ describe("navigation", () => {
       faction: Factions[FactionName.CyberSec],
     });
   });
+
+  it("Enter keydown on the aug pill does NOT trigger row navigation, only FactionAugmentations", () => {
+    joinTestFactions();
+    const root = renderFactions();
+    const augPill = root.querySelector(`[data-aug-pill="${FactionName.CyberSec}"]`);
+    expect(augPill).not.toBeNull();
+    act(() => {
+      // Dispatch keydown on the pill; it bubbles to the row div.
+      augPill?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      // Simulate the browser's default activation of the focused button.
+      augPill?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(toPageSpy).toHaveBeenCalledTimes(1);
+    expect(toPageSpy).toHaveBeenCalledWith(Page.FactionAugmentations, {
+      faction: Factions[FactionName.CyberSec],
+    });
+  });
+
+  it("Enter keydown on the row div itself still navigates to Page.Faction", () => {
+    joinTestFactions();
+    const root = renderFactions();
+    const row = root.querySelector(`[data-faction-row="${FactionName.CyberSec}"]`);
+    expect(row).not.toBeNull();
+    act(() => {
+      row?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(toPageSpy).toHaveBeenCalledTimes(1);
+    expect(toPageSpy).toHaveBeenCalledWith(Page.Faction, { faction: Factions[FactionName.CyberSec] });
+  });
+});
+
+describe("invitation rows", () => {
+  beforeEach(() => {
+    // invitedFactions is derived from Player.factionInvitations (not Factions[x].alreadyInvited directly).
+    Player.factionInvitations.push(FactionName.CyberSec);
+    Factions[FactionName.CyberSec].alreadyInvited = true;
+    Factions[FactionName.CyberSec].isMember = false;
+  });
+
+  afterEach(() => {
+    Player.factionInvitations = Player.factionInvitations.filter((n) => n !== FactionName.CyberSec);
+    Factions[FactionName.CyberSec].alreadyInvited = false;
+  });
+
+  it("renders a prospect row for an invited faction", () => {
+    const root = renderFactions();
+    expect(root.querySelector(`[data-prospect-row="${FactionName.CyberSec}"]`)).not.toBeNull();
+  });
+
+  it("invitation rows render no category chip", () => {
+    const root = renderFactions();
+    const prospectRow = root.querySelector(`[data-prospect-row="${FactionName.CyberSec}"]`);
+    expect(prospectRow).not.toBeNull();
+    expect(prospectRow?.querySelector("[data-category-chip]")).toBeNull();
+  });
 });

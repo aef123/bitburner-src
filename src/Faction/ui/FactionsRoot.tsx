@@ -662,7 +662,12 @@ function JoinedFactionRow({ faction }: { faction: Faction }): React.ReactElement
       tabIndex={0}
       onClick={openFaction}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") openFaction();
+        if (event.key === " ") {
+          event.preventDefault();
+          openFaction();
+        }
       }}
     >
       <div className={classes.nameBlock}>
@@ -754,7 +759,6 @@ function ProspectRow({ faction, rerender }: ProspectRowProps): React.ReactElemen
               </span>
             </Tooltip>
           )}
-          {faction.discovery === FactionDiscovery.known && <CategoryChip faction={faction} />}
           <FactionIndicators faction={faction} />
         </div>
         {invited ? (
