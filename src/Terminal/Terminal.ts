@@ -1,4 +1,5 @@
-import { Output, Link, RawOutput } from "./OutputTypes";
+import { Output, RawOutput, type TerminalHistoryItem } from "./OutputTypes";
+import { recordSessionCommand } from "./sessionHistory";
 import { Player } from "@player";
 import type { BaseServer } from "../Server/BaseServer";
 import { TerminalEvents, TerminalClearEvents } from "./TerminalEvents";
@@ -129,7 +130,7 @@ export class Terminal {
   commandHistory: string[] = [];
   commandHistoryIndex = 0;
 
-  outputHistory: (Output | Link | RawOutput)[] = [
+  outputHistory: TerminalHistoryItem[] = [
     new Output(`Bitburner v${CONSTANTS.VersionString} (${commitHash()})`, "primary"),
   ];
 
@@ -141,7 +142,7 @@ export class Terminal {
   // Path of current directory
   currDir = "" as Directory;
 
-  append(item: Output | Link | RawOutput): void {
+  append(item: TerminalHistoryItem): void {
     this.outputHistory.push(item);
     if (this.outputHistory.length > Settings.MaxTerminalCapacity) {
       this.outputHistory.splice(0, this.outputHistory.length - Settings.MaxTerminalCapacity);
@@ -205,6 +206,9 @@ export class Terminal {
       cancel: cancel,
       finished: p,
       getProgressText: progress,
+      // UI-only additive fields: let the terminal UI compute a numeric progress fraction.
+      startTime: start,
+      durationMs: durationSec * 1000,
     };
   }
 
@@ -286,6 +290,9 @@ export class Terminal {
   }
 
   async executeCommands(commands: string): Promise<void> {
+    // UI-layer session history for the terminal history panel. Records both typed commands and
+    // programmatic re-runs (history panel / quick actions), since they all come through here.
+    recordSessionCommand(commands);
     // Handle Terminal History - multiple commands should be saved as one
     if (this.commandHistory[this.commandHistory.length - 1] != commands) {
       this.commandHistory.push(commands);

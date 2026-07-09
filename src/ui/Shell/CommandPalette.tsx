@@ -254,6 +254,7 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const results = useMemo<PaletteResult[]>(() => {
     const visible = getVisibleResults();
     return rankResults(visible, query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `open` is intentionally included; see comment above.
   }, [query, open]);
 
   // Reset state when palette opens.

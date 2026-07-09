@@ -1,40 +1,51 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Link as MuiLink, Typography } from "@mui/material";
-import { Theme } from "@mui/material/styles";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
 import _ from "lodash";
 
-import { Output, Link, RawOutput } from "../OutputTypes";
+import type { CommandBlockStart } from "../OutputTypes";
 import { Terminal } from "../../Terminal";
 import { TerminalInput } from "./TerminalInput";
 import { TerminalEvents, TerminalClearEvents } from "../TerminalEvents";
 import { BitFlumeModal } from "../../BitNode/ui/BitFlumeModal";
 import { CodingContractModal } from "../../ui/React/CodingContractModal";
 
-import { ANSIITypography } from "../../ui/React/ANSIITypography";
 import { useRerender } from "../../ui/React/hooks";
 import { TerminalActionTimer } from "./TerminalActionTimer";
 import { Settings } from "../../Settings/Settings";
+import { groupOutputHistory } from "./groupOutputHistory";
+import { CommandBlock } from "./CommandBlock";
+import { CommandHistoryPanel } from "./CommandHistoryPanel";
+import { TerminalOutputItem } from "./TerminalOutputItem";
 
-const useStyles = makeStyles()((theme: Theme) => ({
-  container: {
+/**
+ * Collapse state per block, keyed by CommandBlockStart identity. Runtime-only (default expanded),
+ * module-level so it survives page navigation; WeakSet entries die with their blocks when the
+ * MaxTerminalCapacity splice drops them.
+ */
+const collapsedBlocks = new WeakSet<CommandBlockStart>();
+
+const useStyles = makeStyles()(() => ({
+  // Two columns: history panel (250px) | terminal. The target panel (Task 9) will slot in as a
+  // third column after the terminal column.
+  root: {
+    display: "flex",
+    height: "100%",
+    minHeight: 0,
+  },
+  terminalColumn: {
+    flex: 1,
+    minWidth: 0,
     display: "flex",
     flexDirection: "column",
     height: "100%",
     fontFamily: Settings.styles.monoFontFamily,
   },
   entries: {
-    padding: 0,
+    listStyleType: "none",
+    padding: "16px 18px",
     overflow: "scroll",
     flex: "0 1 auto",
     margin: "auto 0 0",
-    fontFamily: Settings.styles.monoFontFamily,
-  },
-  preformatted: {
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-    margin: theme.spacing(0),
-    width: "100%",
     fontFamily: Settings.styles.monoFontFamily,
   },
 }));
@@ -43,6 +54,10 @@ export function TerminalRoot(): React.ReactElement {
   const scrollHook = useRef<HTMLUListElement>(null);
   const rerender = useRerender();
   const [key, setKey] = useState(0);
+  const [, setCollapseVersion] = useState(0);
+  // Paste-into-input wiring: TerminalInput registers its setValue here; the history panel's
+  // Shift+click calls through it.
+  const pasteHandler = useRef<(command: string) => void>(() => {});
 
   useEffect(() => {
     const debounced = _.debounce(() => rerender(), 25, { maxWait: 50 });
@@ -83,34 +98,59 @@ export function TerminalRoot(): React.ReactElement {
     };
   }, []);
 
-  const { classes } = useStyles();
-  return (
-    <div className={classes.container}>
-      <ul key={key} id="terminal" className={classes.entries} ref={scrollHook}>
-        {Terminal.outputHistory.map((item, i) => (
-          <li key={i}>
-            {item instanceof Output && <ANSIITypography text={item.text} color={item.color} />}
-            {item instanceof RawOutput && (
-              <Typography component="div" classes={{ root: classes.preformatted }} paragraph={false}>
-                {item.raw}
-              </Typography>
-            )}
-            {item instanceof Link && (
-              <Typography component="div" classes={{ root: classes.preformatted }}>
-                {item.dashes}
-                <MuiLink onClick={() => Terminal.connectToServer(item.hostname)}>{item.hostname}</MuiLink>
-              </Typography>
-            )}
-          </li>
-        ))}
+  const toggleCollapse = useCallback((start: CommandBlockStart) => {
+    if (collapsedBlocks.has(start)) {
+      collapsedBlocks.delete(start);
+    } else {
+      collapsedBlocks.add(start);
+    }
+    setCollapseVersion((version) => version + 1);
+  }, []);
 
-        {Terminal.action !== null && (
-          <li>
-            <TerminalActionTimer />{" "}
-          </li>
-        )}
-      </ul>
-      <TerminalInput />
+  const registerPaste = useCallback((fn: (command: string) => void) => {
+    pasteHandler.current = fn;
+  }, []);
+
+  const onPaste = useCallback((command: string) => {
+    pasteHandler.current(command);
+  }, []);
+
+  const { classes } = useStyles();
+  // O(n) render-time grouping over ≤ MaxTerminalCapacity items; the history itself stays flat.
+  const grouped = groupOutputHistory(Terminal.outputHistory);
+  const running = Terminal.action !== null;
+  const lastBlock = grouped.blocks.length > 0 ? grouped.blocks[grouped.blocks.length - 1] : null;
+
+  return (
+    <div className={classes.root}>
+      <CommandHistoryPanel onPaste={onPaste} />
+      <div className={classes.terminalColumn}>
+        <ul key={key} id="terminal" className={classes.entries} ref={scrollHook}>
+          {grouped.preamble.map((item, i) => (
+            <li key={i}>
+              <TerminalOutputItem item={item} />
+            </li>
+          ))}
+          {grouped.blocks.map((block, i) => (
+            <CommandBlock
+              key={i}
+              block={block}
+              collapsed={collapsedBlocks.has(block.start)}
+              running={running && block === lastBlock}
+              onToggleCollapse={toggleCollapse}
+            />
+          ))}
+
+          {/* Fallback: an action with no command block to attach to (e.g. output history cleared
+              mid-action) still shows the legacy progress line. */}
+          {running && lastBlock === null && (
+            <li>
+              <TerminalActionTimer />{" "}
+            </li>
+          )}
+        </ul>
+        <TerminalInput registerPaste={registerPaste} />
+      </div>
       <BitFlumeModal />
       <CodingContractModal />
     </div>

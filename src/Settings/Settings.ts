@@ -45,6 +45,8 @@ export const Settings = {
   MaxPortCapacity: 50,
   /** Limit the number of entries in the terminal. */
   MaxTerminalCapacity: 500,
+  /** Commands pinned to the top of the terminal's history panel. */
+  PinnedTerminalCommands: [] as string[],
   /** IP address the Remote File API client will try to connect to. Default localhost . */
   RemoteFileApiAddress: "localhost",
   /** Port the Remote File API client will try to connect to. 0 to disable. */

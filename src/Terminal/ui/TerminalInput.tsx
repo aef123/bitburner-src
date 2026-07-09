@@ -10,11 +10,29 @@ import { extractCurrentText, getTabCompletionPossibilities } from "../getTabComp
 import { Settings } from "../../Settings/Settings";
 import { longestCommonStart } from "../../utils/StringHelperFunctions";
 import { exceptionAlert } from "../../utils/helpers/exceptionAlert";
+import { CommandBlockStart } from "../OutputTypes";
 
+// Input line + hint row per 2A design notes: bordered mono field, green prompt, honest hints.
 const useStyles = makeStyles()((theme: Theme) => ({
+  root: {
+    flexShrink: 0,
+    padding: "0 18px 12px",
+  },
+  inputWrap: {
+    position: "relative",
+  },
+  // Bordered field per mock: border #2a4152 = borderFocus, radius 10. Mock field bg #0d141c has
+  // no token; bgPanel is the nearest.
   input: {
-    backgroundColor: theme.colors.backgroundprimary,
+    border: `1px solid ${theme.colors.borderFocus as string}`,
+    borderRadius: "10px",
+    backgroundColor: theme.colors.bgPanel,
+    padding: "11px 14px",
     fontFamily: Settings.styles.monoFontFamily,
+    fontSize: "12.5px",
+    "& input": {
+      padding: 0,
+    },
   },
   nopadding: {
     padding: theme.spacing(0),
@@ -23,23 +41,54 @@ const useStyles = makeStyles()((theme: Theme) => ({
     margin: theme.spacing(0),
     fontFamily: Settings.styles.monoFontFamily,
   },
+  prompt: {
+    margin: theme.spacing(0),
+    fontFamily: Settings.styles.monoFontFamily,
+    fontSize: "12.5px",
+    color: theme.colors.accentGreen,
+  },
+  promptDisabled: {
+    color: theme.colors.textTertiary,
+  },
+  // Ghost history-search suggestion overlay. Vertically centered over the single-line input so it
+  // tracks the input's baseline; horizontal alignment comes from the monospace prespace fill.
   absolute: {
     margin: theme.spacing(0),
     fontFamily: Settings.styles.monoFontFamily,
+    fontSize: "12.5px",
     position: "absolute",
-    bottom: "12px",
+    top: 0,
+    bottom: 0,
+    left: "14px",
+    right: "14px",
+    display: "flex",
+    alignItems: "center",
     opacity: "0.75",
-    maxWidth: "100%",
     whiteSpace: "pre",
     overflow: "hidden",
     pointerEvents: "none",
+  },
+  // Hint row: REAL bindings only (there is no Ctrl+R history search in the game).
+  hintRow: {
+    display: "flex",
+    gap: "16px",
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "10px",
+    color: theme.colors.textFaint,
+    padding: "6px 4px 0",
+    userSelect: "none",
   },
 }));
 
 // Save command in case we de-load this screen.
 let command = "";
 
-export function TerminalInput(): React.ReactElement {
+interface TerminalInputProps {
+  /** Lets the parent hand our setValue to the history panel for Shift+click paste-into-input. */
+  registerPaste?: (fn: (command: string) => void) => void;
+}
+
+export function TerminalInput({ registerPaste }: TerminalInputProps = {}): React.ReactElement {
   const terminalInput = useRef<HTMLInputElement>(null);
 
   const [value, setValue] = useState(command);
@@ -48,7 +97,7 @@ export function TerminalInput(): React.ReactElement {
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [searchResultsIndex, setSearchResultsIndex] = useState(0);
   const [autofilledValue, setAutofilledValue] = useState(false);
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
 
   // If we have no data in the current terminal history, let's initialize it from the player save
   if (Terminal.commandHistory.length === 0 && Player.terminalCommandHistory.length > 0) {
@@ -64,6 +113,18 @@ export function TerminalInput(): React.ReactElement {
       setPostUpdateValue(null);
     }
   }, [postUpdateValue]);
+
+  // Re-register on every render so the paste handler never closes over stale state.
+  useEffect(() => {
+    registerPaste?.((pasted: string) => {
+      saveValue(pasted, () => {
+        const ref = terminalInput.current;
+        if (!ref) return;
+        ref.focus();
+        ref.setSelectionRange(pasted.length, pasted.length);
+      });
+    });
+  });
 
   function saveValue(newValue: string, postUpdate?: () => void): void {
     /**
@@ -245,7 +306,8 @@ export function TerminalInput(): React.ReactElement {
     if (event.key === KEY.ENTER) {
       event.preventDefault();
       const command = searchResults.length ? searchResults[searchResultsIndex] : value;
-      Terminal.print(`[${Player.getCurrentServer().hostname} /${Terminal.cwd()}]> ${command}`);
+      // Echo as a command-block start so the output renders as a card (Task 8).
+      Terminal.append(new CommandBlockStart(command, Player.getCurrentServer().hostname, Terminal.cwd()));
       if (command) {
         void Terminal.executeCommands(command); // Async function, errors will hit the uncaught handler
         saveValue("");
@@ -375,7 +437,8 @@ export function TerminalInput(): React.ReactElement {
     if (Settings.EnableBashHotkeys) {
       if (event.key === KEY.C && event.ctrlKey && ref && ref.selectionStart === ref.selectionEnd) {
         event.preventDefault();
-        Terminal.print(`[${Player.getCurrentServer().hostname} /${Terminal.cwd()}]> ${value}`);
+        // Echo the discarded input the same way an executed command is echoed.
+        Terminal.append(new CommandBlockStart(value, Player.getCurrentServer().hostname, Terminal.cwd()));
         modifyInput("clearall");
       }
 
@@ -437,42 +500,48 @@ export function TerminalInput(): React.ReactElement {
   }
 
   return (
-    <>
-      <TextField
-        fullWidth
-        color={Terminal.action === null ? "primary" : "secondary"}
-        autoFocus
-        disabled={Terminal.action !== null}
-        autoComplete="off"
-        value={value}
-        classes={{ root: classes.preformatted }}
-        onChange={handleValueChange}
-        inputRef={terminalInput}
-        InputProps={{
-          // for players to hook in
-          id: "terminal-input",
-          className: classes.input,
-          startAdornment: (
-            <Typography
-              classes={{ root: classes.preformatted }}
-              color={Terminal.action === null ? "primary" : "secondary"}
-              flexShrink={0}
-            >
-              [{Player.getCurrentServer().hostname}&nbsp;/{Terminal.cwd()}]&gt;&nbsp;
-            </Typography>
-          ),
-          spellCheck: false,
-          onBlur: () => {
-            setPossibilities([]);
-            resetSearch();
-          },
-          onKeyDown: (event) => {
-            onKeyDown(event).catch((error) => {
-              console.error(error);
-            });
-          },
-        }}
-      ></TextField>
+    <div className={classes.root}>
+      <div className={classes.inputWrap}>
+        <TextField
+          fullWidth
+          color={Terminal.action === null ? "primary" : "secondary"}
+          autoFocus
+          disabled={Terminal.action !== null}
+          autoComplete="off"
+          value={value}
+          classes={{ root: classes.preformatted }}
+          onChange={handleValueChange}
+          inputRef={terminalInput}
+          InputProps={{
+            // for players to hook in
+            id: "terminal-input",
+            className: classes.input,
+            disableUnderline: true,
+            startAdornment: (
+              <Typography
+                classes={{ root: cx(classes.prompt, Terminal.action !== null && classes.promptDisabled) }}
+                flexShrink={0}
+              >
+                [{Player.getCurrentServer().hostname}&nbsp;/{Terminal.cwd()}]&gt;&nbsp;
+              </Typography>
+            ),
+            spellCheck: false,
+            onBlur: () => {
+              setPossibilities([]);
+              resetSearch();
+            },
+            onKeyDown: (event) => {
+              onKeyDown(event).catch((error) => {
+                console.error(error);
+              });
+            },
+          }}
+        ></TextField>
+        <Typography classes={{ root: classes.absolute }} color={"primary"} paragraph={false}>
+          {getSearchSuggestionPrespace()}
+          {(searchResults[searchResultsIndex] ?? "").substring(value.length)}
+        </Typography>
+      </div>
       <Popper
         open={possibilities.length > 0}
         anchorEl={terminalInput.current}
@@ -488,11 +557,12 @@ export function TerminalInput(): React.ReactElement {
           </Typography>
         </Paper>
       </Popper>
-      <Typography classes={{ root: classes.absolute }} color={"primary"} paragraph={false}>
-        {getSearchSuggestionPrespace()}
-        {(searchResults[searchResultsIndex] ?? "").substring(value.length)}
-      </Typography>
-    </>
+      <div className={classes.hintRow}>
+        <span>↹ complete</span>
+        <span>↑↓ history</span>
+        <span>Ctrl+K palette</span>
+      </div>
+    </div>
   );
 }
 

@@ -178,6 +178,15 @@ export function loadSettings(saveString: string) {
   Settings.TelemetryMetricsEnabled = Boolean(Settings.TelemetryMetricsEnabled);
   Settings.TelemetryTracesEnabled = Boolean(Settings.TelemetryTracesEnabled);
 
+  // PinnedTerminalCommands comes from a blind Object.assign of the save; a tampered/old save must
+  // not be able to inject a non-string-array value.
+  if (
+    !Array.isArray(Settings.PinnedTerminalCommands) ||
+    !Settings.PinnedTerminalCommands.every((command) => typeof command === "string")
+  ) {
+    Settings.PinnedTerminalCommands = [];
+  }
+
   // Merge Settings.KeyBindings with DefaultKeyBindings.
   mergePlayerDefinedKeyBindings(Settings.KeyBindings);
 
