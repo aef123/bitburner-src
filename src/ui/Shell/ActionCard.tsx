@@ -36,7 +36,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     // Card geometry per design notes. Mock card bg #0e161f has no token; bgPanel is the nearest.
     card: {
       backgroundColor: theme.colors.bgPanel,
-      border: `1px solid ${theme.colors.borderAccent ?? ""}`,
+      border: `1px solid ${theme.colors.borderAccent as string}`,
       borderRadius: "10px",
       padding: "14px",
       display: "flex",

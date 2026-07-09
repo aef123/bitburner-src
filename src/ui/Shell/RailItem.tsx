@@ -32,7 +32,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     backgroundColor: theme.colors.bgActive,
     color: theme.colors.accentCyan,
     // 2px inset left indicator per design notes.
-    boxShadow: `inset 2px 0 0 ${theme.colors.accentCyan ?? ""}`,
+    boxShadow: `inset 2px 0 0 ${theme.colors.accentCyan as string}`,
     "&:hover": {
       color: theme.colors.accentCyan,
     },

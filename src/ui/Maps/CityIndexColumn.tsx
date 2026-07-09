@@ -26,7 +26,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     width: "330px",
     flex: "none",
     boxSizing: "border-box",
-    borderLeft: `1px solid ${theme.colors.borderDefault ?? ""}`,
+    borderLeft: `1px solid ${theme.colors.borderDefault as string}`,
     backgroundColor: theme.colors.bgSidebar,
     padding: "20px 18px",
     display: "flex",
@@ -47,7 +47,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textAlign: "left",
     boxSizing: "border-box",
     backgroundColor: theme.colors.bgPanel,
-    border: `1px solid ${theme.colors.borderCard ?? ""}`,
+    border: `1px solid ${theme.colors.borderCard as string}`,
     borderRadius: "10px",
     padding: "12px 14px",
     font: "inherit",
@@ -59,7 +59,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   cardCurrent: {
     backgroundColor: theme.colors.bgActive,
-    border: `1px solid ${theme.colors.borderAccent ?? ""}`,
+    border: `1px solid ${theme.colors.borderAccent as string}`,
     cursor: "default",
   },
   cardSelected: {

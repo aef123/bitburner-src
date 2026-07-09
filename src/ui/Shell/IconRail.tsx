@@ -19,7 +19,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     width: "60px",
     flex: "none",
     backgroundColor: theme.colors.bgRail,
-    borderRight: `1px solid ${theme.colors.borderDefault ?? ""}`,
+    borderRight: `1px solid ${theme.colors.borderDefault as string}`,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",

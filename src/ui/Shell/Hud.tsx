@@ -62,7 +62,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       height: "100%",
       boxSizing: "border-box",
       backgroundColor: theme.colors.bgSidebar,
-      borderLeft: `1px solid ${theme.colors.borderDefault ?? ""}`,
+      borderLeft: `1px solid ${theme.colors.borderDefault as string}`,
       padding: "18px 16px",
       display: "flex",
       flexDirection: "column",
@@ -189,7 +189,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     footerButton: {
       flex: 1,
       height: "30px",
-      border: `1px solid ${theme.colors.borderCard ?? ""}`,
+      border: `1px solid ${theme.colors.borderCard as string}`,
       borderRadius: "8px",
       background: "none",
       display: "flex",
