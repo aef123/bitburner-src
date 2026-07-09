@@ -7179,6 +7179,169 @@ interface UserInterface {
  * }
  * ```
  */
+/**
+ * Player-facing OpenTelemetry logging API (ns.telemetry.logs.*).
+ * @remarks
+ * Emit structured, leveled log records through the game's OpenTelemetry pipeline to whatever
+ * sinks the player has enabled (in-game console, stdout/stderr, or an OTLP endpoint). These
+ * are separate from {@link NS.print | print}/{@link NS.tprint | tprint}, which write to the
+ * in-game tail log/terminal. Records below the configured log level are dropped, and a
+ * per-script rate cap prevents flooding. Every record is tagged `source="user"` and with the
+ * calling script's pid, filename, server, and args. No-op when telemetry is disabled.
+ * @public
+ */
+export interface NSTelemetryLogs {
+  /**
+   * Emit a DEBUG-level log record.
+   * @remarks RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes (dimensions) on the record.
+   * @example
+   * ```js
+   * ns.telemetry.logs.debug("starting batch", { target: "n00dles", threads: 50 });
+   * ```
+   */
+  debug(message: string, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Emit an INFO-level log record.
+   * @remarks RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes on the record.
+   */
+  info(message: string, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Emit a WARN-level log record.
+   * @remarks RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes on the record.
+   */
+  warn(message: string, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Emit an ERROR-level log record.
+   * @remarks RAM cost: 0 GB
+   * @param message - The log message (the record body).
+   * @param attributes - Optional key/value attributes on the record.
+   */
+  error(message: string, attributes?: Record<string, string | number | boolean>): void;
+}
+
+/**
+ * Player-defined OpenTelemetry metrics API (ns.telemetry.metrics.*).
+ * @remarks
+ * Define a metric by name on first use, then update it with subsequent calls. The attributes
+ * object is your set of dimensions. Metrics export through the stdout/stderr and/or OTLP sinks
+ * (not the in-game console). No-op when telemetry is disabled.
+ * @public
+ */
+export interface NSTelemetryMetrics {
+  /**
+   * Add to a monotonic (count-up-only) counter, creating it on first use.
+   * @remarks RAM cost: 0 GB
+   * @param name - Metric name.
+   * @param value - Amount to add. Defaults to 1.
+   * @param attributes - Optional dimensions.
+   * @example
+   * ```js
+   * ns.telemetry.metrics.counter("hacks", 1, { target: "n00dles" });
+   * ```
+   */
+  counter(name: string, value?: number, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Add to (or subtract from) an up/down counter, creating it on first use.
+   * @remarks RAM cost: 0 GB
+   * @param name - Metric name.
+   * @param value - Amount to add (may be negative).
+   * @param attributes - Optional dimensions.
+   */
+  upDownCounter(name: string, value: number, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Set the current value of a gauge, creating it on first use.
+   * @remarks RAM cost: 0 GB
+   * @param name - Metric name.
+   * @param value - The current value.
+   * @param attributes - Optional dimensions.
+   */
+  gauge(name: string, value: number, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Record a sample into a histogram (distribution), creating it on first use.
+   * @remarks RAM cost: 0 GB
+   * @param name - Metric name.
+   * @param value - The sample value.
+   * @param attributes - Optional dimensions.
+   */
+  histogram(name: string, value: number, attributes?: Record<string, string | number | boolean>): void;
+}
+
+/**
+ * Player-defined OpenTelemetry tracing API (ns.telemetry.traces.*).
+ * @remarks
+ * Spans are handle-based: {@link NSTelemetryTraces.startSpan | startSpan} returns an opaque
+ * string handle that later calls reference. By default each custom span is its own ROOT trace
+ * (independent trace id) so it shows up complete as soon as you end it — it is NOT nested
+ * under the script's long-lived auto span. Pass a `parent` handle to nest one custom span
+ * under another. Traces export through the stdout/stderr and/or OTLP sinks. No-op when
+ * telemetry is disabled (startSpan returns an empty handle and later calls do nothing).
+ * @public
+ */
+export interface NSTelemetryTraces {
+  /**
+   * Start a span and return its handle.
+   * @remarks RAM cost: 0 GB
+   * @param name - Span name.
+   * @param options - Optional `attributes` (dimensions) and `parent` (handle of another custom span to nest under).
+   * @returns An opaque handle to pass to the other methods, or an empty string when telemetry is off.
+   * @example
+   * ```js
+   * const span = ns.telemetry.traces.startSpan("prepareServer", { attributes: { target } });
+   * // ... work ...
+   * ns.telemetry.traces.endSpan(span);
+   * ```
+   */
+  startSpan(
+    name: string,
+    options?: { attributes?: Record<string, string | number | boolean>; parent?: string },
+  ): string;
+  /**
+   * End a span.
+   * @remarks RAM cost: 0 GB
+   * @param handle - The handle returned by startSpan.
+   * @param options - Optional `error` (mark the span errored) and `attributes` to set before ending.
+   */
+  endSpan(
+    handle: string,
+    options?: { error?: boolean; attributes?: Record<string, string | number | boolean> },
+  ): void;
+  /**
+   * Add a timestamped event to an open span.
+   * @remarks RAM cost: 0 GB
+   * @param handle - The handle returned by startSpan.
+   * @param name - Event name.
+   * @param attributes - Optional event attributes.
+   */
+  spanEvent(handle: string, name: string, attributes?: Record<string, string | number | boolean>): void;
+  /**
+   * Add/update attributes on an open span.
+   * @remarks RAM cost: 0 GB
+   * @param handle - The handle returned by startSpan.
+   * @param attributes - Attributes to set.
+   */
+  setSpanAttributes(handle: string, attributes: Record<string, string | number | boolean>): void;
+}
+
+/**
+ * Telemetry (OpenTelemetry) API, organized into {@link NSTelemetryLogs | logs},
+ * {@link NSTelemetryMetrics | metrics}, and {@link NSTelemetryTraces | traces}.
+ * @public
+ */
+export interface NSTelemetry {
+  /** Structured logging — {@link NSTelemetryLogs}. */
+  readonly logs: NSTelemetryLogs;
+  /** Player-defined metrics — {@link NSTelemetryMetrics}. */
+  readonly metrics: NSTelemetryMetrics;
+  /** Player-defined traces/spans — {@link NSTelemetryTraces}. */
+  readonly traces: NSTelemetryTraces;
+}
+
 export interface NS {
   /**
    * Namespace for {@link Hacknet | hacknet} functions. Some of this API contains spoilers.
@@ -7264,6 +7427,11 @@ export interface NS {
    * Namespace for {@link Grafting | grafting} functions. Contains spoilers.
    */
   readonly grafting: Grafting;
+
+  /**
+   * Namespace for {@link NSTelemetry | telemetry} (OpenTelemetry logging) functions.
+   */
+  readonly telemetry: NSTelemetry;
 
   /**
    * Arguments passed into the script.

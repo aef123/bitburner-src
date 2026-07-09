@@ -116,14 +116,9 @@ module.exports = (env, argv) => {
           columns: true,
           module: true,
         }),
-      !isDevServer &&
-        new webpack.SourceMapDevToolPlugin({
-          filename: "[file].map",
-          columns: true,
-          module: true,
-        }),
       enableReactRefresh && new ReactRefreshWebpackPlugin(),
     ].filter(Boolean),
+    devtool: !isDevServer ? "source-map" : false,
     target: "web",
     entry: entry,
     output: {
@@ -169,6 +164,16 @@ module.exports = (env, argv) => {
       portableRecords: true,
       splitChunks: {
         cacheGroups: {
+          // Keep the OpenTelemetry SDK out of the eager vendor bundle: it is only ever
+          // reached via dynamic import() (when telemetry is enabled), so it belongs in its
+          // own async chunk. Higher priority than `vendor` so these modules are claimed here
+          // and `chunks: "async"` so they are not hoisted into the initial download.
+          opentelemetry: {
+            test: /[\\/]node_modules[\\/]@opentelemetry[\\/]/,
+            name: `opentelemetry`,
+            chunks: "async",
+            priority: 10,
+          },
           vendor: {
             test: /[\\/]node_modules[\\/]/,
             name: `vendor`,

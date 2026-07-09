@@ -8,6 +8,7 @@ import { LoadingScreen } from "./ui/LoadingScreen";
 import { initElectron } from "./Electron";
 
 import { newRemoteFileApiConnection } from "./RemoteFileAPI/RemoteFileAPI";
+import { shutdownTelemetry } from "./Telemetry";
 
 import "./css/font.css";
 
@@ -56,6 +57,12 @@ function rerender(): void {
     return "Your work will be lost.";
   };
 })();
+
+// Best-effort flush of telemetry on page unload. Browser transports may be killed before
+// the flush completes, so delivery primarily relies on the periodic export intervals.
+window.addEventListener("beforeunload", () => {
+  void shutdownTelemetry();
+});
 
 (function () {
   window.print = () => {

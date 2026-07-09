@@ -470,6 +470,28 @@ const grafting = {
   waitForOngoingGrafting: 0,
 } as const;
 
+// Telemetry API (free, consistent with print/tprint — observability shouldn't cost RAM)
+const telemetry = {
+  logs: {
+    debug: 0,
+    info: 0,
+    warn: 0,
+    error: 0,
+  },
+  metrics: {
+    counter: 0,
+    upDownCounter: 0,
+    gauge: 0,
+    histogram: 0,
+  },
+  traces: {
+    startSpan: 0,
+    endSpan: 0,
+    spanEvent: 0,
+    setSpanAttributes: 0,
+  },
+} as const;
+
 const corporation = {
   hasCorporation: 0,
   canCreateCorporation: 0,
@@ -559,6 +581,7 @@ export const RamCosts: RamCostTree<NSFull> = {
   stanek,
   ui,
   grafting,
+  telemetry,
 
   sprintf: 0,
   vsprintf: 0,

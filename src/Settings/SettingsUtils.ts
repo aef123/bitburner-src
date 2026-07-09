@@ -9,6 +9,7 @@ import {
 import { mergePlayerDefinedKeyBindings } from "../utils/KeyBindingUtils";
 import { assertObject } from "../utils/TypeAssertion";
 import { Settings } from "./Settings";
+import { OtelLogLevel } from "./SettingEnums";
 
 /**
  * This function won't be able to catch **all** invalid hostnames. In order to validate a hostname properly, we need to
@@ -70,6 +71,23 @@ export function isValidConnectionPort(port: number): Result {
   return { success: true };
 }
 
+/** Validates the base URL of an OTLP/HTTP endpoint. We only need to catch common mistakes. */
+export function isValidOtlpEndpoint(endpoint: string): Result {
+  if (endpoint === "") {
+    return { success: false, message: "Endpoint cannot be empty" };
+  }
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return { success: false, message: `Invalid URL: ${endpoint}` };
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return { success: false, message: "Endpoint must use http or https" };
+  }
+  return { success: true };
+}
+
 export function loadSettings(saveString: string) {
   const save: unknown = JSON.parse(saveString);
   assertObject(save);
@@ -127,6 +145,29 @@ export function loadSettings(saveString: string) {
   if (!isValidConnectionPort(Settings.RemoteFileApiPort).success) {
     Settings.RemoteFileApiPort = 0;
   }
+
+  // Telemetry settings come from a blind Object.assign of the save, so defensively
+  // sanitize them: a tampered/old save must not be able to inject bad values.
+  if (!isValidOtlpEndpoint(Settings.TelemetryOtlpEndpoint).success) {
+    Settings.TelemetryOtlpEndpoint = "http://localhost:4318";
+  }
+  if (!Object.values(OtelLogLevel).includes(Settings.TelemetryLogLevel)) {
+    Settings.TelemetryLogLevel = OtelLogLevel.INFO;
+  }
+  if (!Number.isFinite(Settings.TelemetryExportIntervalMs)) {
+    Settings.TelemetryExportIntervalMs = 10000;
+  }
+  Settings.TelemetryExportIntervalMs = Math.min(Math.max(Settings.TelemetryExportIntervalMs, 1000), 600000);
+  if (!Number.isFinite(Settings.TelemetryTraceSampleRatio)) {
+    Settings.TelemetryTraceSampleRatio = 1;
+  }
+  Settings.TelemetryTraceSampleRatio = Math.min(Math.max(Settings.TelemetryTraceSampleRatio, 0), 1);
+  Settings.TelemetryEnabled = Boolean(Settings.TelemetryEnabled);
+  Settings.TelemetrySinkGameConsole = Boolean(Settings.TelemetrySinkGameConsole);
+  Settings.TelemetrySinkStdio = Boolean(Settings.TelemetrySinkStdio);
+  Settings.TelemetrySinkOtlp = Boolean(Settings.TelemetrySinkOtlp);
+  Settings.TelemetryMetricsEnabled = Boolean(Settings.TelemetryMetricsEnabled);
+  Settings.TelemetryTracesEnabled = Boolean(Settings.TelemetryTracesEnabled);
 
   // Merge Settings.KeyBindings with DefaultKeyBindings.
   mergePlayerDefinedKeyBindings(Settings.KeyBindings);

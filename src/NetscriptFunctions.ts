@@ -75,6 +75,7 @@ import { NetscriptCorporation } from "./NetscriptFunctions/Corporation";
 import { NetscriptFormulas } from "./NetscriptFunctions/Formulas";
 import { NetscriptStockMarket } from "./NetscriptFunctions/StockMarket";
 import { NetscriptGrafting } from "./NetscriptFunctions/Grafting";
+import { NetscriptTelemetry } from "./NetscriptFunctions/Telemetry";
 import type { NS, RecentScript, ProcessInfo, NSEnums, Server as NSInterfaceServer } from "@nsdefs";
 import { NetscriptSingularity } from "./NetscriptFunctions/Singularity";
 import { NetscriptCloud } from "./NetscriptFunctions/Cloud";
@@ -162,6 +163,7 @@ export const ns: InternalAPI<NSFull> = {
   formulas: NetscriptFormulas(),
   stock: NetscriptStockMarket(),
   grafting: NetscriptGrafting(),
+  telemetry: NetscriptTelemetry(),
   hacknet: NetscriptHacknet(),
   cloud: NetscriptCloud(),
   sprintf:

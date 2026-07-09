@@ -8,6 +8,7 @@ import { NumericDisplayPage } from "./NumericDisplayOptions";
 import { RemoteAPIPage } from "./RemoteAPIPage";
 import { SystemPage } from "./SystemPage";
 import { KeyBindingPage } from "./KeyBindingPage";
+import { TelemetryPage } from "./TelemetryPage";
 import { EventEmitter } from "../../utils/EventEmitter";
 
 export type OptionsTabName =
@@ -17,6 +18,7 @@ export type OptionsTabName =
   | "Gameplay"
   | "Misc"
   | "Remote API"
+  | "Telemetry"
   | "Key Binding";
 
 interface IProps {
@@ -35,6 +37,7 @@ const tabs: Record<OptionsTabName, React.ReactNode> = {
   Gameplay: <GameplayPage />,
   Misc: <MiscPage />,
   "Remote API": <RemoteAPIPage />,
+  Telemetry: <TelemetryPage />,
   "Key Binding": <KeyBindingPage />,
 };
 

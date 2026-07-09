@@ -1046,7 +1046,49 @@ The sub-condition must not be satisfied.
 
 </td><td>
 
-Collection of all functions passed to scripts
+
+</td></tr>
+<tr><td>
+
+[NSTelemetry](./bitburner.nstelemetry.md)
+
+
+</td><td>
+
+Telemetry (OpenTelemetry) API, organized into [logs](./bitburner.nstelemetrylogs.md)<!-- -->, [metrics](./bitburner.nstelemetrymetrics.md)<!-- -->, and [traces](./bitburner.nstelemetrytraces.md)<!-- -->.
+
+
+</td></tr>
+<tr><td>
+
+[NSTelemetryLogs](./bitburner.nstelemetrylogs.md)
+
+
+</td><td>
+
+Player-facing OpenTelemetry logging API (ns.telemetry.logs.\*).
+
+
+</td></tr>
+<tr><td>
+
+[NSTelemetryMetrics](./bitburner.nstelemetrymetrics.md)
+
+
+</td><td>
+
+Player-defined OpenTelemetry metrics API (ns.telemetry.metrics.\*).
+
+
+</td></tr>
+<tr><td>
+
+[NSTelemetryTraces](./bitburner.nstelemetrytraces.md)
+
+
+</td><td>
+
+Player-defined OpenTelemetry tracing API (ns.telemetry.traces.\*).
 
 
 </td></tr>
