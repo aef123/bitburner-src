@@ -7,7 +7,7 @@ import { Player } from "@player";
 import { Server } from "../../Server/Server";
 import { Settings } from "../../Settings/Settings";
 import { Terminal } from "../../Terminal";
-import { getServerSnapshot, type ServerSnapshot } from "../serverSnapshots";
+import { getServerSnapshot, type FullServerSnapshot } from "../serverSnapshots";
 import { reRunCommand } from "./reRunCommand";
 import { formatMoney, formatRam, formatSecurity } from "../../ui/formatNumber";
 
@@ -192,7 +192,7 @@ function QuickActionButton({ command, primary, disabled }: QuickActionProps): Re
   );
 }
 
-function StatBars({ snapshot }: { snapshot: ServerSnapshot }): React.ReactElement {
+function StatBars({ snapshot }: { snapshot: FullServerSnapshot }): React.ReactElement {
   const { classes, cx } = useStyles();
   // Guard division: purchased/zero-money servers have moneyMax 0.
   const moneyFraction = snapshot.moneyMax > 0 ? Math.min(snapshot.moneyAvailable / snapshot.moneyMax, 1) : 0;
@@ -246,6 +246,12 @@ export function TargetPanel(): React.ReactElement {
   // money/security stats at all — for those, only the always-known facts below render.
   const isServer = server instanceof Server;
   const snapshot = isServer ? getServerSnapshot(server.hostname) : undefined;
+  // Money/security bars and the data-source stamp render ONLY from a full (analyze) snapshot.
+  // A scan-analyze partial has no money/security fields — for stats purposes it is treated exactly
+  // like no snapshot: no bars, no stamp, and the UNDISCOVERED hint still offers `analyze`. (The
+  // facts a scan DID print — root/skill/ports/RAM — are covered by the always-known card below,
+  // which reads the live server, so the partial adds nothing the panel needs to render.)
+  const fullSnapshot = snapshot?.source === "analyze" ? snapshot : undefined;
 
   const actionActive = Terminal.action !== null;
   // Quick actions add zero capability — they submit the same terminal command a player would
@@ -261,9 +267,12 @@ export function TargetPanel(): React.ReactElement {
         <div className={classes.hostname} data-target-hostname>
           {server.hostname}
         </div>
-        {snapshot !== undefined && (
+        {fullSnapshot !== undefined && (
           <div className={classes.stamp} data-target-stamp>
-            as of <span className={classes.stampSource}>analyze · {format(new Date(snapshot.timestamp), "HH:mm")}</span>{" "}
+            as of{" "}
+            <span className={classes.stampSource}>
+              {fullSnapshot.source} · {format(new Date(fullSnapshot.timestamp), "HH:mm")}
+            </span>{" "}
             — run again to refresh
           </div>
         )}
@@ -301,11 +310,12 @@ export function TargetPanel(): React.ReactElement {
         </div>
       </div>
 
-      {snapshot !== undefined && <StatBars snapshot={snapshot} />}
+      {fullSnapshot !== undefined && <StatBars snapshot={fullSnapshot} />}
 
-      {/* No snapshot for a normal server → say what's unknown and how to reveal it. Non-Server
+      {/* No FULL snapshot for a normal server → say what's unknown and how to reveal it. A
+          scan-analyze partial lands here too: money/security are still undiscovered. Non-Server
           hosts don't get this card: they have no hidden stats for analyze to reveal. */}
-      {isServer && snapshot === undefined && (
+      {isServer && fullSnapshot === undefined && (
         <div className={classes.card} data-target-undiscovered>
           <div className={classes.undiscoveredHeader}>UNDISCOVERED</div>
           <p className={classes.undiscoveredBody}>

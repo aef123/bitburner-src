@@ -21,7 +21,11 @@ import { Settings } from "../../../src/Settings/Settings";
 import { GetServerOrThrow } from "../../../src/Server/AllServers";
 import { Server } from "../../../src/Server/Server";
 import { Terminal } from "../../../src/Terminal";
-import { clearServerSnapshots, recordServerSnapshot } from "../../../src/Terminal/serverSnapshots";
+import {
+  clearServerSnapshots,
+  recordPartialServerSnapshot,
+  recordServerSnapshot,
+} from "../../../src/Terminal/serverSnapshots";
 import { TargetPanel } from "../../../src/Terminal/ui/TargetPanel";
 import { formatMoney, formatRam, formatSecurity } from "../../../src/ui/formatNumber";
 
@@ -140,6 +144,67 @@ describe("TargetPanel — honesty (no snapshot)", () => {
     expect(card?.textContent).toContain("UNDISCOVERED");
     expect(card?.textContent).toContain("n00dles");
     expect(card?.textContent).toContain("analyze");
+  });
+});
+
+describe("TargetPanel — honesty (scan-analyze partial snapshot only)", () => {
+  // The leak this guards against: scan-analyze prints skill/ports/RAM but never money/security,
+  // so its snapshot must not put money/security in the panel — nor stamp stats it didn't reveal.
+  it("renders NO money or security values anywhere and NO data-source stamp", () => {
+    const server = connectToNoodles();
+    recordPartialServerSnapshot(server, new Date(2026, 0, 1, 14, 2).getTime());
+    const root = renderPanel();
+    expect(root.querySelector("[data-target-money]")).toBeNull();
+    expect(root.querySelector("[data-target-security]")).toBeNull();
+    expect(root.querySelector("[data-target-stats]")).toBeNull();
+    expect(root.querySelector("[data-target-stamp]")).toBeNull();
+    const text = root.textContent ?? "";
+    expect(text).not.toContain(formatMoney(server.moneyAvailable, true));
+    expect(text).not.toContain(formatMoney(server.moneyMax, true));
+    expect(text).not.toContain(formatSecurity(server.hackDifficulty));
+    expect(text).not.toContain(formatSecurity(server.minDifficulty));
+    expect(text).not.toContain("123456789");
+    expect(text).not.toContain("42.5");
+    expect(text).not.toContain("as of");
+  });
+
+  it("still offers the UNDISCOVERED-stats hint — money/security remain unrevealed", () => {
+    const server = connectToNoodles();
+    recordPartialServerSnapshot(server);
+    const root = renderPanel();
+    const card = root.querySelector("[data-target-undiscovered]");
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain("UNDISCOVERED");
+    expect(card?.textContent).toContain("n00dles");
+    expect(card?.textContent).toContain("analyze");
+    // The always-known facts card still renders alongside the hint.
+    expect(root.querySelector("[data-target-access]")).not.toBeNull();
+    expect(root.querySelector("[data-target-ram]")).not.toBeNull();
+  });
+
+  it("a later scan-analyze does not downgrade an analyze snapshot: bars and stamp survive intact", () => {
+    const server = connectToNoodles();
+    recordServerSnapshot(server, new Date(2026, 0, 1, 14, 2).getTime());
+    recordPartialServerSnapshot(server, new Date(2026, 0, 1, 15, 30).getTime());
+    const root = renderPanel();
+    expect(root.querySelector("[data-target-money]")?.textContent).toContain(formatMoney(123456789, true));
+    expect(root.querySelector("[data-target-security]")?.textContent).toContain(formatSecurity(42.5));
+    const stamp = root.querySelector("[data-target-stamp]")?.textContent ?? "";
+    expect(stamp).toContain("analyze");
+    expect(stamp).toContain("14:02");
+    expect(stamp).not.toContain("15:30");
+  });
+
+  it("a later analyze upgrades the partial: bars and an honest analyze stamp appear", () => {
+    const server = connectToNoodles();
+    recordPartialServerSnapshot(server, new Date(2026, 0, 1, 13, 0).getTime());
+    recordServerSnapshot(server, new Date(2026, 0, 1, 14, 2).getTime());
+    const root = renderPanel();
+    expect(root.querySelector("[data-target-undiscovered]")).toBeNull();
+    expect(root.querySelector("[data-target-money]")?.textContent).toContain(formatMoney(123456789, true));
+    const stamp = root.querySelector("[data-target-stamp]")?.textContent ?? "";
+    expect(stamp).toContain("analyze");
+    expect(stamp).toContain("14:02");
   });
 });
 

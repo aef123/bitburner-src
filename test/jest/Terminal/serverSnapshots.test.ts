@@ -3,12 +3,17 @@
  *
  * Covers: record/get by hostname, timestamp capture, overwrite on re-record, value copying
  * (a snapshot must stay frozen when the live server mutates afterwards), and clearing.
+ *
+ * Honesty split (scan-analyze leak fix): scan-analyze records a PARTIAL snapshot containing only
+ * what it printed — money/security must not exist on it in any form. Overwrite semantics: analyze
+ * always overwrites; a partial never overwrites a full snapshot; a partial may replace a partial.
  */
 
 import { Server } from "../../../src/Server/Server";
 import {
   clearServerSnapshots,
   getServerSnapshot,
+  recordPartialServerSnapshot,
   recordServerSnapshot,
 } from "../../../src/Terminal/serverSnapshots";
 
@@ -50,6 +55,7 @@ describe("serverSnapshots", () => {
     recordServerSnapshot(server, 12345);
     const snapshot = getServerSnapshot(server.hostname);
     expect(snapshot).toEqual({
+      source: "analyze",
       moneyAvailable: 2500,
       moneyMax: 10000,
       hackDifficulty: 42,
@@ -78,8 +84,9 @@ describe("serverSnapshots", () => {
     server.moneyAvailable = 9999;
     recordServerSnapshot(server, 200);
     const snapshot = getServerSnapshot(server.hostname);
-    expect(snapshot?.moneyAvailable).toBe(9999);
-    expect(snapshot?.timestamp).toBe(200);
+    if (snapshot?.source !== "analyze") throw new Error("expected a full snapshot");
+    expect(snapshot.moneyAvailable).toBe(9999);
+    expect(snapshot.timestamp).toBe(200);
   });
 
   it("stays frozen when the live server mutates after recording (that IS the feature)", () => {
@@ -88,8 +95,61 @@ describe("serverSnapshots", () => {
     server.moneyAvailable = 1;
     server.hackDifficulty = 99;
     const snapshot = getServerSnapshot(server.hostname);
-    expect(snapshot?.moneyAvailable).toBe(2500);
-    expect(snapshot?.hackDifficulty).toBe(42);
+    if (snapshot?.source !== "analyze") throw new Error("expected a full snapshot");
+    expect(snapshot.moneyAvailable).toBe(2500);
+    expect(snapshot.hackDifficulty).toBe(42);
+  });
+
+  describe("partial (scan-analyze) snapshots", () => {
+    it("records ONLY the fields scan-analyze printed — money/security keys must not exist at all", () => {
+      const server = makeServer();
+      recordPartialServerSnapshot(server, 12345);
+      const snapshot = getServerSnapshot(server.hostname);
+      // Exact-shape match: any extra key (moneyAvailable, hackDifficulty, ...) fails this.
+      expect(snapshot).toEqual({
+        source: "scan-analyze",
+        requiredHackingSkill: 300,
+        numOpenPortsRequired: 3,
+        openPortCount: 1,
+        maxRam: 64,
+        timestamp: 12345,
+      });
+    });
+
+    it("never overwrites an existing full (analyze) snapshot — no downgrade", () => {
+      const server = makeServer();
+      recordServerSnapshot(server, 100);
+      server.requiredHackingSkill = 999;
+      recordPartialServerSnapshot(server, 200);
+      const snapshot = getServerSnapshot(server.hostname);
+      // The full snapshot survives untouched: source, values, AND timestamp.
+      if (snapshot?.source !== "analyze") throw new Error("expected the full snapshot to survive");
+      expect(snapshot.timestamp).toBe(100);
+      expect(snapshot.requiredHackingSkill).toBe(300);
+      expect(snapshot.moneyAvailable).toBe(2500);
+    });
+
+    it("replaces an older partial with a fresher partial", () => {
+      const server = makeServer();
+      recordPartialServerSnapshot(server, 100);
+      server.maxRam = 128;
+      recordPartialServerSnapshot(server, 200);
+      const snapshot = getServerSnapshot(server.hostname);
+      expect(snapshot?.source).toBe("scan-analyze");
+      expect(snapshot?.maxRam).toBe(128);
+      expect(snapshot?.timestamp).toBe(200);
+    });
+
+    it("is upgraded (fully overwritten) by a later analyze", () => {
+      const server = makeServer();
+      recordPartialServerSnapshot(server, 100);
+      recordServerSnapshot(server, 200);
+      const snapshot = getServerSnapshot(server.hostname);
+      if (snapshot?.source !== "analyze") throw new Error("expected analyze to upgrade the partial");
+      expect(snapshot.timestamp).toBe(200);
+      expect(snapshot.moneyAvailable).toBe(2500);
+      expect(snapshot.hackDifficulty).toBe(42);
+    });
   });
 
   it("clearServerSnapshots empties the store", () => {
