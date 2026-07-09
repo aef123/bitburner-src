@@ -7,7 +7,9 @@
  * Covers:
  *   - a station button renders for every (non-hidden) location of the city
  *   - clicking a station fires the toLocation callback with the real Location
- *   - all subway lines render in a single color (category system is gone)
+ *   - subway lines render in multiple AESTHETIC palette colors (gold/green/
+ *     violet/pink rotation; still no category system)
+ *   - junction stations render as interchanges; regular stops do not
  *   - no derived-analytics glyphs (★/⚑) and no category legend render
  *   - hovering The Slums shows the station card with crime content
  *   - hovering a gym shows NO cost/exp multiplier rows (philosophy)
@@ -25,6 +27,7 @@ import type { Location } from "../../../../src/Locations/Location";
 import { Settings } from "../../../../src/Settings/Settings";
 import { CityMap3B } from "../../../../src/ui/Maps/CityMap3B";
 import { HIDDEN_CITY_LOCATIONS } from "../../../../src/ui/Maps/cityAsciiPositions";
+import { cityRoutes } from "../../../../src/ui/Maps/cityRoutes";
 
 import { initGameEnvironment, setupBasicTestingEnvironment } from "../../Utilities";
 
@@ -92,16 +95,48 @@ describe("CityMap3B stations", () => {
   });
 });
 
-describe("CityMap3B single-color subway (category system removed)", () => {
-  it.each(Object.values(CityName))("draws every %s line segment in one color", (city) => {
+describe("CityMap3B colored subway routes (aesthetic, not categorical)", () => {
+  // Fixed rotation, Line 1 = gold. Colors carry no meaning.
+  const palette = [
+    Settings.theme.accentGold,
+    Settings.theme.accentGreen,
+    Settings.theme.accentViolet,
+    Settings.theme.accentPink,
+  ];
+
+  it.each(Object.values(CityName))("draws every %s line segment in a palette color", (city) => {
     const root = renderMap(city);
     const strokes = new Set(Array.from(root.querySelectorAll("svg path")).map((path) => path.getAttribute("stroke")));
-    expect(strokes.size).toBe(1);
-    // The single line color is NOT one of the old category accents and not accentCyan.
-    const stroke = [...strokes][0];
-    expect(stroke).toBe(Settings.theme.textTertiary);
-    for (const old of [Settings.theme.accentGold, Settings.theme.accentGreen, Settings.theme.accentViolet]) {
-      expect(stroke).not.toBe(old);
+    expect(strokes.size).toBeGreaterThanOrEqual(1);
+    for (const stroke of strokes) expect(palette).toContain(stroke);
+  });
+
+  it("uses multiple distinct line colors for a large city (Sector-12)", () => {
+    const root = renderMap(CityName.Sector12);
+    const strokes = new Set(Array.from(root.querySelectorAll("svg path")).map((path) => path.getAttribute("stroke")));
+    expect(strokes.size).toBeGreaterThanOrEqual(2);
+    // Line 1 (gold) always present.
+    expect(strokes).toContain(Settings.theme.accentGold);
+  });
+
+  it("renders junction stations as interchanges and regular stops as plain stations (Sector-12)", () => {
+    const routes = cityRoutes[CityName.Sector12];
+    expect(routes.length).toBeGreaterThanOrEqual(2);
+    const counts = new Map<LocationName, number>();
+    for (const route of routes) {
+      for (const name of route.stations) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const junctions = [...counts].filter(([, count]) => count >= 2).map(([name]) => name);
+    const regulars = [...counts].filter(([, count]) => count === 1).map(([name]) => name);
+    expect(junctions.length).toBeGreaterThanOrEqual(1);
+    expect(regulars.length).toBeGreaterThanOrEqual(1);
+
+    const root = renderMap(CityName.Sector12);
+    for (const name of junctions) {
+      expect(station(root, name)?.getAttribute("data-interchange")).toBe("true");
+    }
+    for (const name of regulars) {
+      expect(station(root, name)?.hasAttribute("data-interchange")).toBe(false);
     }
   });
 
