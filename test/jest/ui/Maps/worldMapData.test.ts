@@ -1,12 +1,14 @@
 /**
- * Tests for the world map geometry module. City positions and coastline
- * strokes must come from the ORIGINAL ASCII world map, now living in the
- * shared module src/ui/React/worldMapArt.ts (consumed by BOTH the classic
- * text map and the vector map). These tests pin the shared art's shape and
- * city letter positions (anti-drift), assert CITY_ART_COORDS derives from it,
- * that projected positions stay in bounds, that the art's relative geography
- * survives normalization, and that the vectorized coastline covers every
- * non-space glyph except the city letters.
+ * Tests for the world map geometry module. City positions and continents
+ * must come from the ORIGINAL ASCII world map, now living in the shared
+ * module src/ui/React/worldMapArt.ts (consumed by BOTH the classic text map
+ * and the vector map). These tests pin the shared art's shape and city letter
+ * positions (anti-drift), assert CITY_ART_COORDS derives from it, that
+ * projected positions stay in bounds, that the art's relative geography
+ * survives normalization, and that the soft continents cover the art's
+ * glyphs: every non-tiny glyph cell is assigned to a continent, the band
+ * polygons contain their own cells, every city sits on a continent, and the
+ * generation is deterministic.
  */
 
 import { CityName } from "@enums";
@@ -14,16 +16,33 @@ import {
   ART_COLS,
   ART_ROWS,
   artToSvg,
+  buildContinents,
   CITY_ART_COORDS,
-  COASTLINE_STROKES,
+  CONTINENTS,
   getFlightArc,
   MAP_HEIGHT,
   MAP_WIDTH,
+  type Point,
   worldMapCities,
 } from "../../../../src/ui/Maps/worldMapData";
 import { CITY_LETTER_TO_NAME, WORLD_MAP_ART } from "../../../../src/ui/React/worldMapArt";
 
 const ALL_CITIES = Object.values(CityName);
+
+/** Standard ray-casting point-in-polygon (vertices in order, closed implicitly). */
+function pointInPolygon(p: Point, polygon: readonly Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function insideAnyPolygon(p: Point, polygons: readonly (readonly Point[])[]): boolean {
+  return polygons.some((polygon) => pointInPolygon(p, polygon));
+}
 
 /**
  * The verified (col, row) of each city letter in the original art. These are
@@ -122,80 +141,76 @@ describe("city positions from the original ASCII art", () => {
   });
 });
 
-describe("vectorized coastline strokes", () => {
-  it("emits one stroke per non-space, non-city-letter glyph (the art is dense: > 300)", () => {
-    let glyphs = 0;
-    for (const line of WORLD_MAP_ART) {
-      for (const char of line) {
-        if (char !== " " && !CITY_LETTER_TO_NAME[char]) glyphs++;
-      }
-    }
-    expect(glyphs).toBeGreaterThan(300);
-    expect(COASTLINE_STROKES).toHaveLength(glyphs);
-  });
-
-  it("keeps every stroke endpoint inside the canvas", () => {
-    for (const s of COASTLINE_STROKES) {
-      for (const v of [s.x1, s.x2]) {
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(MAP_WIDTH);
-      }
-      for (const v of [s.y1, s.y2]) {
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(MAP_HEIGHT);
-      }
+describe("continents from the original ASCII art", () => {
+  it("splits the art into at least three continents, one per anchor city, none tiny", () => {
+    expect(CONTINENTS.length).toBeGreaterThanOrEqual(3);
+    expect(CONTINENTS.map((c) => c.city).sort()).toEqual([...ALL_CITIES].sort());
+    for (const continent of CONTINENTS) {
+      expect(continent.cells.length).toBeGreaterThanOrEqual(6);
+      expect(continent.polygons.length).toBeGreaterThanOrEqual(1);
+      expect(continent.paths).toHaveLength(continent.polygons.length);
     }
   });
 
-  it("places no stroke inside any city letter's cell", () => {
-    // A stroke never leaves its own cell, so its midpoint identifies the cell.
-    const halfCellW = (artToSvg(1, 0).x - artToSvg(0, 0).x) / 2;
-    const halfCellH = (artToSvg(0, 1).y - artToSvg(0, 0).y) / 2;
-    for (const city of ALL_CITIES) {
-      const { col, row } = CITY_ART_COORDS[city];
-      const center = artToSvg(col, row);
-      for (const s of COASTLINE_STROKES) {
-        const mx = (s.x1 + s.x2) / 2;
-        const my = (s.y1 + s.y2) / 2;
-        const inCell = Math.abs(mx - center.x) < halfCellW && Math.abs(my - center.y) < halfCellH;
-        expect(inCell).toBe(false);
+  it("assigns every non-space, non-city-letter glyph to a continent, minus a tiny ocean-ripple remainder", () => {
+    const glyphs = new Set<string>();
+    WORLD_MAP_ART.forEach((line, row) => {
+      for (let col = 0; col < line.length; col++) {
+        const char = line[col];
+        if (char !== " " && !CITY_LETTER_TO_NAME[char]) glyphs.add(`${col},${row}`);
       }
+    });
+    expect(glyphs.size).toBeGreaterThan(300);
+    const assigned = new Set<string>();
+    for (const continent of CONTINENTS) {
+      for (const cell of continent.cells) assigned.add(`${cell.col},${cell.row}`);
     }
+    const unassigned = [...glyphs].filter((key) => !assigned.has(key));
+    expect(unassigned.length).toBeLessThan(6);
+    // No cell belongs to two continents; the only extra cells are the six city letters.
+    expect(CONTINENTS.reduce((sum, c) => sum + c.cells.length, 0)).toBe(glyphs.size - unassigned.length + ALL_CITIES.length);
   });
 
-  it("gives every stroke a visible, sub-opaque opacity", () => {
-    for (const s of COASTLINE_STROKES) {
-      expect(s.opacity).toBeGreaterThan(0.2);
-      expect(s.opacity).toBeLessThan(1);
-    }
-  });
-
-  it("orients glyphs: / rises, \\ falls, | is vertical, - is horizontal", () => {
-    // Row 2 opens with "  /~~-\_/..." — art (2,2) is '/', (6,2) is '\'.
-    const strokeAtCell = (col: number, row: number) => {
-      const center = artToSvg(col, row);
-      const halfCellW = (artToSvg(1, 0).x - artToSvg(0, 0).x) / 2;
-      const halfCellH = (artToSvg(0, 1).y - artToSvg(0, 0).y) / 2;
-      const stroke = COASTLINE_STROKES.find(
-        (s) => Math.abs((s.x1 + s.x2) / 2 - center.x) < halfCellW && Math.abs((s.y1 + s.y2) / 2 - center.y) < halfCellH,
+  it("hugs the art: each continent's polygons contain at least 95% of its own projected cells", () => {
+    for (const continent of CONTINENTS) {
+      const inside = continent.cells.filter((cell) =>
+        insideAnyPolygon(artToSvg(cell.col, cell.row), continent.polygons),
       );
-      expect(stroke).toBeDefined();
-      return stroke as (typeof COASTLINE_STROKES)[number];
-    };
-    expect(WORLD_MAP_ART[2][2]).toBe("/");
-    const rising = strokeAtCell(2, 2);
-    expect(Math.sign((rising.x2 - rising.x1) * (rising.y2 - rising.y1))).toBe(-1);
-    expect(WORLD_MAP_ART[2][6]).toBe("\\");
-    const falling = strokeAtCell(6, 2);
-    expect(Math.sign((falling.x2 - falling.x1) * (falling.y2 - falling.y1))).toBe(1);
-    expect(WORLD_MAP_ART[2][5]).toBe("-");
-    const horizontal = strokeAtCell(5, 2);
-    expect(horizontal.y1).toBe(horizontal.y2);
-    expect(horizontal.x1).not.toBe(horizontal.x2);
-    expect(WORLD_MAP_ART[7][11]).toBe("|");
-    const vertical = strokeAtCell(11, 7);
-    expect(vertical.x1).toBe(vertical.x2);
-    expect(vertical.y1).not.toBe(vertical.y2);
+      expect(inside.length / continent.cells.length).toBeGreaterThanOrEqual(0.95);
+    }
+  });
+
+  it("keeps every polygon vertex inside the canvas", () => {
+    for (const continent of CONTINENTS) {
+      for (const polygon of continent.polygons) {
+        expect(polygon.length).toBeGreaterThanOrEqual(4);
+        for (const p of polygon) {
+          expect(p.x).toBeGreaterThanOrEqual(0);
+          expect(p.x).toBeLessThanOrEqual(MAP_WIDTH);
+          expect(p.y).toBeGreaterThanOrEqual(0);
+          expect(p.y).toBeLessThanOrEqual(MAP_HEIGHT);
+        }
+      }
+    }
+  });
+
+  it("places every city node on a continent (the art puts every city on or next to land)", () => {
+    for (const continent of CONTINENTS) {
+      expect(insideAnyPolygon(worldMapCities[continent.city].center, continent.polygons)).toBe(true);
+    }
+  });
+
+  it("emits smooth closed SVG paths (quadratic curves, Z-closed)", () => {
+    for (const continent of CONTINENTS) {
+      for (const path of continent.paths) {
+        expect(path).toMatch(/^M [\d.-]+ [\d.-]+( Q [\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+)+ Z$/);
+      }
+    }
+  });
+
+  it("is deterministic: rebuilding produces identical continents", () => {
+    expect(JSON.stringify(buildContinents())).toBe(JSON.stringify(buildContinents()));
+    expect(JSON.stringify(buildContinents())).toBe(JSON.stringify(CONTINENTS));
   });
 });
 

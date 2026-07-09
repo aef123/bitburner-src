@@ -1,8 +1,10 @@
 /**
  * World Map (3A) — the redesigned Travel Agency view. City nodes sit at the
- * ORIGINAL ASCII world map's positions and the continents are the original
- * art itself, vectorized glyph-by-glyph (see COASTLINE_STROKES in
- * worldMapData.ts). Deliberately information-light: a node is cyan only when
+ * ORIGINAL ASCII world map's positions and the continents are soft filled
+ * landmasses derived from that art (see CONTINENTS in worldMapData.ts),
+ * blurred for the mock's suggestion-of-a-world look and clipped to the
+ * outermost graticule ellipse so no land spills off the globe.
+ * Deliberately information-light: a node is cyan only when
  * a pending faction invitation requires that city (cityIntel.ts); the popover
  * shows the ticket price, pending invitations, and reputation for factions
  * already joined — nothing derived, no comparisons, no legend.
@@ -14,7 +16,7 @@
  *   popover bg #101823 → bgPanel; popover border #2a4152 = borderFocus (exact)
  *   CTA text-on-cyan #06131a → bgApp
  *   graticule/arc rgba(76,201,232,α) → alpha(accentCyan, α)
- *   coastline strokes → borderDefault at per-glyph opacity (faint, but clearly the map)
+ *   landmass fills → alpha(accentCyan, 0.06) + alpha(accentCyan, 0.14) coast, like the mock's blobs
  */
 import React, { useState } from "react";
 import { alpha, lighten, type Theme } from "@mui/material/styles";
@@ -32,7 +34,7 @@ import { useCycleRerender } from "../React/hooks";
 import { getAllCityIntel } from "./cityIntel";
 import { CityIndexColumn } from "./CityIndexColumn";
 import {
-  COASTLINE_STROKES,
+  CONTINENTS,
   getFlightArc,
   GRATICULE_ELLIPSES,
   GRATICULE_LINES,
@@ -44,6 +46,13 @@ import {
 const NODE_SIZE = 22;
 const CURRENT_NODE_SIZE = 30;
 const POPOVER_WIDTH = 270;
+/** Clips the landmasses to the globe: the OUTERMOST graticule ellipse. */
+const GLOBE_CLIP_ID = "world-map-globe-clip";
+/** Soft-focus blur that turns the band polygons into the mock's hazy landmasses. */
+const LAND_BLUR_ID = "world-map-land-blur";
+const LAND_BLUR_STD_DEVIATION = 4;
+const LAND_FILL_OPACITY = 0.06;
+const LAND_COAST_OPACITY = 0.14;
 
 const useStyles = makeStyles()((theme: Theme) => {
   // All UI-refresh tokens are required ITheme keys, so they are always defined.
@@ -251,7 +260,6 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
     factionInvitations: Player.factionInvitations,
   });
   const accentCyan = theme.colors.accentCyan as string;
-  const borderDefault = theme.colors.borderDefault as string;
   const cities = Object.values(CityName);
   const selectedIntel = selected && selected !== currentCity ? intel[selected] : null;
 
@@ -283,19 +291,35 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
           viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
           aria-hidden="true"
         >
-          {COASTLINE_STROKES.map((s, i) => (
-            <line
-              key={i}
-              x1={s.x1}
-              y1={s.y1}
-              x2={s.x2}
-              y2={s.y2}
-              stroke={borderDefault}
-              strokeOpacity={s.opacity}
-              strokeWidth={1.25}
-              strokeLinecap="round"
-            />
-          ))}
+          <defs>
+            <clipPath id={GLOBE_CLIP_ID}>
+              <ellipse
+                cx={GRATICULE_ELLIPSES[0].cx}
+                cy={GRATICULE_ELLIPSES[0].cy}
+                rx={GRATICULE_ELLIPSES[0].rx}
+                ry={GRATICULE_ELLIPSES[0].ry}
+              />
+            </clipPath>
+            <filter id={LAND_BLUR_ID} x="-15%" y="-15%" width="130%" height="130%">
+              <feGaussianBlur stdDeviation={LAND_BLUR_STD_DEVIATION} />
+            </filter>
+          </defs>
+          {/* Blur first, then clip: the soft edges cannot smear past the globe. */}
+          <g clipPath={`url(#${GLOBE_CLIP_ID})`}>
+            <g filter={`url(#${LAND_BLUR_ID})`}>
+              {CONTINENTS.flatMap((continent) =>
+                continent.paths.map((d, i) => (
+                  <path
+                    key={`${continent.city}-${i}`}
+                    d={d}
+                    fill={alpha(accentCyan, LAND_FILL_OPACITY)}
+                    stroke={alpha(accentCyan, LAND_COAST_OPACITY)}
+                    strokeWidth={1.5}
+                  />
+                )),
+              )}
+            </g>
+          </g>
           {GRATICULE_ELLIPSES.map((e, i) => (
             <ellipse
               key={i}

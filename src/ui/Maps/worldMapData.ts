@@ -10,11 +10,12 @@
  * they are tall, so columns are scaled by CHAR_ASPECT = 0.5 — without it the
  * map would look vertically stretched relative to the terminal art.
  *
- * COASTLINE_STROKES vectorize the art itself: every non-space, non-city-letter
- * glyph becomes one short line segment through the same projection, oriented
- * by what the glyph looks like in a terminal (/ rises, \ falls, | vertical,
- * -/_/~ horizontal, ,'.";  short ticks). The continents therefore match the
- * original map by construction.
+ * CONTINENTS turn the art into soft filled landmasses (see buildContinents):
+ * every coastline glyph is assigned to the continent of the nearest city by a
+ * breadth-first flood over the glyph grid, then each continent becomes one or
+ * more closed band polygons that hug its glyphs row by row. The shapes follow
+ * the original map by construction; WorldMap3A renders them as barely-visible
+ * blurred fills clipped to the globe ellipse.
  */
 import { CityName } from "@enums";
 
@@ -93,63 +94,165 @@ export const worldMapCities: Record<CityName, WorldMapCityDatum> = Object.values
   return acc;
 }, {} as Record<CityName, WorldMapCityDatum>);
 
-/** One vectorized art glyph: a line segment in canvas coordinates. */
-export interface CoastStroke {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  /** Stroke opacity: full-cell glyphs read stronger than the small tick glyphs. */
-  opacity: number;
+/** One glyph cell of the ASCII art, in art-grid coordinates. */
+export interface ArtCell {
+  col: number;
+  row: number;
+}
+
+/** A landmass derived from the art, anchored by the city whose letter sits on it. */
+export interface Continent {
+  city: CityName;
+  /** The art cells assigned to this continent (its city's own cell included). */
+  cells: readonly ArtCell[];
+  /**
+   * Closed band polygons in canvas coordinates, one per contiguous run of art
+   * rows: each row contributes [minCol − ½ … maxCol + ½], so the outline hugs
+   * the art's glyphs instead of bulging like a convex hull would.
+   */
+  polygons: readonly (readonly Point[])[];
+  /** The polygons smoothed into closed SVG paths (quadratic curves through edge midpoints). */
+  paths: readonly string[];
+}
+
+/** Fixed seed order makes the flood fill fully deterministic. */
+const CONTINENT_SEED_ORDER: readonly CityName[] = [
+  CityName.Sector12,
+  CityName.Aevum,
+  CityName.Volhaven,
+  CityName.Chongqing,
+  CityName.NewTokyo,
+  CityName.Ishima,
+];
+/** Glyphs within this Chebyshev distance belong to the same landmass while flooding. */
+const CLUSTER_TOLERANCE = 2;
+/**
+ * The first hop away from a city letter uses a wider reach: the letters sit in
+ * a pocket of open water in the art (Chongqing's nearest coastline glyph is 4
+ * cells away), so a plain tolerance-2 flood would leave some cities landless.
+ */
+const SEED_REACH = 4;
+/** Row-blocks with fewer cells than this render as slivers; they get no polygon. */
+const MIN_BLOCK_CELLS = 3;
+
+/** Quadratic-midpoint smoothing: a closed path through the midpoints of the polygon's edges. */
+function smoothClosedPath(points: readonly Point[]): string {
+  const mid = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const first = mid(points[0], points[1]);
+  let d = `M ${first.x} ${first.y}`;
+  for (let i = 1; i <= points.length; i++) {
+    const p = points[i % points.length];
+    const m = mid(p, points[(i + 1) % points.length]);
+    d += ` Q ${p.x} ${p.y} ${m.x} ${m.y}`;
+  }
+  return `${d} Z`;
 }
 
 /**
- * Per-glyph segment, in art-cell units relative to the glyph's cell center:
- * [dCol1, dRow1, dCol2, dRow2, opacity]. ±0.5 reaches the cell edge, so the
- * full-cell glyphs (/ \ | - _ ~) chain up with their neighbors exactly like
- * the characters do in the terminal art. Diagonals run corner-to-corner, which
- * (with CHAR_ASPECT) reproduces the steep slope a / or \ has in a 1:2 cell.
+ * Band polygons for one continent: rows are grouped into contiguous blocks and
+ * each block becomes a closed polygon — down the right edge (maxCol + ½ per
+ * row), back up the left edge (minCol − ½), with the first/last rows extended
+ * half a cell so the shape covers those cells fully. Following the per-row
+ * extents keeps the elongated coastlines of the art (a convex hull would fill
+ * the oceans between them).
  */
-type GlyphSegment = readonly [dCol1: number, dRow1: number, dCol2: number, dRow2: number, opacity: number];
-const FULL_OPACITY = 0.65;
-const SOFT_OPACITY = 0.55;
-const TICK_OPACITY = 0.4;
-const GLYPH_SEGMENTS: Record<string, GlyphSegment> = {
-  "/": [-0.5, 0.5, 0.5, -0.5, FULL_OPACITY], // rising diagonal (SW→NE)
-  "\\": [-0.5, -0.5, 0.5, 0.5, FULL_OPACITY], // falling diagonal (NW→SE)
-  "|": [0, -0.5, 0, 0.5, FULL_OPACITY], // vertical
-  "-": [-0.5, 0, 0.5, 0, FULL_OPACITY], // horizontal, mid-cell
-  _: [-0.5, 0.45, 0.5, 0.45, FULL_OPACITY], // horizontal, on the baseline
-  "~": [-0.5, 0, 0.5, 0, SOFT_OPACITY], // gentle horizontal
-  ",": [0.08, 0.15, -0.08, 0.45, TICK_OPACITY], // short low tick
-  "'": [0.08, -0.45, -0.08, -0.15, TICK_OPACITY], // short high tick
-  ".": [-0.12, 0.4, 0.12, 0.4, TICK_OPACITY], // small baseline dash
-  '"': [0, -0.45, 0, -0.15, TICK_OPACITY], // short high tick
-  ";": [0.08, -0.05, -0.08, 0.4, TICK_OPACITY], // tick through the lower half
-  ")": [0.1, -0.4, 0.1, 0.4, SOFT_OPACITY], // near-vertical
-};
-/** Fallback for any glyph without a mapping: a small mid-cell tick. */
-const DEFAULT_SEGMENT: GlyphSegment = [-0.12, 0, 0.12, 0, TICK_OPACITY];
+function bandPolygons(cells: readonly ArtCell[]): Point[][] {
+  const bands = new Map<number, { min: number; max: number; count: number }>();
+  for (const { col, row } of cells) {
+    const band = bands.get(row);
+    if (band) {
+      band.min = Math.min(band.min, col);
+      band.max = Math.max(band.max, col);
+      band.count++;
+    } else {
+      bands.set(row, { min: col, max: col, count: 1 });
+    }
+  }
+  const sortedBands = [...bands.entries()]
+    .map(([row, band]) => ({ row, ...band }))
+    .sort((a, b) => a.row - b.row);
+  const blocks: (typeof sortedBands)[] = [];
+  for (const band of sortedBands) {
+    const block = blocks[blocks.length - 1];
+    if (block && band.row === block[block.length - 1].row + 1) block.push(band);
+    else blocks.push([band]);
+  }
+  const polygons: Point[][] = [];
+  for (const block of blocks) {
+    if (block.reduce((sum, band) => sum + band.count, 0) < MIN_BLOCK_CELLS) continue;
+    const top = block[0];
+    const bottom = block[block.length - 1];
+    const right: Point[] = [artToSvg(top.max + 0.5, top.row - 0.5)];
+    for (const band of block) right.push(artToSvg(band.max + 0.5, band.row));
+    right.push(artToSvg(bottom.max + 0.5, bottom.row + 0.5));
+    const left: Point[] = [artToSvg(bottom.min - 0.5, bottom.row + 0.5)];
+    for (const band of [...block].reverse()) left.push(artToSvg(band.min - 0.5, band.row));
+    left.push(artToSvg(top.min - 0.5, top.row - 0.5));
+    const outline = [...right, ...left];
+    // artToSvg rounds to integers, so consecutive vertices can collapse; drop the duplicates.
+    polygons.push(outline.filter((p, i) => i === 0 || p.x !== outline[i - 1].x || p.y !== outline[i - 1].y));
+  }
+  return polygons;
+}
 
 /**
- * The vectorized ASCII art: one stroke per non-space, non-city-letter glyph,
- * projected through artToSvg. City letters are skipped — the city NODES mark
- * those cells.
+ * Assign every coastline glyph to the continent of the nearest city, by a
+ * layered breadth-first flood over the glyph grid (Chebyshev adjacency
+ * CLUSTER_TOLERANCE, first hop SEED_REACH). The flood splits the art's two
+ * big connected landmass outlines into city-anchored continents at natural
+ * midpoints, so the per-row bands never span an ocean. A couple of isolated
+ * ocean-ripple glyphs (fewer than 6 cells) are reachable from no city and are
+ * deliberately left out. Fully deterministic: fixed seed order, row-major
+ * neighbor scans.
  */
-export const COASTLINE_STROKES: readonly CoastStroke[] = (() => {
-  const strokes: CoastStroke[] = [];
+export function buildContinents(): Continent[] {
+  const keyOf = (col: number, row: number): string => `${col},${row}`;
+  const land = new Map<string, ArtCell>();
   WORLD_MAP_ART.forEach((line, row) => {
     for (let col = 0; col < line.length; col++) {
       const char = line[col];
-      if (char === " " || CITY_LETTER_TO_NAME[char]) continue;
-      const [dCol1, dRow1, dCol2, dRow2, opacity] = GLYPH_SEGMENTS[char] ?? DEFAULT_SEGMENT;
-      const a = artToSvg(col + dCol1, row + dRow1);
-      const b = artToSvg(col + dCol2, row + dRow2);
-      strokes.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, opacity });
+      if (char !== " " && !CITY_LETTER_TO_NAME[char]) land.set(keyOf(col, row), { col, row });
     }
   });
-  return strokes;
-})();
+  const assigned = new Map<string, CityName>();
+  const claimAround = (city: CityName, center: ArtCell, reach: number, out: ArtCell[]): void => {
+    for (let dRow = -reach; dRow <= reach; dRow++) {
+      for (let dCol = -reach; dCol <= reach; dCol++) {
+        const key = keyOf(center.col + dCol, center.row + dRow);
+        const cell = land.get(key);
+        if (cell && !assigned.has(key)) {
+          assigned.set(key, city);
+          out.push(cell);
+        }
+      }
+    }
+  };
+  let frontier = CONTINENT_SEED_ORDER.map((city) => {
+    const claimed: ArtCell[] = [];
+    claimAround(city, CITY_ART_COORDS[city], SEED_REACH, claimed);
+    return { city, claimed };
+  });
+  while (frontier.some((f) => f.claimed.length > 0)) {
+    frontier = frontier.map(({ city, claimed }) => {
+      const next: ArtCell[] = [];
+      for (const cell of claimed) claimAround(city, cell, CLUSTER_TOLERANCE, next);
+      return { city, claimed: next };
+    });
+  }
+  return CONTINENT_SEED_ORDER.map((city) => {
+    // The city's own cell is part of its continent: cities stand on land.
+    const cells: ArtCell[] = [CITY_ART_COORDS[city]];
+    for (const [key, owner] of assigned) {
+      if (owner === city) cells.push(land.get(key) as ArtCell);
+    }
+    cells.sort((a, b) => a.row - b.row || a.col - b.col);
+    const polygons = bandPolygons(cells);
+    return { city, cells, polygons, paths: polygons.map(smoothClosedPath) };
+  });
+}
+
+/** The soft landmasses of the world map, generated once from the shared art. */
+export const CONTINENTS: readonly Continent[] = buildContinents();
 
 interface Arc {
   start: Point;

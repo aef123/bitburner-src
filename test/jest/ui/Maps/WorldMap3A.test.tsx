@@ -142,12 +142,31 @@ describe("WorldMap3A info diet", () => {
     expect(text).not.toContain("arcs show ticket routes");
   });
 
-  it("draws the vectorized ASCII coastline as many rounded line strokes", () => {
+  it("draws the continents as soft filled shapes, blurred and clipped to the globe ellipse", () => {
     const root = renderMap();
-    const lines = root.querySelectorAll('svg line[stroke-linecap="round"]');
-    expect(lines.length).toBeGreaterThan(300);
-    // The old hand-traced closed outlines are gone.
-    expect(root.querySelectorAll("svg path[d$='Z']")).toHaveLength(0);
+    // The landmass group is clipped by the OUTERMOST graticule ellipse (cx 505, rx 460).
+    const clip = root.querySelector("#world-map-globe-clip");
+    expect(clip?.tagName.toLowerCase()).toBe("clippath");
+    const clipEllipse = clip?.querySelector("ellipse");
+    expect(clipEllipse?.getAttribute("cx")).toBe("505");
+    expect(clipEllipse?.getAttribute("cy")).toBe("340");
+    expect(clipEllipse?.getAttribute("rx")).toBe("460");
+    expect(clipEllipse?.getAttribute("ry")).toBe("290");
+    const clippedGroup = root.querySelector('svg g[clip-path="url(#world-map-globe-clip)"]');
+    expect(clippedGroup).not.toBeNull();
+    // Soft look: a Gaussian blur applies to the land, and each continent is a closed filled path.
+    expect(clippedGroup?.querySelector('g[filter="url(#world-map-land-blur)"]')).not.toBeNull();
+    const blurFilter = root.querySelector("#world-map-land-blur");
+    expect(blurFilter?.tagName.toLowerCase()).toBe("filter");
+    expect(blurFilter?.firstElementChild?.tagName).toBe("feGaussianBlur");
+    const landPaths = Array.from(clippedGroup?.querySelectorAll("path") ?? []);
+    expect(landPaths.length).toBeGreaterThanOrEqual(3);
+    for (const path of landPaths) {
+      expect(path.getAttribute("d")).toMatch(/Z$/);
+      expect(path.getAttribute("fill")).not.toBe("none");
+    }
+    // The glyph-by-glyph stroke rendering is gone.
+    expect(root.querySelectorAll('svg line[stroke-linecap="round"]')).toHaveLength(0);
   });
 
   it("shows a pending invitation on the node, popover, and index column", () => {
