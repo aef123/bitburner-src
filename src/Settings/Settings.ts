@@ -85,6 +85,10 @@ export const Settings = {
   IsSidebarOpened: true,
   /** Tail rendering intervall in ms */
   TailRenderInterval: 1000,
+  /** Whether the terminal's command-history side panel is collapsed to its slim rail. Collapsed by default: the terminal ships full-width and the panel is opt-in. */
+  TerminalHistoryCollapsed: true,
+  /** Whether the terminal's target side panel is collapsed to its slim rail. Collapsed by default: the terminal ships full-width and the panel is opt-in. */
+  TerminalTargetCollapsed: true,
   /** Theme colors. */
   theme: { ...defaultTheme },
   /** Interface styles. */

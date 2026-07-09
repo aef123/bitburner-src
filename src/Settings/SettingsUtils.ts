@@ -178,6 +178,11 @@ export function loadSettings(saveString: string) {
   Settings.TelemetryMetricsEnabled = Boolean(Settings.TelemetryMetricsEnabled);
   Settings.TelemetryTracesEnabled = Boolean(Settings.TelemetryTracesEnabled);
 
+  // Terminal side-panel collapse states also come from the blind Object.assign; coerce to real
+  // booleans. Old saves lack these keys entirely, so they keep the collapsed-by-default values.
+  Settings.TerminalHistoryCollapsed = Boolean(Settings.TerminalHistoryCollapsed);
+  Settings.TerminalTargetCollapsed = Boolean(Settings.TerminalTargetCollapsed);
+
   // PinnedTerminalCommands comes from a blind Object.assign of the save; a tampered/old save must
   // not be able to inject a non-string-array value.
   if (

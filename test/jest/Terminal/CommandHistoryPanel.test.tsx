@@ -51,12 +51,15 @@ afterEach(() => {
   clearSessionCommands();
 });
 
-function renderPanel(onPaste: (command: string) => void = () => {}): HTMLDivElement {
+function renderPanel(
+  onPaste: (command: string) => void = () => {},
+  onCollapse: () => void = () => {},
+): HTMLDivElement {
   if (!container) throw new Error("No container");
   act(() => {
     ReactDOM.render(
       <ThemeProvider theme={testTheme}>
-        <CommandHistoryPanel onPaste={onPaste} />
+        <CommandHistoryPanel onPaste={onPaste} onCollapse={onCollapse} />
       </ThemeProvider>,
       container,
     );
@@ -201,5 +204,18 @@ describe("CommandHistoryPanel — re-run and paste", () => {
       pin?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(Settings.PinnedTerminalCommands).toContain("free");
+  });
+});
+
+describe("CommandHistoryPanel — collapse chevron", () => {
+  it("renders a header collapse button that fires onCollapse", () => {
+    const onCollapse = jest.fn();
+    const root = renderPanel(() => {}, onCollapse);
+    const chevron = root.querySelector<HTMLButtonElement>("[data-history-collapse]");
+    expect(chevron).not.toBeNull();
+    act(() => {
+      chevron?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 });

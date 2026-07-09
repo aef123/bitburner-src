@@ -58,12 +58,12 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-function renderPanel(): HTMLDivElement {
+function renderPanel(onCollapse: () => void = () => {}): HTMLDivElement {
   if (!container) throw new Error("No container");
   act(() => {
     ReactDOM.render(
       <ThemeProvider theme={testTheme}>
-        <TargetPanel />
+        <TargetPanel onCollapse={onCollapse} />
       </ThemeProvider>,
       container,
     );
@@ -290,6 +290,20 @@ describe("TargetPanel — quick actions", () => {
     for (const command of ["hack", "weaken", "grow", "backdoor"]) {
       expect(getActionButton(root, command).disabled).toBe(true);
     }
+  });
+});
+
+describe("TargetPanel — collapse chevron", () => {
+  it("renders a header collapse button that fires onCollapse", () => {
+    connectToNoodles();
+    const onCollapse = jest.fn();
+    const root = renderPanel(onCollapse);
+    const chevron = root.querySelector<HTMLButtonElement>("[data-target-collapse]");
+    expect(chevron).not.toBeNull();
+    act(() => {
+      chevron?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 });
 

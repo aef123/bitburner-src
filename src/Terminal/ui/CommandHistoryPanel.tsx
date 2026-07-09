@@ -41,6 +41,9 @@ const useStyles = makeStyles()((theme: Theme) => {
     minHeight: 0,
   },
   panelHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
     fontFamily: Settings.styles.monoFontFamily,
     fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
@@ -49,6 +52,13 @@ const useStyles = makeStyles()((theme: Theme) => {
     padding: "0 6px",
     marginBottom: "10px",
     flexShrink: 0,
+  },
+  collapseChevron: {
+    color: theme.colors.textTertiary,
+    fontSize: typeScale.body,
+    "&:hover": {
+      color: theme.colors.textSecondary,
+    },
   },
   // Search bar per 2A notes: 30px, border #22303e = borderCard, bg #0e141b = bgPanel.
   search: {
@@ -292,6 +302,8 @@ function HistoryRow({
 interface CommandHistoryPanelProps {
   /** Shift+click: paste the command into the terminal input (wired to TerminalInput's setValue). */
   onPaste: (command: string) => void;
+  /** Header chevron: collapse the panel back to its rail (persists via Settings.TerminalHistoryCollapsed). */
+  onCollapse: () => void;
 }
 
 /**
@@ -300,7 +312,7 @@ interface CommandHistoryPanelProps {
  * and EARLIER (Player.terminalCommandHistory minus this session — the save keeps no timestamps,
  * so those entries render dimmed and undated).
  */
-export function CommandHistoryPanel({ onPaste }: CommandHistoryPanelProps): React.ReactElement {
+export function CommandHistoryPanel({ onPaste, onCollapse }: CommandHistoryPanelProps): React.ReactElement {
   const { classes, cx } = useStyles();
   const rerender = useRerender();
   const [query, setQuery] = useState("");
@@ -327,7 +339,18 @@ export function CommandHistoryPanel({ onPaste }: CommandHistoryPanelProps): Reac
 
   return (
     <div className={classes.panel} data-history-panel>
-      <div className={classes.panelHeader}>HISTORY</div>
+      <div className={classes.panelHeader}>
+        <span>HISTORY</span>
+        <button
+          className={cx(classes.iconButton, classes.collapseChevron)}
+          data-history-collapse
+          title="Collapse panel"
+          aria-label="Collapse the command history panel"
+          onClick={onCollapse}
+        >
+          ‹
+        </button>
+      </div>
       <div className={classes.search}>
         <span className={classes.searchIcon}>⌕</span>
         <input

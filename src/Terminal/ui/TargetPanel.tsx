@@ -30,13 +30,34 @@ const useStyles = makeStyles()((theme: Theme) => {
     overflowY: "auto",
     minHeight: 0,
   },
+  sectionLabelRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+    marginBottom: "8px",
+  },
   sectionLabel: {
     fontFamily: Settings.styles.monoFontFamily,
     fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".16em",
-    marginBottom: "8px",
+  },
+  collapseChevron: {
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    margin: 0,
+    cursor: "pointer",
+    fontFamily: Settings.styles.monoFontFamily,
+    fontSize: typeScale.body,
+    lineHeight: 1,
+    flexShrink: 0,
+    color: theme.colors.textTertiary,
+    "&:hover": {
+      color: theme.colors.textSecondary,
+    },
   },
   hostname: {
     fontFamily: Settings.styles.monoFontFamily,
@@ -178,6 +199,11 @@ const useStyles = makeStyles()((theme: Theme) => {
   };
 });
 
+interface TargetPanelProps {
+  /** Header chevron: collapse the panel back to its rail (persists via Settings.TerminalTargetCollapsed). */
+  onCollapse: () => void;
+}
+
 interface QuickActionProps {
   command: "hack" | "weaken" | "grow" | "backdoor";
   primary?: boolean;
@@ -245,7 +271,7 @@ function StatBars({ snapshot }: { snapshot: FullServerSnapshot }): React.ReactEl
  * is deliberately not memoized): analyze completion prints output (→ emit), and connect calls
  * setcwd (→ emit), so both refresh paths are already covered.
  */
-export function TargetPanel(): React.ReactElement {
+export function TargetPanel({ onCollapse }: TargetPanelProps): React.ReactElement {
   const { classes, cx } = useStyles();
   const server = Player.getCurrentServer();
   // Hacknet servers (and other BaseServer subclasses) can be connected to but have no
@@ -269,7 +295,18 @@ export function TargetPanel(): React.ReactElement {
   return (
     <div className={classes.panel} data-target-panel>
       <div>
-        <div className={classes.sectionLabel}>CONNECTED TO</div>
+        <div className={classes.sectionLabelRow}>
+          <div className={classes.sectionLabel}>CONNECTED TO</div>
+          <button
+            className={classes.collapseChevron}
+            data-target-collapse
+            title="Collapse panel"
+            aria-label="Collapse the target panel"
+            onClick={onCollapse}
+          >
+            ›
+          </button>
+        </div>
         <div className={classes.hostname} data-target-hostname>
           {server.hostname}
         </div>
