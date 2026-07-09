@@ -4,23 +4,26 @@ import { makeStyles } from "tss-react/mui";
 
 import { Settings } from "../../Settings/Settings";
 import { Page } from "../Router";
-import { IconRail } from "./IconRail";
+import { IconRail, RAIL_WIDTH_COLLAPSED, RAIL_WIDTH_EXPANDED } from "./IconRail";
 import { TopBar } from "./TopBar";
 import { Hud } from "./Hud";
 import { HudToggleEvents } from "./hudEvents";
+import { RailToggleEvents } from "./railEvents";
 import { useNavigationHotkeys, useHotkeySuppression } from "./useNavigationHotkeys";
 import { PalettePortal, usePaletteState } from "./CommandPalette";
 
 const useStyles = makeStyles()((theme: Theme) => ({
   /**
    * Shell grid per design notes 1A: 60px icon rail spanning the full height, 52px top bar spanning
-   * the content and HUD columns, content + 272px docked HUD below. When the HUD is collapsed the
-   * third column animates to 0 (160ms per the global interaction rules) and the HUD is simply
-   * hidden — the TopBar reopen button restores it (no floating fallback).
+   * the content and HUD columns, content + 272px docked HUD below. Both edge columns animate
+   * (160ms per the global interaction rules): the rail expands 60px ↔ 210px on its chevron
+   * (Settings.IsSidebarOpened), and when the HUD is collapsed the third column animates to 0 and
+   * the HUD is simply hidden — the TopBar reopen button restores it (no floating fallback).
+   * gridTemplateColumns is set inline (see render) because the two toggles compose into four
+   * combinations; everything else stays here.
    */
   shell: {
     display: "grid",
-    gridTemplateColumns: "60px 1fr 272px",
     gridTemplateRows: "52px 1fr",
     gridTemplateAreas: `"rail topbar topbar" "rail content hud"`,
     transition: "grid-template-columns 160ms ease-out",
@@ -28,9 +31,6 @@ const useStyles = makeStyles()((theme: Theme) => ({
     height: "100vh",
     overflow: "hidden",
     backgroundColor: theme.colors.bgApp,
-  },
-  shellHudCollapsed: {
-    gridTemplateColumns: "60px 1fr 0px",
   },
   rail: {
     gridArea: "rail",
@@ -74,14 +74,18 @@ interface ShellLayoutProps {
 
 export function ShellLayout({ page, save, killScripts, children }: ShellLayoutProps): React.ReactElement {
   useNavigationHotkeys();
-  const { classes, cx } = useStyles();
+  const { classes } = useStyles();
   const contentRef = useRef<HTMLElement>(null);
   const paletteState = usePaletteState();
   const { isSuppressed } = useHotkeySuppression();
   const [hudCollapsed, setHudCollapsedState] = useState(Settings.HudCollapsed);
+  const [railExpanded, setRailExpandedState] = useState(Settings.IsSidebarOpened);
 
   // Track HUD collapse/restore (chevron in the HUD header, reopen button in the TopBar).
   useEffect(() => HudToggleEvents.subscribe(() => setHudCollapsedState(Settings.HudCollapsed)), []);
+
+  // Track the rail's expand/collapse chevron (persisted via Settings.IsSidebarOpened).
+  useEffect(() => RailToggleEvents.subscribe(() => setRailExpandedState(Settings.IsSidebarOpened)), []);
 
   // Global Ctrl/⌘+K shortcut — same suppression rules as Alt+X hotkeys.
   // Yields to any in-app consumer (e.g. terminal Ctrl+K / clear-after-cursor) that called
@@ -114,8 +118,11 @@ export function ShellLayout({ page, save, killScripts, children }: ShellLayoutPr
     }
   }, [page]);
 
+  const railColumn = `${railExpanded ? RAIL_WIDTH_EXPANDED : RAIL_WIDTH_COLLAPSED}px`;
+  const hudColumn = hudCollapsed ? "0px" : "272px";
+
   return (
-    <div className={cx(classes.shell, hudCollapsed && classes.shellHudCollapsed)}>
+    <div className={classes.shell} style={{ gridTemplateColumns: `${railColumn} 1fr ${hudColumn}` }}>
       <IconRail page={page} className={classes.rail} />
       <TopBar page={page} className={classes.topBar} paletteState={paletteState} hudCollapsed={hudCollapsed} />
       <main ref={contentRef} className={classes.content}>

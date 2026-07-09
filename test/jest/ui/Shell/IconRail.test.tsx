@@ -13,6 +13,7 @@ import { Router } from "../../../../src/ui/GameRoot";
 import { ErrorState } from "../../../../src/ErrorHandling/ErrorState";
 import { InvitationsSeen } from "../../../../src/Faction/ui/FactionsRoot";
 import { IconRail } from "../../../../src/ui/Shell/IconRail";
+import { ShellLayout } from "../../../../src/ui/Shell/ShellLayout";
 
 import { initGameEnvironment, setupBasicTestingEnvironment } from "../../Utilities";
 
@@ -30,6 +31,8 @@ beforeEach(() => {
   Player.sourceFiles.clear();
   ErrorState.UnreadErrors = 0;
   InvitationsSeen.clear();
+  // Collapsed (icons-only) baseline: the pre-existing tests assert icon-only rendering.
+  Settings.IsSidebarOpened = false;
   container = document.createElement("div");
   document.body.appendChild(container);
 });
@@ -148,5 +151,111 @@ describe("IconRail navigation", () => {
       getItem(root, Page.Terminal)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(toPage).toHaveBeenCalledWith(Page.Terminal);
+  });
+});
+
+function getChevron(root: HTMLElement): HTMLElement | null {
+  return root.querySelector('[aria-label="Expand sidebar"], [aria-label="Collapse sidebar"]');
+}
+
+describe("IconRail expand/collapse", () => {
+  it("collapsed rail renders icons only (no page names)", () => {
+    const root = renderRail(Page.Terminal);
+    expect(getItem(root, Page.Terminal)?.textContent).toBe("");
+    expect(getItem(root, Page.City)?.textContent).toBe("");
+  });
+
+  it("expanded rail renders page names next to the icons", () => {
+    Settings.IsSidebarOpened = true;
+    const root = renderRail(Page.Terminal);
+    expect(getItem(root, Page.Terminal)?.textContent).toBe(String(Page.Terminal));
+    expect(getItem(root, Page.City)?.textContent).toBe(String(Page.City));
+  });
+
+  it("expanded rail renders group headers", () => {
+    Settings.IsSidebarOpened = true;
+    const root = renderRail(Page.Terminal);
+    expect(root.textContent).toContain("Hacking");
+    expect(root.textContent).toContain("World");
+  });
+
+  it("chevron click expands the rail and persists Settings.IsSidebarOpened", () => {
+    const root = renderRail(Page.Terminal);
+    expect(getChevron(root)?.getAttribute("aria-label")).toBe("Expand sidebar");
+    act(() => {
+      getChevron(root)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(Settings.IsSidebarOpened).toBe(true);
+    expect(getItem(root, Page.Terminal)?.textContent).toBe(String(Page.Terminal));
+    expect(getChevron(root)?.getAttribute("aria-label")).toBe("Collapse sidebar");
+  });
+
+  it("chevron click collapses an expanded rail back to icons", () => {
+    Settings.IsSidebarOpened = true;
+    const root = renderRail(Page.Terminal);
+    act(() => {
+      getChevron(root)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(Settings.IsSidebarOpened).toBe(false);
+    expect(getItem(root, Page.Terminal)?.textContent).toBe("");
+    expect(getChevron(root)?.getAttribute("aria-label")).toBe("Expand sidebar");
+  });
+
+  it("marks the active item in both modes (aria-current + accent label class)", () => {
+    let root = renderRail(Page.Terminal);
+    expect(getItem(root, Page.Terminal)?.getAttribute("aria-current")).toBe("page");
+
+    // Fresh mount: the rail reads Settings.IsSidebarOpened on mount (and via the chevron's event).
+    if (container) ReactDOM.unmountComponentAtNode(container);
+    Settings.IsSidebarOpened = true;
+    root = renderRail(Page.Terminal);
+    const activeItem = getItem(root, Page.Terminal);
+    const inactiveItem = getItem(root, Page.City);
+    expect(activeItem?.getAttribute("aria-current")).toBe("page");
+    // The active label carries the accent styling class the inactive label lacks.
+    const activeLabel = activeItem?.querySelector("span");
+    const inactiveLabel = inactiveItem?.querySelector("span");
+    expect(activeLabel).not.toBeNull();
+    expect(inactiveLabel).not.toBeNull();
+    expect(activeLabel?.className).not.toBe(inactiveLabel?.className);
+  });
+
+  it("keeps badges visible while expanded", () => {
+    Settings.IsSidebarOpened = true;
+    ErrorState.UnreadErrors = 3;
+    const root = renderRail(Page.Terminal);
+    expect(getItem(root, Page.ActiveScripts)?.textContent).toContain("3");
+  });
+});
+
+describe("ShellLayout rail column", () => {
+  function renderShell(): HTMLDivElement {
+    if (!container) throw new Error("No container");
+    act(() => {
+      ReactDOM.render(
+        <ThemeProvider theme={testTheme}>
+          <ShellLayout page={Page.Terminal} save={jest.fn()} killScripts={jest.fn()}>
+            <div />
+          </ShellLayout>
+        </ThemeProvider>,
+        container,
+      );
+    });
+    return container;
+  }
+
+  it("first grid column follows the rail expansion (60px ↔ 210px)", () => {
+    Settings.HudCollapsed = false;
+    const root = renderShell();
+    const shell = root.firstElementChild as HTMLElement;
+    expect(shell.style.gridTemplateColumns).toBe("60px 1fr 272px");
+    act(() => {
+      getChevron(root)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(shell.style.gridTemplateColumns).toBe("210px 1fr 272px");
+    act(() => {
+      getChevron(root)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(shell.style.gridTemplateColumns).toBe("60px 1fr 272px");
   });
 });
