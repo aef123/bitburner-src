@@ -24,6 +24,35 @@ import {
 } from "../../utils/KeyBindingUtils";
 
 /**
+ * Shared hotkey suppression guard. Returns an object with:
+ *   - `isSuppressed(event)` — true when any shell hotkey (navigation or palette) should be skipped.
+ *
+ * The hook owns the KeyBindingEvents subscription so callers don't need to manage it themselves.
+ * Both useNavigationHotkeys and ShellLayout's palette shortcut handler use this to avoid drift.
+ */
+export function useHotkeySuppression(): { isSuppressed: (event: KeyboardEvent) => boolean } {
+  const isSettingUpKeyBindings = useRef(false);
+
+  useEffect(() => {
+    const clearSubscription = KeyBindingEvents.subscribe((eventType) => {
+      if (eventType === KeyBindingEventType.StartSettingUp) isSettingUpKeyBindings.current = true;
+      if (eventType === KeyBindingEventType.StopSettingUp) isSettingUpKeyBindings.current = false;
+    });
+    return clearSubscription;
+  }, []);
+
+  const isSuppressed = useCallback((event: KeyboardEvent): boolean => {
+    if (Settings.DisableHotkeys) return true;
+    if (event.getModifierState(event.key)) return true;
+    if (isSettingUpKeyBindings.current) return true;
+    if ((Player.currentWork && Player.focus) || Router.page() === Page.BitVerse) return true;
+    return false;
+  }, []);
+
+  return { isSuppressed };
+}
+
+/**
  * Navigate to a page from a navigation surface (icon rail, hotkeys, palette). Mirrors SidebarRoot's clickPage:
  * provides the required context for complex pages and advances the interactive tutorial when the flashed page is
  * visited.
@@ -47,19 +76,7 @@ export function navigateToPage(page: Page): void {
 }
 
 export function useNavigationHotkeys(): void {
-  const isSettingUpKeyBindings = useRef(false);
-
-  useEffect(() => {
-    const clearSubscription = KeyBindingEvents.subscribe((eventType) => {
-      if (eventType === KeyBindingEventType.StartSettingUp) {
-        isSettingUpKeyBindings.current = true;
-      }
-      if (eventType === KeyBindingEventType.StopSettingUp) {
-        isSettingUpKeyBindings.current = false;
-      }
-    });
-    return clearSubscription;
-  }, []);
+  const { isSuppressed } = useHotkeySuppression();
 
   /**
    * "keyBindingType is GoToPageKeyBindingType" narrows the type: a binding is navigable when it targets a page
@@ -74,18 +91,7 @@ export function useNavigationHotkeys(): void {
 
   useEffect(() => {
     function handleShortcuts(this: Document, event: KeyboardEvent): void {
-      if (Settings.DisableHotkeys) {
-        return;
-      }
-      if (event.getModifierState(event.key)) {
-        return;
-      }
-      if (isSettingUpKeyBindings.current) {
-        return;
-      }
-      if ((Player.currentWork && Player.focus) || Router.page() === Page.BitVerse) {
-        return;
-      }
+      if (isSuppressed(event)) return;
       const keyBindingTypes = determineKeyBindingTypes(CurrentKeyBindings, convertKeyboardEventToKeyCombination(event));
       for (const keyBindingType of keyBindingTypes) {
         if (!canGoToPage(keyBindingType)) {
@@ -98,5 +104,5 @@ export function useNavigationHotkeys(): void {
 
     document.addEventListener("keydown", handleShortcuts);
     return () => document.removeEventListener("keydown", handleShortcuts);
-  }, [canGoToPage]);
+  }, [canGoToPage, isSuppressed]);
 }

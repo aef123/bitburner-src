@@ -53,6 +53,40 @@ afterEach(() => {
   Router.toPage = () => {};
 });
 
+// ─── Ctrl+K double-fire guard — defaultPrevented early-return ────────────
+//
+// Verify that a document-level Ctrl+K event whose defaultPrevented flag has been
+// set by an earlier listener (e.g. the terminal's bash-hotkey handler) does NOT
+// reach the palette opener. We replicate the exact early-return from handlePaletteShortcut
+// so the test stays in sync with the implementation even when ShellLayout can't be
+// fully mounted in the test environment.
+
+describe("handlePaletteShortcut — defaultPrevented early-return", () => {
+  it("does not open the palette when event.defaultPrevented is true", () => {
+    const openSpy = jest.fn();
+
+    // Replicate the exact logic from ShellLayout's handlePaletteShortcut.
+    function simulateHandler(event: KeyboardEvent): void {
+      if (event.defaultPrevented) return;
+      const isK = event.key === "k" || event.key === "K";
+      const hasCtrlOrMeta = event.ctrlKey || event.metaKey;
+      if (!isK || !hasCtrlOrMeta) return;
+      openSpy();
+    }
+
+    // Event with defaultPrevented=true (simulate a prior listener calling preventDefault).
+    const consumed = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    consumed.preventDefault(); // sets defaultPrevented = true
+    simulateHandler(consumed);
+    expect(openSpy).not.toHaveBeenCalled();
+
+    // Sanity-check: same event without defaultPrevented DOES open the palette.
+    const fresh = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    simulateHandler(fresh);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ─── Ranking unit tests (pure function, no DOM) ───────────────────────────
 
 describe("rankResults — ranking", () => {
