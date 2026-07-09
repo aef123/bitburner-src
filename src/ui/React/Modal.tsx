@@ -1,5 +1,6 @@
 import React, { type CSSProperties, useEffect, useState } from "react";
 import { Theme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Fade from "@mui/material/Fade";
@@ -16,9 +17,10 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   paper: {
     position: "relative",
-    backgroundColor: theme.palette.background.default,
-    border: "2px solid " + theme.palette.primary.main,
-    boxShadow: `0px 3px 5px -1px ${theme.palette.primary.dark},0px 5px 8px 0px ${theme.palette.primary.dark},0px 1px 14px 0px ${theme.palette.primary.dark}`,
+    backgroundColor: theme.colors.bgPanel,
+    border: "1px solid " + theme.colors.borderCard,
+    borderRadius: 10,
+    boxShadow: `0px 16px 40px ${alpha((theme.colors.black as string) ?? "#000000", 0.5)}`,
     padding: 2,
     maxWidth: "80%",
     maxHeight: "80%",
