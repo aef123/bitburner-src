@@ -26,42 +26,45 @@ interface IProps {
   onUpdate: () => void;
 }
 
-const tabMargin = 5;
 const tabIconWidth = 25;
-const tabIconHeight = 38.5;
+const tabHeight = 38;
 
 export function Tab({ provided, tabId, isActive, isExternal, isUnsaved, onClick, onClose, onUpdate }: IProps) {
   const rerender = useRerender();
+  /**
+   * Restyle per design-notes-2C tab strip: active tab is lifted to the editor bg with a 2px cyan
+   * top stripe and bright text; inactive tabs are transparent with dim text. External-server files
+   * keep the warning color — that signal predates the redesign and is load-bearing (files on
+   * non-home servers are lost on resets).
+   */
   const colorProps = isActive
     ? {
-        background: Settings.theme.button,
-        borderColor: Settings.theme.button,
-        color: Settings.theme.primary,
+        background: Settings.theme.bgApp,
+        borderTop: `2px solid ${Settings.theme.accentCyan}`,
+        color: isExternal ? Settings.theme.warning : Settings.theme.textPrimary,
       }
     : {
-        background: Settings.theme.backgroundsecondary,
-        borderColor: Settings.theme.backgroundsecondary,
-        color: Settings.theme.secondary,
+        background: "transparent",
+        borderTop: "2px solid transparent",
+        color: isExternal ? Settings.theme.warning : Settings.theme.textSecondary,
       };
 
-  let tabTitle;
-  let tooltipTitle;
-  if (isUnsaved()) {
-    // Show a "*" character to notify the player that this file is dirtied.
-    tabTitle = (
-      <>
-        <Typography component="span" color={Settings.theme.warning}>
-          *{" "}
-        </Typography>
-        {tabId}
-      </>
-    );
-  } else {
-    tabTitle = tabId;
-  }
+  // Dirty marker per 2C mock: cyan ● dot (replaces the old "*" prefix).
+  const dirtyDot = isUnsaved() ? (
+    <span data-dirty-dot style={{ color: Settings.theme.accentCyan, fontSize: "9px", marginRight: 6 }}>
+      ●
+    </span>
+  ) : null;
 
+  const tabTitle = (
+    <>
+      {dirtyDot}
+      {tabId}
+    </>
+  );
+
+  let tooltipTitle;
   if (isExternal) {
-    colorProps.color = Settings.theme.warning;
     // Show a warning message if this file is on a non-home server.
     tooltipTitle = (
       <Typography component="span" color={Settings.theme.warning}>
@@ -77,9 +80,10 @@ export function Tab({ provided, tabId, isActive, isExternal, isUnsaved, onClick,
   const iconButtonStyle = {
     maxWidth: tabIconWidth,
     minWidth: tabIconWidth,
-    minHeight: tabIconHeight,
-    maxHeight: tabIconHeight,
+    minHeight: tabHeight,
+    maxHeight: tabHeight,
     ...colorProps,
+    color: Settings.theme.textFaint,
   };
 
   const tabRef = useRef<HTMLDivElement | null>(null);
@@ -111,9 +115,8 @@ export function Tab({ provided, tabId, isActive, isExternal, isUnsaved, onClick,
       {...provided.dragHandleProps}
       style={{
         ...provided.draggableProps.style,
-        marginRight: tabMargin,
         flexShrink: 0,
-        border: "1px solid " + Settings.theme.well,
+        borderRight: `1px solid ${Settings.theme.borderDefault}`,
       }}
     >
       <Tooltip title={tooltipTitle}>
@@ -126,8 +129,11 @@ export function Tab({ provided, tabId, isActive, isExternal, isUnsaved, onClick,
             }
           }}
           style={{
-            minHeight: tabIconHeight,
+            minHeight: tabHeight,
             overflow: "hidden",
+            textTransform: "none",
+            fontFamily: Settings.styles.monoFontFamily,
+            fontSize: "11.5px",
             ...colorProps,
           }}
         >

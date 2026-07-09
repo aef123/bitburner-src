@@ -5,14 +5,19 @@ import type { editor } from "monaco-editor";
 import React from "react";
 type IStandaloneCodeEditor = editor.IStandaloneCodeEditor;
 
+// The vim status element now lives inside StatusBar2C's 28px bar (Task 11): fill the segment the
+// host gives us instead of forcing the old 36px row height.
 const StatusBarContainer = styled("div")({
   display: "flex",
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
-  height: 36,
+  height: "100%",
+  width: "100%",
+  minWidth: 0,
   marginLeft: 4,
   marginRight: 4,
+  overflow: "hidden",
 });
 
 const StatusBarLeft = styled("div")({

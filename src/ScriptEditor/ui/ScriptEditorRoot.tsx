@@ -1,6 +1,6 @@
 import type { ContentFilePath } from "../../Paths/ContentFile";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 
 import type * as acorn from "acorn";
@@ -27,10 +27,21 @@ import { useRerender } from "../../ui/React/hooks";
 import { isUnsavedFile, getServerCode, makeModel, saveScript } from "./utils";
 import { OpenScript } from "./OpenScript";
 import { Tabs } from "./Tabs";
-import { Toolbar } from "./Toolbar";
+import { ActivityBar } from "./ActivityBar";
+import { ExplorerPanel } from "./ExplorerPanel";
+import { StatusBar2C } from "./StatusBar2C";
 import { NoOpenScripts } from "./NoOpenScripts";
 import { ScriptEditorContextProvider, useScriptEditorContext } from "./ScriptEditorContext";
+import { OptionsModal, type OptionsModalProps } from "./OptionsModal";
+import { makeTheme } from "./themes";
 import { useVimEditor } from "./useVimEditor";
+import { Modal } from "../../ui/React/Modal";
+import { useBoolean } from "../../ui/React/hooks";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableRow from "@mui/material/TableRow";
+import Tooltip from "@mui/material/Tooltip";
 import { useCallback } from "react";
 import { type AST, getFileType, getModuleScript, parseAST } from "../../utils/ScriptTransformer";
 import { RamCalculationErrorCode } from "../../Script/RamCalculationErrorCodes";
@@ -173,7 +184,29 @@ function Root(props: IProps): React.ReactElement {
     reloadModelOfCurrentScript();
   }
 
-  const { options, showRAMError, updateRAM, startUpdatingRAM, finishUpdatingRAM } = useScriptEditorContext();
+  const { options, saveOptions, ramEntries, showRAMError, updateRAM, startUpdatingRAM, finishUpdatingRAM } =
+    useScriptEditorContext();
+
+  // Explorer visibility (activity-bar toggle). Runtime-only UI state, default open.
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [ramInfoOpen, { on: openRAMInfo, off: closeRAMInfo }] = useBoolean(false);
+  const [optionsOpen, { on: openOptions, off: closeOptions }] = useBoolean(false);
+
+  // Moved from the removed Toolbar: options round-trip (saveOptions + delayed editor update to
+  // avoid the vim/regular mode switch resetting settings) and custom-theme rebuild.
+  const onOptionChange: OptionsModalProps["onOptionChange"] = (option, value) => {
+    const newOptions = { ...options, [option]: value };
+    saveOptions(newOptions);
+    // delaying editor options update to avoid an issue
+    // where switching between vim and regular modes causes some settings to be reset
+    setTimeout(() => {
+      editorRef.current?.updateOptions(newOptions);
+    }, 100);
+  };
+
+  const onThemeChange = () => {
+    monaco.editor.defineTheme("customTheme", makeTheme(Settings.EditorTheme));
+  };
 
   let decorations: monaco.editor.IEditorDecorationsCollection | undefined;
 
@@ -548,6 +581,65 @@ function Root(props: IProps): React.ReactElement {
     }
   }
 
+  /**
+   * Open a file from the explorer panel. This is the SAME machinery onMount uses for nano/vim
+   * openings (reuse existing OpenScript via the tab path, else create OpenScript + makeModel) —
+   * deliberately not a second open path.
+   */
+  function openFileFromExplorer(hostname: string, path: string): void {
+    const server = GetServer(hostname);
+    if (server === null) {
+      return;
+    }
+    const filePath = path as ContentFilePath; // paths come straight from server.scripts/textFiles keys
+    const existingIndex = openScripts.findIndex((script) => script.path === filePath && script.hostname === hostname);
+    if (existingIndex !== -1) {
+      // Already open: the tab-click path handles cursor bookkeeping, model swap, and parseCode.
+      onTabClick(existingIndex);
+      rerender();
+      return;
+    }
+    const content = server.getContentFile(filePath)?.content;
+    if (content === undefined) {
+      return;
+    }
+    // Save the cursor of the file we're leaving (same bookkeeping as onTabClick).
+    if (currentScript !== null) {
+      const currentPosition = editorRef.current?.getPosition();
+      if (currentPosition) {
+        currentScript.lastPosition = currentPosition;
+      }
+    }
+    const newScript = new OpenScript(
+      filePath,
+      content,
+      hostname,
+      new monaco.Position(0, 0),
+      makeModel(hostname, filePath, content),
+      currentScript !== null ? currentScript.vimMode : props.vim,
+    );
+    openScripts.push(newScript);
+    currentScript = newScript;
+    if (editorRef.current !== null) {
+      editorRef.current.setModel(newScript.model);
+      parseCode(newScript.code);
+      editorRef.current.focus();
+    }
+    rerender();
+    removeOutlineOfEditor();
+  }
+
+  /** Reveal a line in the active editor (outline clicks). */
+  function revealLine(line: number): void {
+    const editor = editorRef.current;
+    if (editor === null) {
+      return;
+    }
+    editor.revealLineInCenter(line);
+    editor.setPosition({ lineNumber: line, column: 1 });
+    editor.focus();
+  }
+
   function onUnmountEditor() {
     if (!currentScript) {
       return;
@@ -579,6 +671,10 @@ function Root(props: IProps): React.ReactElement {
 
   return (
     <>
+      {/* Layout per design-notes-2C: tab strip (46px spacer over the activity bar, then tabs),
+          main row = activity bar | explorer | editor column, status bar at the bottom. Sized by
+          the shell pane via height:100% — no 100vh (global constraint). The Editor stays mounted
+          (display:none when no script) exactly as before: its unmount disposes all models. */}
       <div
         style={{
           display: currentScript !== null ? "flex" : "none",
@@ -587,21 +683,92 @@ function Root(props: IProps): React.ReactElement {
           flexDirection: "column",
         }}
       >
-        <Tabs
-          scripts={openScripts}
+        <div style={{ display: "flex", flexDirection: "row", alignItems: "stretch" }}>
+          {/* Spacer above the activity bar per the 2C mock, sharing the tab strip's chrome. */}
+          <div
+            style={{
+              width: 46,
+              flex: "none",
+              boxSizing: "border-box",
+              backgroundColor: Settings.theme.bgRail,
+              borderBottom: `1px solid ${Settings.theme.borderDefault}`,
+            }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Tabs
+              scripts={openScripts}
+              currentScript={currentScript}
+              onTabClick={onTabClick}
+              onTabClose={onTabClose}
+              onTabUpdate={onTabUpdate}
+            />
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "row" }}>
+          <ActivityBar
+            explorerOpen={explorerOpen}
+            onToggleExplorer={() => setExplorerOpen(!explorerOpen)}
+            onOpenOptions={openOptions}
+          />
+          {explorerOpen && (
+            <ExplorerPanel currentScript={currentScript} onOpenFile={openFileFromExplorer} onReveal={revealLine} />
+          )}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <Editor onMount={onMount} onChange={updateCode} onUnmount={onUnmountEditor} />
+          </div>
+        </div>
+
+        <StatusBar2C
           currentScript={currentScript}
-          onTabClick={onTabClick}
-          onTabClose={onTabClose}
-          onTabUpdate={onTabUpdate}
+          editor={editorRef.current}
+          vimStatus={statusBarRef.current}
+          onRun={() => {
+            run().catch((error) => console.error(error));
+          }}
+          onSave={() => {
+            save().catch((error) => console.error(error));
+          }}
+          onBeautify={() => {
+            beautify().catch((error) => console.error(error));
+          }}
+          onOpenRAMModal={openRAMInfo}
         />
-        <div style={{ flex: "0 0 5px" }} />
-        <Editor onMount={onMount} onChange={updateCode} onUnmount={onUnmountEditor} />
-
-        {statusBarRef.current}
-
-        <Toolbar onSave={save} onRun={run} editor={editorRef.current} onBeautify={beautify} />
       </div>
       {!currentScript && <NoOpenScripts />}
+
+      {/* Editor options round-trip (was the Toolbar's Options button; now the activity bar ⚙). */}
+      <OptionsModal
+        open={optionsOpen}
+        options={options}
+        onClose={closeOptions}
+        onOptionChange={onOptionChange}
+        onThemeChange={onThemeChange}
+      />
+      {/* Static RAM breakdown (was the Toolbar's RAM button; now the status-bar RAM segment). */}
+      <Modal open={ramInfoOpen} onClose={closeRAMInfo}>
+        <Tooltip
+          title={
+            "Static RAM costs of individual functions used by this script. " +
+            "Calling `ns.ramOverride()` with a constant number as the first statement in " +
+            "your script will override the value here, as well."
+          }
+        >
+          <Table>
+            <TableBody>
+              {ramEntries.map(([n, r]) => (
+                <React.Fragment key={n + r}>
+                  <TableRow>
+                    <TableCell sx={{ color: Settings.theme.primary }}>{n}</TableCell>
+                    <TableCell align="right" sx={{ color: Settings.theme.primary }}>
+                      {r}
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </Tooltip>
+      </Modal>
     </>
   );
 }

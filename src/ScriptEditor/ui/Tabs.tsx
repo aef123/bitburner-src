@@ -65,7 +65,19 @@ export function Tabs({ scripts, currentScript, onTabClick, onTabClose, onTabUpda
   }
 
   return (
-    <Box display="flex" flexGrow="0" flexDirection="row" alignItems="center">
+    // Tab strip per design-notes-2C: chrome bg with a bottom hairline; tabs themselves are
+    // restyled in Tab.tsx. Structure around the Droppable is unchanged — react-beautiful-dnd is
+    // sensitive to DOM changes between DragDropContext/Droppable/Draggable.
+    <Box
+      display="flex"
+      flexGrow="0"
+      flexDirection="row"
+      alignItems="center"
+      sx={{
+        backgroundColor: Settings.theme.bgRail,
+        borderBottom: `1px solid ${Settings.theme.borderDefault}`,
+      }}
+    >
       <Tooltip
         title={"Search Open Scripts"}
         open={isSearchTooltipOpen}
@@ -108,9 +120,7 @@ export function Tabs({ scripts, currentScript, onTabClick, onTabClose, onTabUpda
               ref={provided.innerRef}
               {...provided.droppableProps}
               style={{
-                backgroundColor: snapshot.isDraggingOver
-                  ? Settings.theme.backgroundsecondary
-                  : Settings.theme.backgroundprimary,
+                backgroundColor: snapshot.isDraggingOver ? Settings.theme.bgActive : Settings.theme.bgRail,
                 overflowX: "scroll",
               }}
               onWheel={handleScroll}

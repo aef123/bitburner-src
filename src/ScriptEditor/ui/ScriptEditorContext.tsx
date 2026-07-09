@@ -13,6 +13,8 @@ import { type ScriptFilePath } from "../../Paths/ScriptFilePath";
 
 export interface ScriptEditorContextShape {
   ram: string;
+  /** Numeric static RAM cost of the current script, or null when unknown (error / text file). */
+  ramUsage: number | null;
   ramEntries: string[][];
   showRAMError: (error?: RamCalculationFailure) => void;
   updateRAM: (ast: AST, path: ScriptFilePath, server: BaseServer) => void;
@@ -29,9 +31,11 @@ const ScriptEditorContext = React.createContext({} as ScriptEditorContextShape);
 
 export function ScriptEditorContextProvider({ children }: { children: React.ReactNode }) {
   const [ram, setRAM] = useState("RAM: ???");
+  const [ramUsage, setRamUsage] = useState<number | null>(null);
   const [ramEntries, setRamEntries] = useState<string[][]>([["???", ""]]);
 
   const showRAMError: ScriptEditorContextShape["showRAMError"] = (error) => {
+    setRamUsage(null);
     if (!error) {
       setRAM("N/A");
       setRamEntries([["N/A", ""]]);
@@ -66,6 +70,7 @@ export function ScriptEditorContextProvider({ children }: { children: React.Reac
       }
 
       setRAM("RAM: " + formatRam(ramUsage.cost));
+      setRamUsage(ramUsage.cost);
       setRamEntries(entriesDisp);
       return;
     }
@@ -74,6 +79,7 @@ export function ScriptEditorContextProvider({ children }: { children: React.Reac
       showRAMError(ramUsage);
     } else {
       setRAM("RAM: Unknown Error");
+      setRamUsage(null);
       setRamEntries([["Unknown Error", ""]]);
     }
   };
@@ -119,6 +125,7 @@ export function ScriptEditorContextProvider({ children }: { children: React.Reac
     <ScriptEditorContext.Provider
       value={{
         ram,
+        ramUsage,
         ramEntries,
         showRAMError,
         updateRAM,
