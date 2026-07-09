@@ -304,6 +304,25 @@ describe("CommandPalette keyboard flow", () => {
     expect(items.length).toBe(0);
   });
 
+  it("refreshes visibility on reopen: a page unlocked while closed appears with an empty query", () => {
+    const onClose = jest.fn();
+    const onNavigate = jest.fn();
+
+    // Open with a fresh player: Gang must not be listed.
+    let root = renderPalette(true, onClose, onNavigate);
+    const labelsOf = (r: HTMLElement) =>
+      Array.from(r.querySelectorAll("[data-palette-item]")).map((el) => el.querySelector("span")?.textContent);
+    expect(labelsOf(root)).not.toContain(String(Page.Gang));
+
+    // Close the palette (component stays mounted, like PalettePortal), then unlock Gang.
+    renderPalette(false, onClose, onNavigate);
+    Player.gang = {} as Gang;
+
+    // Reopen with the query still empty: Gang must now appear without typing.
+    root = renderPalette(true, onClose, onNavigate);
+    expect(labelsOf(root)).toContain(String(Page.Gang));
+  });
+
   it("clicking a result item calls onNavigate and onClose", () => {
     const onClose = jest.fn();
     const onNavigate = jest.fn();

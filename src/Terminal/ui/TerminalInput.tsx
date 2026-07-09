@@ -14,15 +14,18 @@ import { exceptionAlert } from "../../utils/helpers/exceptionAlert";
 const useStyles = makeStyles()((theme: Theme) => ({
   input: {
     backgroundColor: theme.colors.backgroundprimary,
+    fontFamily: Settings.styles.monoFontFamily,
   },
   nopadding: {
     padding: theme.spacing(0),
   },
   preformatted: {
     margin: theme.spacing(0),
+    fontFamily: Settings.styles.monoFontFamily,
   },
   absolute: {
     margin: theme.spacing(0),
+    fontFamily: Settings.styles.monoFontFamily,
     position: "absolute",
     bottom: "12px",
     opacity: "0.75",
@@ -450,7 +453,11 @@ export function TerminalInput(): React.ReactElement {
           id: "terminal-input",
           className: classes.input,
           startAdornment: (
-            <Typography color={Terminal.action === null ? "primary" : "secondary"} flexShrink={0}>
+            <Typography
+              classes={{ root: classes.preformatted }}
+              color={Terminal.action === null ? "primary" : "secondary"}
+              flexShrink={0}
+            >
               [{Player.getCurrentServer().hostname}&nbsp;/{Terminal.cwd()}]&gt;&nbsp;
             </Typography>
           ),

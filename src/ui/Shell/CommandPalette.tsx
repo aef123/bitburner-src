@@ -248,10 +248,13 @@ export function CommandPalette({ open, onClose, onNavigate }: CommandPaletteProp
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Recompute visible results and ranking whenever query or open state changes.
+  // `open` must be a dependency: PalettePortal keeps this component mounted, and on reopen
+  // setQuery("") is a no-op when the query is already empty — without `open` here, a page
+  // unlocked between opens (e.g. Gang) would be missing from the empty-query list.
   const results = useMemo<PaletteResult[]>(() => {
     const visible = getVisibleResults();
     return rankResults(visible, query);
-  }, [query]);
+  }, [query, open]);
 
   // Reset state when palette opens.
   useEffect(() => {
