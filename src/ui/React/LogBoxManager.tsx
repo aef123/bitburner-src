@@ -171,6 +171,7 @@ const useStyles = makeStyles()({
     whiteSpace: "pre-wrap",
     wordWrap: "break-word",
     borderWidth: "0 1px 1px 1px",
+    fontFamily: Settings.styles.monoFontFamily,
   },
   titleButton: {
     borderWidth: "0 0 0 1px",

@@ -15,6 +15,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     color: theme.colors.success,
+    fontFamily: Settings.styles.monoFontFamily,
     "--padForFlushBg": (Settings.styles.lineHeight - 1) / 2 + "em",
   },
   error: {
@@ -22,6 +23,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     color: theme.palette.error.main,
+    fontFamily: Settings.styles.monoFontFamily,
     "--padForFlushBg": (Settings.styles.lineHeight - 1) / 2 + "em",
   },
   primary: {
@@ -29,6 +31,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     color: theme.palette.primary.main,
+    fontFamily: Settings.styles.monoFontFamily,
     "--padForFlushBg": (Settings.styles.lineHeight - 1) / 2 + "em",
   },
   info: {
@@ -36,6 +39,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     color: theme.palette.info.main,
+    fontFamily: Settings.styles.monoFontFamily,
     "--padForFlushBg": (Settings.styles.lineHeight - 1) / 2 + "em",
   },
   warning: {
@@ -43,6 +47,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     color: theme.palette.warning.main,
+    fontFamily: Settings.styles.monoFontFamily,
     "--padForFlushBg": (Settings.styles.lineHeight - 1) / 2 + "em",
   },
 }));

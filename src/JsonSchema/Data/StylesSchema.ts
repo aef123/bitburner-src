@@ -14,5 +14,8 @@ export const StylesSchema = {
     fontFamily: {
       type: "string",
     },
+    monoFontFamily: {
+      type: "string",
+    },
   },
 };

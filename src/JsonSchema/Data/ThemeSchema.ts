@@ -161,6 +161,72 @@ function getThemeSchemaProperties() {
     bnlvl3: {
       type: "string",
     },
+    bgApp: {
+      type: "string",
+    },
+    bgRail: {
+      type: "string",
+    },
+    bgPanel: {
+      type: "string",
+    },
+    bgPanelDeep: {
+      type: "string",
+    },
+    bgSidebar: {
+      type: "string",
+    },
+    bgActive: {
+      type: "string",
+    },
+    borderDefault: {
+      type: "string",
+    },
+    borderCard: {
+      type: "string",
+    },
+    borderFocus: {
+      type: "string",
+    },
+    borderAccent: {
+      type: "string",
+    },
+    track: {
+      type: "string",
+    },
+    textPrimary: {
+      type: "string",
+    },
+    textBody: {
+      type: "string",
+    },
+    textSecondary: {
+      type: "string",
+    },
+    textTertiary: {
+      type: "string",
+    },
+    textFaint: {
+      type: "string",
+    },
+    accentCyan: {
+      type: "string",
+    },
+    accentGreen: {
+      type: "string",
+    },
+    accentGold: {
+      type: "string",
+    },
+    accentRed: {
+      type: "string",
+    },
+    accentViolet: {
+      type: "string",
+    },
+    accentPink: {
+      type: "string",
+    },
   };
   for (const key of getRecordKeys(result)) {
     result[key].pattern = themeHexColorRegex.source;

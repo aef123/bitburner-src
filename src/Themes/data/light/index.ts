@@ -1,4 +1,5 @@
 import { IPredefinedTheme } from "../../Themes";
+import { uiRefreshTokens } from "../uiRefreshDefaults";
 import img1 from "./screenshot.png";
 
 export const Theme: IPredefinedTheme = {
@@ -46,5 +47,6 @@ export const Theme: IPredefinedTheme = {
     bnlvl1: "#B8B800",
     bnlvl2: "#38B384",
     bnlvl3: "#374BFF",
+    ...uiRefreshTokens,
   },
 };

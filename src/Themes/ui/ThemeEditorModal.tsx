@@ -377,6 +377,146 @@ export function ThemeEditorModal(props: IProps): React.ReactElement {
           color={customTheme.bnlvl3}
           defaultColor={defaultTheme.bnlvl3}
         />
+
+        <br />
+        <ColorEditor
+          name="bgApp"
+          onColorChange={onColorChange}
+          color={customTheme.bgApp}
+          defaultColor={defaultTheme.bgApp}
+        />
+        <ColorEditor
+          name="bgRail"
+          onColorChange={onColorChange}
+          color={customTheme.bgRail}
+          defaultColor={defaultTheme.bgRail}
+        />
+        <ColorEditor
+          name="bgPanel"
+          onColorChange={onColorChange}
+          color={customTheme.bgPanel}
+          defaultColor={defaultTheme.bgPanel}
+        />
+        <ColorEditor
+          name="bgPanelDeep"
+          onColorChange={onColorChange}
+          color={customTheme.bgPanelDeep}
+          defaultColor={defaultTheme.bgPanelDeep}
+        />
+        <ColorEditor
+          name="bgSidebar"
+          onColorChange={onColorChange}
+          color={customTheme.bgSidebar}
+          defaultColor={defaultTheme.bgSidebar}
+        />
+        <ColorEditor
+          name="bgActive"
+          onColorChange={onColorChange}
+          color={customTheme.bgActive}
+          defaultColor={defaultTheme.bgActive}
+        />
+
+        <br />
+        <ColorEditor
+          name="borderDefault"
+          onColorChange={onColorChange}
+          color={customTheme.borderDefault}
+          defaultColor={defaultTheme.borderDefault}
+        />
+        <ColorEditor
+          name="borderCard"
+          onColorChange={onColorChange}
+          color={customTheme.borderCard}
+          defaultColor={defaultTheme.borderCard}
+        />
+        <ColorEditor
+          name="borderFocus"
+          onColorChange={onColorChange}
+          color={customTheme.borderFocus}
+          defaultColor={defaultTheme.borderFocus}
+        />
+        <ColorEditor
+          name="borderAccent"
+          onColorChange={onColorChange}
+          color={customTheme.borderAccent}
+          defaultColor={defaultTheme.borderAccent}
+        />
+        <ColorEditor
+          name="track"
+          onColorChange={onColorChange}
+          color={customTheme.track}
+          defaultColor={defaultTheme.track}
+        />
+
+        <br />
+        <ColorEditor
+          name="textPrimary"
+          onColorChange={onColorChange}
+          color={customTheme.textPrimary}
+          defaultColor={defaultTheme.textPrimary}
+        />
+        <ColorEditor
+          name="textBody"
+          onColorChange={onColorChange}
+          color={customTheme.textBody}
+          defaultColor={defaultTheme.textBody}
+        />
+        <ColorEditor
+          name="textSecondary"
+          onColorChange={onColorChange}
+          color={customTheme.textSecondary}
+          defaultColor={defaultTheme.textSecondary}
+        />
+        <ColorEditor
+          name="textTertiary"
+          onColorChange={onColorChange}
+          color={customTheme.textTertiary}
+          defaultColor={defaultTheme.textTertiary}
+        />
+        <ColorEditor
+          name="textFaint"
+          onColorChange={onColorChange}
+          color={customTheme.textFaint}
+          defaultColor={defaultTheme.textFaint}
+        />
+
+        <br />
+        <ColorEditor
+          name="accentCyan"
+          onColorChange={onColorChange}
+          color={customTheme.accentCyan}
+          defaultColor={defaultTheme.accentCyan}
+        />
+        <ColorEditor
+          name="accentGreen"
+          onColorChange={onColorChange}
+          color={customTheme.accentGreen}
+          defaultColor={defaultTheme.accentGreen}
+        />
+        <ColorEditor
+          name="accentGold"
+          onColorChange={onColorChange}
+          color={customTheme.accentGold}
+          defaultColor={defaultTheme.accentGold}
+        />
+        <ColorEditor
+          name="accentRed"
+          onColorChange={onColorChange}
+          color={customTheme.accentRed}
+          defaultColor={defaultTheme.accentRed}
+        />
+        <ColorEditor
+          name="accentViolet"
+          onColorChange={onColorChange}
+          color={customTheme.accentViolet}
+          defaultColor={defaultTheme.accentViolet}
+        />
+        <ColorEditor
+          name="accentPink"
+          onColorChange={onColorChange}
+          color={customTheme.accentPink}
+          defaultColor={defaultTheme.accentPink}
+        />
       </Paper>
 
       <Paper sx={{ px: 1, py: 1, my: 1 }}>

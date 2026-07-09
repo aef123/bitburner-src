@@ -28,6 +28,28 @@ declare module "@mui/material/styles" {
       primary: React.CSSProperties["color"];
       secondary: React.CSSProperties["color"];
       well: React.CSSProperties["color"];
+      bgApp: React.CSSProperties["color"];
+      bgRail: React.CSSProperties["color"];
+      bgPanel: React.CSSProperties["color"];
+      bgPanelDeep: React.CSSProperties["color"];
+      bgSidebar: React.CSSProperties["color"];
+      bgActive: React.CSSProperties["color"];
+      borderDefault: React.CSSProperties["color"];
+      borderCard: React.CSSProperties["color"];
+      borderFocus: React.CSSProperties["color"];
+      borderAccent: React.CSSProperties["color"];
+      track: React.CSSProperties["color"];
+      textPrimary: React.CSSProperties["color"];
+      textBody: React.CSSProperties["color"];
+      textSecondary: React.CSSProperties["color"];
+      textTertiary: React.CSSProperties["color"];
+      textFaint: React.CSSProperties["color"];
+      accentCyan: React.CSSProperties["color"];
+      accentGreen: React.CSSProperties["color"];
+      accentGold: React.CSSProperties["color"];
+      accentRed: React.CSSProperties["color"];
+      accentViolet: React.CSSProperties["color"];
+      accentPink: React.CSSProperties["color"];
     };
   }
   interface ThemeOptions {
@@ -52,6 +74,28 @@ declare module "@mui/material/styles" {
       primary: React.CSSProperties["color"];
       secondary: React.CSSProperties["color"];
       well: React.CSSProperties["color"];
+      bgApp: React.CSSProperties["color"];
+      bgRail: React.CSSProperties["color"];
+      bgPanel: React.CSSProperties["color"];
+      bgPanelDeep: React.CSSProperties["color"];
+      bgSidebar: React.CSSProperties["color"];
+      bgActive: React.CSSProperties["color"];
+      borderDefault: React.CSSProperties["color"];
+      borderCard: React.CSSProperties["color"];
+      borderFocus: React.CSSProperties["color"];
+      borderAccent: React.CSSProperties["color"];
+      track: React.CSSProperties["color"];
+      textPrimary: React.CSSProperties["color"];
+      textBody: React.CSSProperties["color"];
+      textSecondary: React.CSSProperties["color"];
+      textTertiary: React.CSSProperties["color"];
+      textFaint: React.CSSProperties["color"];
+      accentCyan: React.CSSProperties["color"];
+      accentGreen: React.CSSProperties["color"];
+      accentGold: React.CSSProperties["color"];
+      accentRed: React.CSSProperties["color"];
+      accentViolet: React.CSSProperties["color"];
+      accentPink: React.CSSProperties["color"];
     };
   }
 }
@@ -82,6 +126,28 @@ export function refreshTheme(): void {
       primary: Settings.theme.primary,
       secondary: Settings.theme.secondary,
       well: Settings.theme.well,
+      bgApp: Settings.theme.bgApp,
+      bgRail: Settings.theme.bgRail,
+      bgPanel: Settings.theme.bgPanel,
+      bgPanelDeep: Settings.theme.bgPanelDeep,
+      bgSidebar: Settings.theme.bgSidebar,
+      bgActive: Settings.theme.bgActive,
+      borderDefault: Settings.theme.borderDefault,
+      borderCard: Settings.theme.borderCard,
+      borderFocus: Settings.theme.borderFocus,
+      borderAccent: Settings.theme.borderAccent,
+      track: Settings.theme.track,
+      textPrimary: Settings.theme.textPrimary,
+      textBody: Settings.theme.textBody,
+      textSecondary: Settings.theme.textSecondary,
+      textTertiary: Settings.theme.textTertiary,
+      textFaint: Settings.theme.textFaint,
+      accentCyan: Settings.theme.accentCyan,
+      accentGreen: Settings.theme.accentGreen,
+      accentGold: Settings.theme.accentGold,
+      accentRed: Settings.theme.accentRed,
+      accentViolet: Settings.theme.accentViolet,
+      accentPink: Settings.theme.accentPink,
     },
     palette: {
       primary: {

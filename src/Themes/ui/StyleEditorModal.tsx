@@ -103,6 +103,13 @@ export function StyleEditorModal(props: IProps): React.ReactElement {
           onChange={(value, error) => update({ ...customStyle, fontFamily: value ?? "" }, error)}
         />
         <br />
+        <StyleField<"fontFamily">
+          name="Mono Font Family"
+          type="string"
+          value={customStyle.monoFontFamily}
+          onChange={(value, error) => update({ ...customStyle, monoFontFamily: value ?? "" }, error)}
+        />
+        <br />
         <StyleField<"fontSize">
           name="Font Size"
           type="number"

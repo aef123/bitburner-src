@@ -113,6 +113,15 @@ export function loadSettings(saveString: string) {
   } catch (error) {
     console.error(error);
   }
+  // Migration: if the user has the old JetBrainsMono-only fontFamily default, update it to
+  // the new IBM Plex Sans default for UI text. Custom font selections are preserved.
+  if (Settings.styles.fontFamily === `JetBrainsMono, "Courier New", monospace`) {
+    Settings.styles.fontFamily = `"IBM Plex Sans", "Segoe UI", sans-serif`;
+  }
+  // Migration: if monoFontFamily is missing (old save), set it to the default.
+  if (!Settings.styles.monoFontFamily) {
+    Settings.styles.monoFontFamily = `JetBrainsMono, "Courier New", monospace`;
+  }
   /**
    * KeyBindings data does not exist in old save files. Technically, this check is unnecessary. If KeyBindings is
    * undefined, assertAndSanitizeKeyBindings will throw an error, and that error will be caught here. However, it

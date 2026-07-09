@@ -14,24 +14,28 @@ import { CodingContractModal } from "../../ui/React/CodingContractModal";
 import { ANSIITypography } from "../../ui/React/ANSIITypography";
 import { useRerender } from "../../ui/React/hooks";
 import { TerminalActionTimer } from "./TerminalActionTimer";
+import { Settings } from "../../Settings/Settings";
 
 const useStyles = makeStyles()((theme: Theme) => ({
   container: {
     display: "flex",
     flexDirection: "column",
     height: "calc(100vh - 16px)",
+    fontFamily: Settings.styles.monoFontFamily,
   },
   entries: {
     padding: 0,
     overflow: "scroll",
     flex: "0 1 auto",
     margin: "auto 0 0",
+    fontFamily: Settings.styles.monoFontFamily,
   },
   preformatted: {
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
     margin: theme.spacing(0),
     width: "100%",
+    fontFamily: Settings.styles.monoFontFamily,
   },
 }));
 

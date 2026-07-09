@@ -11357,6 +11357,28 @@ interface UserInterfaceTheme {
   bnlvl1: string;
   bnlvl2: string;
   bnlvl3: string;
+  bgApp: string;
+  bgRail: string;
+  bgPanel: string;
+  bgPanelDeep: string;
+  bgSidebar: string;
+  bgActive: string;
+  borderDefault: string;
+  borderCard: string;
+  borderFocus: string;
+  borderAccent: string;
+  track: string;
+  textPrimary: string;
+  textBody: string;
+  textSecondary: string;
+  textTertiary: string;
+  textFaint: string;
+  accentCyan: string;
+  accentGreen: string;
+  accentGold: string;
+  accentRed: string;
+  accentViolet: string;
+  accentPink: string;
 }
 
 /**
@@ -11365,6 +11387,7 @@ interface UserInterfaceTheme {
  */
 interface IStyleSettings {
   fontFamily: string;
+  monoFontFamily: string;
   fontSize: number;
   tailFontSize: number;
   lineHeight: number;
