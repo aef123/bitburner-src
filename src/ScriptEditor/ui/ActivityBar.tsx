@@ -1,28 +1,22 @@
 /**
- * Activity bar for the script editor (Task 11, 2C part 1) per design-notes-2C: 46px strip with
- * 34×34 buttons and the inset 2px cyan indicator on the active one.
+ * Activity bar for the script editor (2C) per design-notes-2C: 46px strip with 34×34 buttons and
+ * the inset 2px cyan indicator on the active one.
  *
- * v1 contents (Search arrives in Task 12): Explorer toggle, NS API docs (the Toolbar's
- * DocumentationAutocomplete relocated into a popover — Ctrl-click/Ctrl-Enter still opens
- * externally via the same onSelection event inspection), then bottom-aligned Terminal (the
- * Toolbar's "Terminal" button relocated) and editor Settings (existing OptionsModal, opened by
- * the Root).
+ * Task 12 contents: Explorer / Search side-panel toggles (Ctrl+Shift+F inside the editor also
+ * activates Search), NS API docs (opens the bottom panel's NS API tab — the Task 11 popover moved
+ * there entirely, same DocumentationAutocomplete + link, so no capability was lost), then
+ * bottom-aligned Terminal (the old Toolbar's button relocated) and editor Settings (existing
+ * OptionsModal, opened by the Root).
  */
 
-import React, { useRef, useState } from "react";
+import React from "react";
 import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
-import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
-import Typography from "@mui/material/Typography";
 
 import { Router } from "../../ui/GameRoot";
 import { Page } from "../../ui/Router";
 import { Settings } from "../../Settings/Settings";
-import { DocumentationAutocomplete } from "../../Documentation/ui/DocumentationAutocomplete";
-import { openDocumentationPopUp } from "../../Documentation/root";
-import { defaultNsApiPage, openDocExternally } from "../../ui/React/Documentation";
-import { DocumentationLink } from "../../ui/React/DocumentationLink";
 import { CurrentKeyBindings, parseKeyCombinationsToString, ScriptEditorAction } from "../../utils/KeyBindingUtils";
 
 const useStyles = makeStyles()((theme: Theme) => ({
@@ -69,48 +63,57 @@ const useStyles = makeStyles()((theme: Theme) => ({
   spacer: {
     flex: 1,
   },
-  popover: {
-    padding: "12px 14px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    backgroundColor: theme.colors.bgPanelDeep,
-    border: `1px solid ${theme.colors.borderFocus as string}`,
-  },
-  popoverHint: {
-    color: theme.colors.textTertiary,
-    fontSize: "10.5px",
-  },
 }));
 
+export type SidePanelKind = "explorer" | "search";
+
 interface ActivityBarProps {
-  explorerOpen: boolean;
-  onToggleExplorer: () => void;
+  /** Which side panel is showing (null = none). */
+  activePanel: SidePanelKind | null;
+  /** Clicking an already-active panel icon closes the panel (the Root toggles). */
+  onSelectPanel: (panel: SidePanelKind) => void;
+  /** Whether the bottom panel is open on the NS API tab (drives the ◈ active state). */
+  nsApiOpen: boolean;
+  onToggleNsApi: () => void;
   onOpenOptions: () => void;
 }
 
-export function ActivityBar({ explorerOpen, onToggleExplorer, onOpenOptions }: ActivityBarProps): React.ReactElement {
+export function ActivityBar({
+  activePanel,
+  onSelectPanel,
+  nsApiOpen,
+  onToggleNsApi,
+  onOpenOptions,
+}: ActivityBarProps): React.ReactElement {
   const { classes, cx } = useStyles();
-  const [docsOpen, setDocsOpen] = useState(false);
-  const docsAnchor = useRef<HTMLButtonElement | null>(null);
 
   return (
     <div className={classes.bar} data-activity-bar>
       <Tooltip title="Explorer" placement="right">
         <button
-          className={cx(classes.button, explorerOpen && classes.buttonActive)}
+          className={cx(classes.button, activePanel === "explorer" && classes.buttonActive)}
           data-activity-explorer
-          onClick={onToggleExplorer}
+          onClick={() => onSelectPanel("explorer")}
         >
           ▤
         </button>
       </Tooltip>
+      {/* Binding is registered on the editor itself (ScriptEditorRoot.onMount), so it only fires
+          while the editor has focus — the tooltip says so to stay honest. */}
+      <Tooltip title="Search all servers (Ctrl+Shift+F in the editor)" placement="right">
+        <button
+          className={cx(classes.button, activePanel === "search" && classes.buttonActive)}
+          data-activity-search
+          onClick={() => onSelectPanel("search")}
+        >
+          ⌕
+        </button>
+      </Tooltip>
       <Tooltip title="NS API documentation" placement="right">
         <button
-          ref={docsAnchor}
-          className={cx(classes.button, docsOpen && classes.buttonActive)}
+          className={cx(classes.button, nsApiOpen && classes.buttonActive)}
           data-activity-docs
-          onClick={() => setDocsOpen(true)}
+          onClick={onToggleNsApi}
         >
           ◈
         </button>
@@ -129,32 +132,6 @@ export function ActivityBar({ explorerOpen, onToggleExplorer, onOpenOptions }: A
           ⚙
         </button>
       </Tooltip>
-
-      <Popover
-        open={docsOpen}
-        anchorEl={docsAnchor.current}
-        onClose={() => setDocsOpen(false)}
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        classes={{ paper: classes.popover }}
-      >
-        {/* Same handler the Toolbar used: plain select opens the in-game popup, Ctrl-select opens
-            the external docs site (DocumentationAutocomplete reports ctrlKey via `external`). */}
-        <DocumentationAutocomplete
-          onChange={(path, external) => {
-            setDocsOpen(false);
-            if (external) {
-              openDocExternally(path);
-              return;
-            }
-            openDocumentationPopUp(path);
-          }}
-          width={350}
-        />
-        <Typography className={classes.popoverHint}>Ctrl+select opens in your browser</Typography>
-        <Typography>
-          <DocumentationLink page={defaultNsApiPage}>NS API documentation</DocumentationLink>
-        </Typography>
-      </Popover>
     </div>
   );
 }

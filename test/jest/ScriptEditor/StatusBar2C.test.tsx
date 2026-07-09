@@ -47,6 +47,7 @@ interface RenderOptions {
   onSave?: () => void;
   onBeautify?: () => void;
   onOpenRAMModal?: () => void;
+  onProblemsClick?: () => void;
 }
 
 function renderBar(options: RenderOptions = {}): HTMLDivElement {
@@ -63,6 +64,7 @@ function renderBar(options: RenderOptions = {}): HTMLDivElement {
             onSave={options.onSave ?? (() => {})}
             onBeautify={options.onBeautify ?? (() => {})}
             onOpenRAMModal={options.onOpenRAMModal ?? (() => {})}
+            onProblemsClick={options.onProblemsClick ?? (() => {})}
           />
         </ScriptEditorContextProvider>
       </ThemeProvider>,
@@ -121,6 +123,15 @@ describe("StatusBar2C segments", () => {
     const root = renderBar();
     expect(root.textContent).not.toContain("fits");
     expect(root.textContent).not.toContain("exceeds");
+  });
+
+  it("toggles the bottom panel's Problems tab when the problems segment is clicked (Task 12)", () => {
+    const onProblemsClick = jest.fn();
+    const root = renderBar({ onProblemsClick });
+    act(() => {
+      root.querySelector("[data-status-problems]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onProblemsClick).toHaveBeenCalled();
   });
 
   it("hosts the vim status element inside the bar", () => {

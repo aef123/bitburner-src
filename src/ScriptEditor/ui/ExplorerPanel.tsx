@@ -7,7 +7,7 @@
  * uses for nano/vim-opened files) via the onOpenFile callback — no second open path is invented.
  */
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
@@ -133,7 +133,11 @@ export function ExplorerPanel({ currentScript, onOpenFile, onReveal }: ExplorerP
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
 
   const hostname = currentScript?.hostname ?? "home";
-  const tree = buildFileTree(serverFilePaths(hostname));
+  // Memo keyed on the actual path list (not just the hostname): scripts can create/delete files
+  // while the editor is open (ns.write etc.), and re-renders are frequent (every keystroke via the
+  // Root's rerender). Paths can't contain "\n" so the joined key is collision-free.
+  const treeKey = serverFilePaths(hostname).join("\n");
+  const tree = useMemo(() => buildFileTree(treeKey === "" ? [] : treeKey.split("\n")), [treeKey]);
 
   // OTHER SERVERS: honest filter — purchased/backdoored/admin only (see explorerTree.ts for the
   // rule + precedent citation). Servers without content files are omitted: nothing to expand.

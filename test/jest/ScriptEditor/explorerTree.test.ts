@@ -5,10 +5,11 @@
  * - buildFileTree: groups a server's file paths (scripts Map keys + textFiles Map keys) into a
  *   nested folder tree with deterministic ordering (folders first, then files, both alphabetical).
  * - filterEditorAccessibleServers: the honest "OTHER SERVERS" filter. Rule: a server appears only
- *   if the player has real file access — purchased by player, backdoor installed, or admin rights.
- *   (Precedent: addReachableServerNames in src/Terminal/getTabCompletionPossibilities.ts:117-129;
- *   the explorer deliberately drops that function's "adjacent on network" clause because adjacency
- *   is transient connectivity, not file access.)
+ *   if the player has guaranteed file access — purchased by player, backdoor installed, or admin
+ *   rights. This is a conservative proxy: in-game file access is actually broader (nano/rm work on
+ *   any connected server without root; only `run` gates on admin rights), so the filter can only
+ *   under-represent — it never shows a server the player can't touch. Output is sorted
+ *   alphabetically by hostname.
  */
 
 import {
@@ -69,7 +70,7 @@ describe("filterEditorAccessibleServers (honest OTHER SERVERS rule)", () => {
     };
   }
 
-  it("includes purchased, backdoored, and admin servers; excludes everything else", () => {
+  it("includes purchased, backdoored, and admin servers; excludes everything else; sorts by hostname", () => {
     const servers = [
       makeServer({ hostname: "pserv-1", purchasedByPlayer: true }),
       makeServer({ hostname: "backdoored", backdoorInstalled: true }),
@@ -77,7 +78,7 @@ describe("filterEditorAccessibleServers (honest OTHER SERVERS rule)", () => {
       makeServer({ hostname: "locked" }),
     ];
     const result = filterEditorAccessibleServers(servers, "home");
-    expect(result.map((s) => s.hostname)).toEqual(["pserv-1", "backdoored", "rooted"]);
+    expect(result.map((s) => s.hostname)).toEqual(["backdoored", "pserv-1", "rooted"]);
   });
 
   it("excludes the current server (it has its own FILES section)", () => {

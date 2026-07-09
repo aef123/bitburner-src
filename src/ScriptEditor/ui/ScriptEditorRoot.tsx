@@ -27,8 +27,11 @@ import { useRerender } from "../../ui/React/hooks";
 import { isUnsavedFile, getServerCode, makeModel, saveScript } from "./utils";
 import { OpenScript } from "./OpenScript";
 import { Tabs } from "./Tabs";
-import { ActivityBar } from "./ActivityBar";
+import { ActivityBar, type SidePanelKind } from "./ActivityBar";
 import { ExplorerPanel } from "./ExplorerPanel";
+import { SearchPanel } from "./SearchPanel";
+import { QuickOpen } from "./QuickOpen";
+import { BottomPanel, type BottomPanelTab } from "./BottomPanel";
 import { StatusBar2C } from "./StatusBar2C";
 import { NoOpenScripts } from "./NoOpenScripts";
 import { ScriptEditorContextProvider, useScriptEditorContext } from "./ScriptEditorContext";
@@ -187,10 +190,32 @@ function Root(props: IProps): React.ReactElement {
   const { options, saveOptions, ramEntries, showRAMError, updateRAM, startUpdatingRAM, finishUpdatingRAM } =
     useScriptEditorContext();
 
-  // Explorer visibility (activity-bar toggle). Runtime-only UI state, default open.
-  const [explorerOpen, setExplorerOpen] = useState(true);
+  // Side panel (activity-bar toggles: Explorer or Search, or neither). Runtime-only UI state.
+  const [sidePanel, setSidePanel] = useState<SidePanelKind | null>("explorer");
+  // Quick-open overlay (Ctrl+P registered on the editor in onMount).
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  // Bottom panel (Problems / NS API / Logs). Closed by default; opened via the status bar's
+  // problems segment or the activity bar's ◈ button.
+  const [bottomOpen, setBottomOpen] = useState(false);
+  const [bottomTab, setBottomTab] = useState<BottomPanelTab>("problems");
+  // Each bump of this token refocuses the search panel's query input (Ctrl+Shift+F).
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [ramInfoOpen, { on: openRAMInfo, off: closeRAMInfo }] = useBoolean(false);
   const [optionsOpen, { on: openOptions, off: closeOptions }] = useBoolean(false);
+
+  const toggleSidePanel = (panel: SidePanelKind): void => {
+    setSidePanel((previous) => (previous === panel ? null : panel));
+  };
+
+  /** Open (or toggle away) the bottom panel on a specific tab. */
+  const toggleBottomPanel = (tab: BottomPanelTab): void => {
+    if (bottomOpen && bottomTab === tab) {
+      setBottomOpen(false);
+      return;
+    }
+    setBottomTab(tab);
+    setBottomOpen(true);
+  };
 
   // Moved from the removed Toolbar: options round-trip (saveOptions + delayed editor update to
   // avoid the vim/regular mode switch resetting settings) and custom-theme rebuild.
@@ -383,6 +408,36 @@ function Root(props: IProps): React.ReactElement {
     // Required when switching between site navigation (e.g. from Script Editor -> Terminal and back)
     // the `useEffect()` for vim mode is called before editor is mounted.
     editorRef.current = editor;
+
+    /**
+     * Editor-scoped keybindings (Task 12). addAction (rather than addCommand) because it returns
+     * an IDisposable and shows up in the editor's F1 command palette; both register with the
+     * standalone editor's own keybinding service, which listens on the editor's DOM node — so
+     * these bindings only fire while the editor has focus, and they die with editor.dispose() on
+     * unmount (Editor.tsx cleanup). They cannot leak to the terminal, the shell's Ctrl+K palette,
+     * or any other page. The handlers use only stable React state setters since onMount runs once
+     * per editor instance.
+     *
+     * Vim-mode note: monaco-vim maps <C-p> to `k` (keymap_vim: keyToKey, all contexts) and
+     * consumes the keydown before monaco's keybinding service sees it — so in vim mode Ctrl+P
+     * stays a vim motion and quick-open simply doesn't trigger. That is the documented-acceptable
+     * outcome; vim users have :e-style flows and the mouse.
+     */
+    editor.addAction({
+      id: "bitburner.quick-open",
+      label: "Quick Open File (all accessible servers)",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP],
+      run: () => setQuickOpenOpen(true),
+    });
+    editor.addAction({
+      id: "bitburner.search-all-servers",
+      label: "Search All Servers",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      run: () => {
+        setSidePanel("search");
+        setSearchFocusToken((token) => token + 1);
+      },
+    });
 
     // Open current script. This happens when the player switch tabs and open the editor tab.
     if (props.files.size === 0 && currentScript !== null) {
@@ -629,15 +684,24 @@ function Root(props: IProps): React.ReactElement {
     removeOutlineOfEditor();
   }
 
-  /** Reveal a line in the active editor (outline clicks). */
-  function revealLine(line: number): void {
+  /** Reveal a position in the active editor (outline clicks, problems rows, search matches). */
+  function revealPosition(line: number, column: number): void {
     const editor = editorRef.current;
     if (editor === null) {
       return;
     }
     editor.revealLineInCenter(line);
-    editor.setPosition({ lineNumber: line, column: 1 });
+    editor.setPosition({ lineNumber: line, column });
     editor.focus();
+  }
+
+  /** Open a file (same machinery as the explorer) and jump to a position — search-match clicks. */
+  function openFileAt(hostname: string, path: string, line: number, column: number): void {
+    openFileFromExplorer(hostname, path);
+    // openFileFromExplorer bails silently when the server/file vanished; only reveal on success.
+    if (currentScript !== null && currentScript.hostname === hostname && currentScript.path === path) {
+      revealPosition(line, column);
+    }
   }
 
   function onUnmountEditor() {
@@ -672,15 +736,18 @@ function Root(props: IProps): React.ReactElement {
   return (
     <>
       {/* Layout per design-notes-2C: tab strip (46px spacer over the activity bar, then tabs),
-          main row = activity bar | explorer | editor column, status bar at the bottom. Sized by
-          the shell pane via height:100% — no 100vh (global constraint). The Editor stays mounted
-          (display:none when no script) exactly as before: its unmount disposes all models. */}
+          main row = activity bar | explorer-or-search | editor column, bottom panel, status bar.
+          Sized by the shell pane via height:100% — no 100vh (global constraint). The Editor stays
+          mounted (display:none when no script) exactly as before: its unmount disposes all models.
+          position:relative hosts the quick-open overlay; the bottom panel squeezing the editor is
+          handled by monaco's automaticLayout (same height mechanism Task 11 established). */}
       <div
         style={{
           display: currentScript !== null ? "flex" : "none",
           height: "100%",
           width: "100%",
           flexDirection: "column",
+          position: "relative",
         }}
       >
         <div style={{ display: "flex", flexDirection: "row", alignItems: "stretch" }}>
@@ -706,17 +773,41 @@ function Root(props: IProps): React.ReactElement {
         </div>
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "row" }}>
           <ActivityBar
-            explorerOpen={explorerOpen}
-            onToggleExplorer={() => setExplorerOpen(!explorerOpen)}
+            activePanel={sidePanel}
+            onSelectPanel={toggleSidePanel}
+            nsApiOpen={bottomOpen && bottomTab === "nsapi"}
+            onToggleNsApi={() => toggleBottomPanel("nsapi")}
             onOpenOptions={openOptions}
           />
-          {explorerOpen && (
-            <ExplorerPanel currentScript={currentScript} onOpenFile={openFileFromExplorer} onReveal={revealLine} />
+          {sidePanel === "explorer" && (
+            <ExplorerPanel
+              currentScript={currentScript}
+              onOpenFile={openFileFromExplorer}
+              onReveal={(line) => revealPosition(line, 1)}
+            />
+          )}
+          {sidePanel === "search" && (
+            <SearchPanel
+              currentHostname={currentScript?.hostname ?? "home"}
+              focusToken={searchFocusToken}
+              onOpenAt={openFileAt}
+            />
           )}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
             <Editor onMount={onMount} onChange={updateCode} onUnmount={onUnmountEditor} />
           </div>
         </div>
+
+        {bottomOpen && (
+          <BottomPanel
+            tab={bottomTab}
+            onTabChange={setBottomTab}
+            onClose={() => setBottomOpen(false)}
+            editor={editorRef.current}
+            currentScript={currentScript}
+            onGotoProblem={revealPosition}
+          />
+        )}
 
         <StatusBar2C
           currentScript={currentScript}
@@ -732,6 +823,22 @@ function Root(props: IProps): React.ReactElement {
             beautify().catch((error) => console.error(error));
           }}
           onOpenRAMModal={openRAMInfo}
+          onProblemsClick={() => toggleBottomPanel("problems")}
+        />
+
+        {/* Quick-open overlay (Ctrl+P inside the editor). Opening it steals focus from the
+            editor, which triggers the existing autosave-on-blur (Editor.tsx onDidBlurEditorWidget
+            when MonacoAutoSaveOnFocusChange) — the same thing every toolbar/status-bar click has
+            always done; saveScript is idempotent, so this is harmless. Closing refocuses the
+            editor per the design notes. */}
+        <QuickOpen
+          open={quickOpenOpen}
+          currentHostname={currentScript?.hostname ?? "home"}
+          onOpenFile={openFileFromExplorer}
+          onClose={() => {
+            setQuickOpenOpen(false);
+            editorRef.current?.focus();
+          }}
         />
       </div>
       {!currentScript && <NoOpenScripts />}

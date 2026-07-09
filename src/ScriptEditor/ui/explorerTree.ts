@@ -59,16 +59,27 @@ export interface ServerAccessInfo {
  *
  * Precedent: addReachableServerNames in src/Terminal/getTabCompletionPossibilities.ts:117-129 uses
  * backdoored/purchased/adjacent for `connect` completion. The explorer deliberately swaps the
- * "adjacent on network" clause for hasAdminRights: adjacency is transient connectivity for the
- * connect command, while this panel claims file access, which admin rights actually grant
- * (run/nano/rm all gate on root).
+ * "adjacent on network" clause for hasAdminRights.
+ *
+ * This filter is a conservative PROXY for file access, not an exact mirror of it. In the terminal,
+ * only `run` gates on admin rights; nano/rm work on any server the player is connected to (verified
+ * against src/Terminal/commands — neither checks hasAdminRights), and any discovered server can be
+ * reached through a connect chain. So the player's real in-game file-access surface is BROADER than
+ * this list. Under-representation is the safe direction for an honesty rule: every server shown
+ * here is genuinely accessible, and nothing about undiscovered or unrooted servers is fabricated
+ * or leaked.
+ *
+ * Results are sorted alphabetically by hostname so the list (and everything derived from it:
+ * quick-open, full-text search) is stable and scan-friendly.
  *
  * The current script's own server is excluded — it has the dedicated FILES section above.
  */
 export function filterEditorAccessibleServers<T extends ServerAccessInfo>(servers: T[], excludeHostname: string): T[] {
-  return servers.filter(
-    (server) =>
-      server.hostname !== excludeHostname &&
-      (server.purchasedByPlayer || server.hasAdminRights || server.backdoorInstalled === true),
-  );
+  return servers
+    .filter(
+      (server) =>
+        server.hostname !== excludeHostname &&
+        (server.purchasedByPlayer || server.hasAdminRights || server.backdoorInstalled === true),
+    )
+    .sort((a, b) => a.hostname.localeCompare(b.hostname));
 }

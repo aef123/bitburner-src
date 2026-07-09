@@ -41,6 +41,16 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflow: "hidden",
     whiteSpace: "nowrap",
   },
+  // The problems segment is a button since Task 12: clicking it toggles the bottom panel's
+  // Problems tab (whose row scope matches this count exactly — active model, Warning+).
+  problemsSegment: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+  },
   problemsClean: {
     color: theme.colors.accentGreen,
   },
@@ -115,6 +125,8 @@ interface StatusBar2CProps {
   onSave: () => void;
   onBeautify: () => void;
   onOpenRAMModal: () => void;
+  /** Toggles the bottom panel's Problems tab (Task 12). */
+  onProblemsClick: () => void;
 }
 
 export function StatusBar2C({
@@ -125,6 +137,7 @@ export function StatusBar2C({
   onSave,
   onBeautify,
   onOpenRAMModal,
+  onProblemsClick,
 }: StatusBar2CProps): React.ReactElement {
   const { classes, cx } = useStyles();
   const { ram, ramUsage, isUpdatingRAM, options } = useScriptEditorContext();
@@ -182,13 +195,14 @@ export function StatusBar2C({
 
   return (
     <div className={classes.bar} data-status-bar>
-      <span
-        className={problems === 0 ? classes.problemsClean : classes.problemsDirty}
+      <button
+        className={cx(classes.problemsSegment, problems === 0 ? classes.problemsClean : classes.problemsDirty)}
         data-status-problems
-        title="Problems reported by the editor for the active file"
+        title="Problems reported by the editor for the active file — click to open the Problems panel"
+        onClick={onProblemsClick}
       >
         {problems === 0 ? "✓ no problems" : `✕ ${problems} problem${problems === 1 ? "" : "s"}`}
-      </span>
+      </button>
       <Tooltip title="Static RAM cost — click for the per-function breakdown">
         <button
           className={cx(

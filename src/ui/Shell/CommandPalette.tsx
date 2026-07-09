@@ -70,7 +70,11 @@ export function getVisibleResults(): PaletteResult[] {
 }
 
 /**
- * Rank a list of PaletteResults against a query string.
+ * Rank a list of results against a query string.
+ *
+ * Generic over anything with a `label` (the ranked text) and a `navIndex` (stable tie-break) so
+ * the script editor's quick-open (Task 12) reuses the exact same ranking as the shell palette
+ * instead of reimplementing it.
  *
  * Empty query → returns items unchanged (nav order).
  *
@@ -80,14 +84,14 @@ export function getVisibleResults(): PaletteResult[] {
  *   - Bucket A comes before Bucket B in the final list.
  *   - Items that neither match nor exceed the fuzzy threshold are excluded.
  */
-export function rankResults(items: PaletteResult[], query: string): PaletteResult[] {
+export function rankResults<T extends { label: string; navIndex: number }>(items: T[], query: string): T[] {
   if (!query) return items.slice();
 
   const lower = query.toLowerCase();
   const diceQuery = lower; // dice is already case-sensitive; we feed lowercased strings.
 
-  const substringHits: Array<{ item: PaletteResult; pos: number }> = [];
-  const fuzzyHits: Array<{ item: PaletteResult; score: number }> = [];
+  const substringHits: Array<{ item: T; pos: number }> = [];
+  const fuzzyHits: Array<{ item: T; score: number }> = [];
 
   for (const item of items) {
     const labelLower = item.label.toLowerCase();
