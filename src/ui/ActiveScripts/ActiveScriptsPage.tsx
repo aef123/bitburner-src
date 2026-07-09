@@ -228,7 +228,10 @@ export function ActiveScriptsPage(props: IProps): React.ReactElement {
   const lastServerNumber = serverData.length === 0 ? 0 : adjustedIndex + dataToShow.length;
 
   // Header stats reflect the whole network, not the filtered view.
-  const ramTotals = aggregateNetworkRam(GetAllServers());
+  // Pass showDarkweb=true so darknet servers with admin rights are counted in the
+  // rooted bucket — they can run player scripts and are visible in the list below,
+  // so excluding them would make the totals contradict the per-server RAM bars.
+  const ramTotals = aggregateNetworkRam(GetAllServers(true));
   let hostCount = 0;
   {
     const hosts = new Set<string>();

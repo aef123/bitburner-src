@@ -132,6 +132,62 @@ describe("buildRamBarSegments", () => {
   });
 });
 
+describe("darknet server classification", () => {
+  // DarknetServer inherits BaseServer but is NOT purchasedByPlayer and does NOT set
+  // isHacknetServer — so the classifyServer chain falls through to the rooted/null branch.
+
+  it("a cracked (hasAdminRights) darknet server classifies as rooted", () => {
+    // Mirrors what GetAllServers(true) would pass in for an authenticated dnet node.
+    const crackedDnet = makeServer({
+      hostname: "dnet-abc123",
+      purchasedByPlayer: false,
+      isHacknetServer: false,
+      hasAdminRights: true,
+      ramUsed: 64,
+      maxRam: 128,
+    });
+    expect(classifyServer(crackedDnet)).toBe("rooted");
+  });
+
+  it("an uncracked (no admin) darknet server is excluded from aggregation", () => {
+    const uncrackedDnet = makeServer({
+      hostname: "dnet-locked",
+      purchasedByPlayer: false,
+      isHacknetServer: false,
+      hasAdminRights: false,
+      ramUsed: 0,
+      maxRam: 256,
+    });
+    expect(classifyServer(uncrackedDnet)).toBeNull();
+  });
+
+  it("aggregateNetworkRam counts cracked dnet RAM in rooted and excludes uncracked", () => {
+    const crackedDnet = makeServer({
+      hostname: "dnet-abc123",
+      purchasedByPlayer: false,
+      isHacknetServer: false,
+      hasAdminRights: true,
+      ramUsed: 64,
+      maxRam: 128,
+    });
+    const uncrackedDnet = makeServer({
+      hostname: "dnet-locked",
+      purchasedByPlayer: false,
+      isHacknetServer: false,
+      hasAdminRights: false,
+      ramUsed: 0,
+      maxRam: 256,
+    });
+    // Only the cracked dnet node should appear in the rooted bucket.
+    // The uncracked node's 256 GB must not inflate totalMax (same rule as unrooted foreign servers).
+    const totals = aggregateNetworkRam([crackedDnet, uncrackedDnet]);
+    expect(totals.used.rooted).toBe(64);
+    expect(totals.totalMax).toBe(128);
+    expect(totals.totalUsed).toBe(64);
+    expect(totals.free).toBe(64);
+  });
+});
+
 describe("totalMoneyRate / totalExpRate", () => {
   it("sums per-script online rates", () => {
     const scripts = [
