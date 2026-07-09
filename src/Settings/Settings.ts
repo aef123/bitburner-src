@@ -27,6 +27,15 @@ export const Settings = {
   DisableOverviewProgressBars: false,
   /** Whether the docked HUD panel is collapsed (the floating overview widget is shown instead). */
   HudCollapsed: false,
+  /**
+   * Sort mode for the joined-factions list on the Factions screen.
+   * "" (the default) applies no sort: the list stays in the game's standard faction order, and the
+   * empty string round-trips through saves as "still using the default order".
+   * Other values: "closest" (smallest rep delta to the next unowned augmentation), "reputation", "favor".
+   */
+  FactionsSortMode: "",
+  /** Whether the Factions screen filters the joined-factions list to factions with purchasable augmentations. */
+  FactionsCanBuyOnly: false,
   /** Whether to enable bash hotkeys */
   EnableBashHotkeys: false,
   /** Whether to enable terminal history search */
