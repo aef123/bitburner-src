@@ -1,8 +1,10 @@
 /**
- * World Map (3A) — the redesigned Travel Agency view. SVG signal map with flight
- * arcs from the current city; every city shows what's worth flying for before
- * you pay. Geometry comes verbatim from the design mock via worldMapData.ts;
- * the "color = meaning" logic lives in the pure cityIntel.ts selectors.
+ * World Map (3A) — the redesigned Travel Agency view. City nodes sit at the
+ * ORIGINAL ASCII world map's positions and the coastlines are traced from the
+ * same art (see worldMapData.ts). Deliberately information-light: a node is
+ * cyan only when a pending faction invitation requires that city (cityIntel.ts);
+ * the popover shows the ticket price, pending invitations, and reputation for
+ * factions already joined — nothing derived, no comparisons.
  *
  * Token mapping for mock hexes without a 1:1 token (documented derivations):
  *   canvas radial gradient #0c1420 → bgPanelDeep, #070a0e → bgApp (nearest tokens)
@@ -11,6 +13,7 @@
  *   popover bg #101823 → bgPanel; popover border #2a4152 = borderFocus (exact)
  *   CTA text-on-cyan #06131a → bgApp; legend bg rgba(10,14,19,.85) → alpha(bgApp, 0.85)
  *   graticule/arc rgba(76,201,232,α) → alpha(accentCyan, α)
+ *   coastline stroke/tint → borderDefault (+ alpha fill)
  */
 import React, { useState } from "react";
 import { alpha, lighten, type Theme } from "@mui/material/styles";
@@ -25,13 +28,13 @@ import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatMoney, formatReputation } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 
-import { type CityIntel, getAllCityIntel } from "./cityIntel";
+import { getAllCityIntel } from "./cityIntel";
 import { CityIndexColumn } from "./CityIndexColumn";
 import {
   getFlightArc,
   GRATICULE_ELLIPSES,
   GRATICULE_LINES,
-  LANDMASS_BLOBS,
+  LANDMASS_OUTLINES,
   MAP_HEIGHT,
   MAP_WIDTH,
   worldMapCities,
@@ -70,11 +73,6 @@ const useStyles = makeStyles()((theme: Theme) => {
     svg: {
       position: "absolute",
       inset: 0,
-      pointerEvents: "none",
-    },
-    blob: {
-      position: "absolute",
-      filter: "blur(2px)",
       pointerEvents: "none",
     },
     header: {
@@ -142,6 +140,8 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     label: {
       position: "absolute",
+      // Centered under the node: positions come from the ASCII art, labels self-center.
+      transform: "translateX(-50%)",
       fontFamily: Settings.styles.monoFontFamily,
       fontSize: typeScale.caption, // mock: 10.5px
       fontWeight: 500,
@@ -169,7 +169,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "baseline",
-      marginBottom: "3px",
+      marginBottom: "12px",
     },
     popoverName: {
       fontSize: typeScale.cardTitle, // mock: 14px
@@ -181,11 +181,6 @@ const useStyles = makeStyles()((theme: Theme) => {
       fontSize: typeScale.caption, // mock: 10px
       fontWeight: 500,
       color: theme.colors.accentGold,
-    },
-    popoverDescription: {
-      fontSize: typeScale.body, // mock: 10.5px
-      color: theme.colors.textSecondary,
-      marginBottom: "11px",
     },
     infoList: {
       display: "flex",
@@ -204,10 +199,6 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     infoGood: {
       color: theme.colors.accentGreen,
-      whiteSpace: "nowrap",
-    },
-    infoMuted: {
-      color: textTertiary,
       whiteSpace: "nowrap",
     },
     infoMono: {
@@ -261,11 +252,22 @@ const useStyles = makeStyles()((theme: Theme) => {
       gap: "6px",
       whiteSpace: "nowrap",
     },
-    legendDotSignal: {
+    // Filled cyan, like the current-city node.
+    legendDotCurrent: {
       width: "8px",
       height: "8px",
       borderRadius: "50%",
       backgroundColor: accentCyan,
+      flex: "none",
+    },
+    // Cyan ring on dark, like an invitation node.
+    legendDotInvite: {
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      boxSizing: "border-box",
+      backgroundColor: theme.colors.bgPanelDeep,
+      border: `2px solid ${accentCyan}`,
       flex: "none",
     },
     // Matches the slate node stroke (textTertiary) so the legend swatch is honest about node color.
@@ -276,61 +278,11 @@ const useStyles = makeStyles()((theme: Theme) => {
       backgroundColor: textTertiary,
       flex: "none",
     },
-    legendArcs: {
-      color: textTertiary,
-    },
   };
 });
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
-}
-
-function TrainingRows({
-  intel,
-  classes,
-}: {
-  intel: CityIntel;
-  classes: Record<"infoRow" | "infoLeft" | "infoGood" | "infoMuted" | "infoMono", string>;
-}): React.ReactElement {
-  const { bestUniversity, bestGym } = intel;
-  if (!bestUniversity && !bestGym) {
-    return (
-      <div className={classes.infoRow}>
-        <span className={classes.infoMuted}>No university · no gym</span>
-      </div>
-    );
-  }
-  return (
-    <>
-      {bestUniversity ? (
-        <div className={classes.infoRow}>
-          <span className={classes.infoLeft}>◆ {bestUniversity.name}</span>
-          <span className={intel.hasBetterUniversity ? classes.infoGood : classes.infoMuted}>
-            uni <span className={classes.infoMono}>×{bestUniversity.expMult}</span>
-            {intel.hasBetterUniversity ? " · better" : ""}
-          </span>
-        </div>
-      ) : (
-        <div className={classes.infoRow}>
-          <span className={classes.infoMuted}>No university</span>
-        </div>
-      )}
-      {bestGym ? (
-        <div className={classes.infoRow}>
-          <span className={classes.infoLeft}>◆ {bestGym.name}</span>
-          <span className={intel.hasBetterGym ? classes.infoGood : classes.infoMuted}>
-            gym <span className={classes.infoMono}>×{bestGym.expMult}</span>
-            {intel.hasBetterGym ? " · better" : ""}
-          </span>
-        </div>
-      ) : (
-        <div className={classes.infoRow}>
-          <span className={classes.infoMuted}>No gym</span>
-        </div>
-      )}
-    </>
-  );
 }
 
 export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void }): React.ReactElement {
@@ -347,6 +299,7 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
     factionInvitations: Player.factionInvitations,
   });
   const accentCyan = theme.colors.accentCyan as string;
+  const borderDefault = theme.colors.borderDefault as string;
   const cities = Object.values(CityName);
   const selectedIntel = selected && selected !== currentCity ? intel[selected] : null;
 
@@ -354,7 +307,7 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
   const popoverPosition = selectedIntel
     ? {
         left: clamp(worldMapCities[selectedIntel.city].center.x - POPOVER_WIDTH / 2, 12, MAP_WIDTH - POPOVER_WIDTH - 12),
-        top: clamp(worldMapCities[selectedIntel.city].center.y - 218, 12, MAP_HEIGHT - 240),
+        top: clamp(worldMapCities[selectedIntel.city].center.y - 150, 12, MAP_HEIGHT - 170),
       }
     : null;
 
@@ -367,20 +320,6 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
           if (event.target === event.currentTarget) setSelected(null);
         }}
       >
-        {LANDMASS_BLOBS.map((blob, i) => (
-          <div
-            key={i}
-            className={classes.blob}
-            style={{
-              left: blob.left,
-              top: blob.top,
-              width: blob.width,
-              height: blob.height,
-              borderRadius: blob.borderRadius,
-              backgroundColor: alpha(accentCyan, blob.opacity),
-            }}
-          />
-        ))}
         <svg
           className={classes.svg}
           width={MAP_WIDTH}
@@ -388,6 +327,16 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
           viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
           aria-hidden="true"
         >
+          {LANDMASS_OUTLINES.map((d, i) => (
+            <path
+              key={i}
+              d={d}
+              fill={alpha(borderDefault, 0.08)}
+              stroke={borderDefault}
+              strokeWidth={1}
+              strokeLinejoin="round"
+            />
+          ))}
           {GRATICULE_ELLIPSES.map((e, i) => (
             <ellipse
               key={i}
@@ -461,7 +410,7 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
                   )}
                   style={position}
                   data-city={city}
-                  aria-label={`${city}${cityIntel.hasSomething ? " — has something for you now" : ""}`}
+                  aria-label={`${city}${cityIntel.hasSomething ? " — faction invitation waiting" : ""}`}
                   onClick={() => setSelected((prev) => (prev === city ? null : city))}
                   onMouseEnter={() => setHovered(city)}
                   onMouseLeave={() => setHovered((prev) => (prev === city ? null : prev))}
@@ -469,7 +418,7 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
               )}
               <span
                 className={cx(classes.label, active && classes.labelActive)}
-                style={{ left: datum.label.x, top: datum.label.y }}
+                style={{ left: datum.center.x, top: datum.center.y + size / 2 + 6 }}
               >
                 {city.toUpperCase()}
                 {isCurrent && " ◄ you"}
@@ -483,22 +432,22 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
               <span className={classes.popoverName}>{selectedIntel.city}</span>
               <span className={classes.popoverPrice}>{formatMoney(CONSTANTS.TravelCost)}</span>
             </div>
-            <div className={classes.popoverDescription}>{worldMapCities[selectedIntel.city].flavor}</div>
-            <div className={classes.infoList}>
-              {selectedIntel.factions.map((faction) => (
-                <div className={classes.infoRow} key={faction.name}>
-                  <span className={classes.infoLeft}>⚑ {faction.name}</span>
-                  {faction.standing === "member" && (
-                    <span className={cx(classes.infoGood, classes.infoMono)}>
-                      rep {formatReputation(Factions[faction.name].playerReputation)}
-                    </span>
-                  )}
-                  {faction.standing === "invited" && <span className={classes.infoGood}>invite pending</span>}
-                  {faction.standing === "joinable" && <span className={classes.infoMuted}>join here</span>}
-                </div>
-              ))}
-              <TrainingRows intel={selectedIntel} classes={classes} />
-            </div>
+            {selectedIntel.factions.length > 0 && (
+              <div className={classes.infoList}>
+                {selectedIntel.factions.map((faction) => (
+                  <div className={classes.infoRow} key={faction.name}>
+                    <span className={classes.infoLeft}>⚑ {faction.name}</span>
+                    {faction.standing === "member" ? (
+                      <span className={cx(classes.infoGood, classes.infoMono)}>
+                        rep {formatReputation(Factions[faction.name].playerReputation)}
+                      </span>
+                    ) : (
+                      <span className={classes.infoGood}>invitation waiting</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               className={classes.cta}
@@ -511,12 +460,14 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
         )}
         <div className={classes.legend}>
           <span className={classes.legendItem}>
-            <span className={classes.legendDotSignal} /> has something for you now
+            <span className={classes.legendDotCurrent} /> current city
+          </span>
+          <span className={classes.legendItem}>
+            <span className={classes.legendDotInvite} /> faction invitation waiting
           </span>
           <span className={classes.legendItem}>
             <span className={classes.legendDotQuiet} /> nothing new
           </span>
-          <span className={cx(classes.legendItem, classes.legendArcs)}>— arcs show ticket routes</span>
         </div>
       </div>
       <CityIndexColumn
