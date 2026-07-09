@@ -19,7 +19,7 @@ import { StockMarket } from "../StockMarket/StockMarket";
 import type { IRouter, PageContext, PageWithContext } from "./Router";
 import { isSimplePage, Page } from "./Router";
 import { Overview } from "./React/Overview";
-import { SidebarRoot } from "../Sidebar/ui/SidebarRoot";
+import { ShellLayout } from "./Shell/ShellLayout";
 import { AugmentationsRoot } from "../Augmentation/ui/AugmentationsRoot";
 import { DevMenuRoot } from "../DevMenu";
 import { BladeburnerRoot } from "../Bladeburner/ui/BladeburnerRoot";
@@ -548,10 +548,7 @@ export function GameRoot(): React.ReactElement {
                 }
               </Overview>
               {withSidebar ? (
-                <Box display="flex" flexDirection="row" width="100%">
-                  <SidebarRoot page={pageWithContext.page} />
-                  <Box className={classes.root}>{mainPage}</Box>
-                </Box>
+                <ShellLayout page={pageWithContext.page}>{mainPage}</ShellLayout>
               ) : (
                 <Box className={classes.root}>{mainPage}</Box>
               )}

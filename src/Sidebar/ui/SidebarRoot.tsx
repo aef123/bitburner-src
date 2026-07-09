@@ -12,73 +12,32 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 
-import ComputerIcon from "@mui/icons-material/Computer"; // Hacking
-import LastPageIcon from "@mui/icons-material/LastPage"; // Terminal
-import CreateIcon from "@mui/icons-material/Create"; // Create Script
-import StorageIcon from "@mui/icons-material/Storage"; // Active Scripts
-import BugReportIcon from "@mui/icons-material/BugReport"; // Create Program
-import EqualizerIcon from "@mui/icons-material/Equalizer"; // Stats
-import ContactsIcon from "@mui/icons-material/Contacts"; // Factions
-import DoubleArrowIcon from "@mui/icons-material/DoubleArrow"; // Augmentations
-import AccountTreeIcon from "@mui/icons-material/AccountTree"; // Hacknet
-import PeopleAltIcon from "@mui/icons-material/PeopleAlt"; // Sleeves
-import LocationCityIcon from "@mui/icons-material/LocationCity"; // City
-import AirplanemodeActiveIcon from "@mui/icons-material/AirplanemodeActive"; // Travel
-import WorkIcon from "@mui/icons-material/Work"; // Job
-import TrendingUpIcon from "@mui/icons-material/TrendingUp"; // Stock Market
-import FormatBoldIcon from "@mui/icons-material/FormatBold"; // Bladeburner
-import BusinessIcon from "@mui/icons-material/Business"; // Corp
-import SportsMmaIcon from "@mui/icons-material/SportsMma"; // Gang
-import CheckIcon from "@mui/icons-material/Check"; // Milestones
-import HelpIcon from "@mui/icons-material/Help"; // Tutorial
-import SettingsIcon from "@mui/icons-material/Settings"; // options
-import DeveloperBoardIcon from "@mui/icons-material/DeveloperBoard"; // Stanek + Dev
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents"; // Achievements
-import AccountBoxIcon from "@mui/icons-material/AccountBox"; // Character
-import PublicIcon from "@mui/icons-material/Public"; // World
-import LiveHelpIcon from "@mui/icons-material/LiveHelp"; // Help
-import BorderInnerSharpIcon from "@mui/icons-material/BorderInnerSharp"; // IPvGO
-import ShareIcon from "@mui/icons-material/Share"; // DarkWeb
-import BiotechIcon from "@mui/icons-material/Biotech"; // Grafting
-
 import { Router } from "../../ui/GameRoot";
-import { ComplexPage, SimplePage } from "../../ui/Enums";
 import { Page, isSimplePage } from "../../ui/Router";
 import { SidebarAccordion } from "./SidebarAccordion";
 import { Player } from "@player";
 import { CONSTANTS } from "../../Constants";
-import { iTutorialSteps, iTutorialNextStep, ITutorial } from "../../InteractiveTutorial";
-import { getAvailableCreatePrograms } from "../../Programs/ProgramHelpers";
+import { iTutorialNextStep } from "../../InteractiveTutorial";
 import { Settings } from "../../Settings/Settings";
-import { AugmentationName } from "@enums";
 
-import { ProgramsSeen } from "../../Programs/ui/ProgramsRoot";
-import { InvitationsSeen } from "../../Faction/ui/FactionsRoot";
 import { commitHash } from "../../utils/helpers/commitHash";
 import { useCycleRerender } from "../../ui/React/hooks";
-import { playerHasDiscoveredGo } from "../../Go/effects/effect";
-import { knowAboutBitverse } from "../../BitNode/BitNodeUtils";
 import {
   convertKeyboardEventToKeyCombination,
   determineKeyBindingTypes,
   type GoToPageKeyBindingType,
+  GoToPageKeyBindingTypes,
   KeyBindingEvents,
   KeyBindingEventType,
-  ScriptEditorAction,
   type KeyBindingType,
   CurrentKeyBindings,
 } from "../../utils/KeyBindingUtils";
-import { throwIfReachable } from "../../utils/helpers/throwIfReachable";
-import { ErrorState } from "../../ErrorHandling/ErrorState";
-
-import { hasDarknetAccess } from "../../DarkNet/utils/darknetAuthUtils";
-
-const RotatedDoubleArrowIcon = React.forwardRef(function RotatedDoubleArrowIcon(
-  props: { color: "primary" | "secondary" | "error" },
-  __ref: React.ForwardedRef<SVGSVGElement>,
-) {
-  return <DoubleArrowIcon {...props} style={{ transform: "rotate(-90deg)" }} ref={__ref} />;
-});
+import {
+  getTutorialFlashPage,
+  isItemVisible,
+  isPageVisible,
+  navigationSections,
+} from "../navigationItems";
 
 const openedMixin = (theme: Theme): CSSObject => ({
   width: theme.spacing(31),
@@ -126,59 +85,7 @@ export function SidebarRoot(props: { page: Page }): React.ReactElement {
   const isSettingUpKeyBindings = useRef(false);
   useCycleRerender();
 
-  let flash: Page | null = null;
-  switch (ITutorial.currStep) {
-    case iTutorialSteps.CharacterGoToTerminalPage:
-    case iTutorialSteps.ActiveScriptsPage:
-      flash = Page.Terminal;
-      break;
-    case iTutorialSteps.GoToCharacterPage:
-      flash = Page.Stats;
-      break;
-    case iTutorialSteps.TerminalGoToActiveScriptsPage:
-      flash = Page.ActiveScripts;
-      break;
-    case iTutorialSteps.GoToHacknetNodesPage:
-      flash = Page.Hacknet;
-      break;
-    case iTutorialSteps.HacknetNodesGoToWorldPage:
-      flash = Page.City;
-      break;
-    case iTutorialSteps.WorldDescription:
-      flash = Page.Documentation;
-      break;
-  }
-
-  const augmentationCount = Player.queuedAugmentations.length;
-  const invitationsCount = Player.factionInvitations.filter((f) => !InvitationsSeen.has(f)).length;
-  const programCount = getAvailableCreatePrograms().length - ProgramsSeen.size;
-  const errorCount = ErrorState.UnreadErrors;
-
-  const canOpenFactions =
-    Player.factionInvitations.length > 0 ||
-    Player.factions.length > 0 ||
-    Player.factionRumors.size > 0 ||
-    Player.augmentations.length > 0 ||
-    Player.queuedAugmentations.length > 0 ||
-    knowAboutBitverse();
-
-  const canOpenAugmentations =
-    Player.augmentations.length > 0 ||
-    Player.queuedAugmentations.length > 0 ||
-    knowAboutBitverse() ||
-    Player.exploits.length > 0;
-
-  const canOpenSleeves = Player.sleeves.length > 0;
-  const canOpenGrafting = Player.canAccessGrafting();
-
-  const canCorporation = !!Player.corporation;
-  const canGang = !!Player.gang;
-  const canJob = Object.values(Player.jobs).length > 0;
-  const canStockMarket = Player.hasWseAccount;
-  const canBladeburner = !!Player.bladeburner;
-  const canStaneksGift = Player.augmentations.some((aug) => aug.name === AugmentationName.StaneksGift1);
-  const canIPvGO = playerHasDiscoveredGo();
-  const canDarkNet = hasDarknetAccess();
+  const flash = getTutorialFlashPage();
 
   const clickPage = useCallback(
     (page: Page) => {
@@ -202,72 +109,16 @@ export function SidebarRoot(props: { page: Page }): React.ReactElement {
   );
 
   /**
-   * We use "keyBindingType is GoToPageKeyBindingType" to narrow down the type of keyBindingType.
+   * We use "keyBindingType is GoToPageKeyBindingType" to narrow down the type of keyBindingType. A binding is
+   * navigable when it targets a page (not a script editor action) and that page's shared navigation item is
+   * currently visible.
    */
-  const canGoToPage = useCallback(
-    (keyBindingType: KeyBindingType): keyBindingType is GoToPageKeyBindingType => {
-      switch (keyBindingType) {
-        case SimplePage.Terminal:
-        case ComplexPage.ScriptEditor:
-        case ComplexPage.ActiveScripts:
-        case SimplePage.CreateProgram:
-        case SimplePage.Stats:
-        case SimplePage.Hacknet:
-        case SimplePage.City:
-        case SimplePage.Travel:
-        case SimplePage.Milestones:
-        case ComplexPage.Documentation:
-        case SimplePage.Achievements:
-        case ComplexPage.Options:
-          return true;
-        case SimplePage.StaneksGift:
-          return canStaneksGift;
-        case SimplePage.Factions:
-          return canOpenFactions;
-        case SimplePage.Augmentations:
-          return canOpenAugmentations;
-        case SimplePage.Sleeves:
-          return canOpenSleeves;
-        case SimplePage.Grafting:
-          return canOpenGrafting;
-        case SimplePage.Job:
-          return canJob;
-        case SimplePage.StockMarket:
-          return canStockMarket;
-        case SimplePage.Bladeburner:
-          return canBladeburner;
-        case SimplePage.Corporation:
-          return canCorporation;
-        case SimplePage.Gang:
-          return canGang;
-        case SimplePage.Go:
-          return canIPvGO;
-        case SimplePage.DarkNet:
-          return canDarkNet;
-        case ScriptEditorAction.Save:
-        case ScriptEditorAction.GoToTerminal:
-        case ScriptEditorAction.Run:
-          return false;
-        default:
-          throwIfReachable(keyBindingType);
-      }
+  const canGoToPage = useCallback((keyBindingType: KeyBindingType): keyBindingType is GoToPageKeyBindingType => {
+    if (!(GoToPageKeyBindingTypes as readonly KeyBindingType[]).includes(keyBindingType)) {
       return false;
-    },
-    [
-      canStaneksGift,
-      canOpenFactions,
-      canOpenAugmentations,
-      canOpenSleeves,
-      canOpenGrafting,
-      canJob,
-      canStockMarket,
-      canBladeburner,
-      canCorporation,
-      canGang,
-      canIPvGO,
-      canDarkNet,
-    ],
-  );
+    }
+    return isPageVisible(keyBindingType as Page);
+  }, []);
 
   useEffect(() => {
     const clearSubscription = KeyBindingEvents.subscribe((eventType) => {
@@ -343,100 +194,30 @@ export function SidebarRoot(props: { page: Page }): React.ReactElement {
       )}
       <Divider />
       <List>
-        <SidebarAccordion
-          key_="Hacking"
-          page={props.page}
-          clickPage={clickPage}
-          flash={flash}
-          icon={ComputerIcon}
-          sidebarOpen={open}
-          classes={classes}
-          items={[
-            { key_: Page.Terminal, icon: LastPageIcon },
-            { key_: Page.ScriptEditor, icon: CreateIcon },
-            {
-              key_: Page.ActiveScripts,
-              icon: StorageIcon,
-              count: errorCount,
-              alternateKeys: [Page.RecentErrors, Page.RecentlyKilledScripts],
-            },
-            { key_: Page.CreateProgram, icon: BugReportIcon, count: programCount },
-            canStaneksGift && { key_: Page.StaneksGift, icon: DeveloperBoardIcon },
-          ]}
-        />
-        <Typography component="div" id="sidebar-extra-hook-0"></Typography>
-        <Divider />
-        <SidebarAccordion
-          key_="Character"
-          page={props.page}
-          clickPage={clickPage}
-          flash={flash}
-          icon={AccountBoxIcon}
-          sidebarOpen={open}
-          classes={classes}
-          items={[
-            { key_: Page.Stats, icon: EqualizerIcon },
-            canOpenFactions && {
-              key_: Page.Factions,
-              icon: ContactsIcon,
-              active: [Page.Factions, Page.Faction].includes(props.page),
-              count: invitationsCount,
-            },
-            canOpenAugmentations && {
-              key_: Page.Augmentations,
-              icon: RotatedDoubleArrowIcon,
-              count: augmentationCount,
-            },
-            { key_: Page.Hacknet, icon: AccountTreeIcon },
-            canOpenSleeves && { key_: Page.Sleeves, icon: PeopleAltIcon },
-            canOpenGrafting && { key_: Page.Grafting, icon: BiotechIcon },
-          ]}
-        />
-        <Typography component="div" id="sidebar-extra-hook-1"></Typography>
-        <Divider />
-        <SidebarAccordion
-          key_="World"
-          page={props.page}
-          clickPage={clickPage}
-          flash={flash}
-          icon={PublicIcon}
-          sidebarOpen={open}
-          classes={classes}
-          items={[
-            {
-              key_: Page.City,
-              icon: LocationCityIcon,
-              active: [Page.City, Page.Location].includes(props.page),
-            },
-            { key_: Page.Travel, icon: AirplanemodeActiveIcon },
-            canJob && { key_: Page.Job, icon: WorkIcon },
-            canStockMarket && { key_: Page.StockMarket, icon: TrendingUpIcon },
-            canBladeburner && { key_: Page.Bladeburner, icon: FormatBoldIcon },
-            canCorporation && { key_: Page.Corporation, icon: BusinessIcon },
-            canGang && { key_: Page.Gang, icon: SportsMmaIcon },
-            canIPvGO && { key_: Page.Go, icon: BorderInnerSharpIcon },
-            canDarkNet && { key_: Page.DarkNet, icon: ShareIcon },
-          ]}
-        />
-        <Typography component="div" id="sidebar-extra-hook-2"></Typography>
-        <Divider />
-        <SidebarAccordion
-          key_="Help"
-          page={props.page}
-          clickPage={clickPage}
-          flash={flash}
-          icon={LiveHelpIcon}
-          sidebarOpen={open}
-          classes={classes}
-          items={[
-            { key_: Page.Milestones, icon: CheckIcon },
-            { key_: Page.Documentation, icon: HelpIcon },
-            { key_: Page.Achievements, icon: EmojiEventsIcon },
-            { key_: Page.Options, icon: SettingsIcon },
-            process.env.NODE_ENV === "development" && { key_: Page.DevMenu, icon: DeveloperBoardIcon },
-          ]}
-        />
-        <Typography component="div" id="sidebar-extra-hook-3"></Typography>
+        {navigationSections.map((section, index) => (
+          <React.Fragment key={section.label}>
+            {index > 0 && <Divider />}
+            <SidebarAccordion
+              key_={section.label}
+              page={props.page}
+              clickPage={clickPage}
+              flash={flash}
+              icon={section.icon}
+              sidebarOpen={open}
+              classes={classes}
+              items={section.items.map(
+                (item) =>
+                  isItemVisible(item) && {
+                    key_: item.page,
+                    icon: item.icon,
+                    count: item.badge?.(),
+                    alternateKeys: item.alternateKeys,
+                  },
+              )}
+            />
+            <Typography component="div" id={`sidebar-extra-hook-${index}`}></Typography>
+          </React.Fragment>
+        ))}
       </List>
     </Drawer>
   );
