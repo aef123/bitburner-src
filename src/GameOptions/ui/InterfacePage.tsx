@@ -26,6 +26,17 @@ export const InterfacePage = (): React.ReactElement => {
         }
       />
       <OptionSwitch
+        checked={Settings.ClassicMaps}
+        onChange={(newValue) => (Settings.ClassicMaps = newValue)}
+        text="Use classic maps"
+        tooltip={
+          <>
+            If this is set, the world and city maps use the classic rendering (ASCII art, or button lists when ASCII
+            art is disabled) instead of the redesigned maps.
+          </>
+        }
+      />
+      <OptionSwitch
         checked={Settings.DisableTextEffects}
         onChange={(newValue) => (Settings.DisableTextEffects = newValue)}
         text="Disable text effects"

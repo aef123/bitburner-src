@@ -15,6 +15,8 @@ export const Settings = {
   AutoexecScript: "",
   /** How often the game should autosave the player's progress, in seconds. */
   AutosaveInterval: 60,
+  /** Whether to use the classic world/city maps (ASCII art or button lists) instead of the redesigned SVG maps. */
+  ClassicMaps: false,
   /** Whether to render city as list of buttons. */
   DisableASCIIArt: false,
   /** Whether global keyboard shortcuts should be disabled throughout the game. */

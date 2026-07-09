@@ -16,6 +16,7 @@ import { Settings } from "../../Settings/Settings";
 
 import { Money } from "../../ui/React/Money";
 import { WorldMap } from "../../ui/React/WorldMap";
+import { WorldMap3A } from "../../ui/Maps/WorldMap3A";
 import { dialogBoxCreate } from "../../ui/React/DialogBox";
 
 import Typography from "@mui/material/Typography";
@@ -53,32 +54,36 @@ export function TravelAgencyRoot(): React.ReactElement {
   return (
     <>
       <Typography variant="h4">Travel Agency</Typography>
-      <Box mx={2}>
-        <Typography>
-          From {Player.city}, you can travel to any other city! A ticket costs{" "}
-          <Money money={CONSTANTS.TravelCost} forPurchase={true} />.
-        </Typography>
-        {Settings.DisableASCIIArt ? (
-          <>
-            {Object.values(CityName)
-              .filter((city: string) => city != Player.city)
-              .map((city: string) => {
-                const match = Object.entries(CityName).find((entry) => entry[1] === city);
-                if (match === undefined) throw new Error(`could not find key for city '${city}'`);
-                return (
-                  <React.Fragment key={city}>
-                    <Button onClick={() => startTravel(city as CityName)} sx={{ m: 2 }}>
-                      <Typography>Travel to {city}</Typography>
-                    </Button>
-                    <br />
-                  </React.Fragment>
-                );
-              })}
-          </>
-        ) : (
-          <WorldMap currentCity={Player.city} onTravel={(city: CityName) => startTravel(city)} />
-        )}
-      </Box>
+      {!Settings.ClassicMaps ? (
+        <WorldMap3A onTravel={(city: CityName) => startTravel(city)} />
+      ) : (
+        <Box mx={2}>
+          <Typography>
+            From {Player.city}, you can travel to any other city! A ticket costs{" "}
+            <Money money={CONSTANTS.TravelCost} forPurchase={true} />.
+          </Typography>
+          {Settings.DisableASCIIArt ? (
+            <>
+              {Object.values(CityName)
+                .filter((city: string) => city != Player.city)
+                .map((city: string) => {
+                  const match = Object.entries(CityName).find((entry) => entry[1] === city);
+                  if (match === undefined) throw new Error(`could not find key for city '${city}'`);
+                  return (
+                    <React.Fragment key={city}>
+                      <Button onClick={() => startTravel(city as CityName)} sx={{ m: 2 }}>
+                        <Typography>Travel to {city}</Typography>
+                      </Button>
+                      <br />
+                    </React.Fragment>
+                  );
+                })}
+            </>
+          ) : (
+            <WorldMap currentCity={Player.city} onTravel={(city: CityName) => startTravel(city)} />
+          )}
+        </Box>
+      )}
       <TravelConfirmationModal
         city={destination}
         travel={() => travel(destination)}
