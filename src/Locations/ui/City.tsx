@@ -15,6 +15,7 @@ import { Settings } from "../../Settings/Settings";
 import { Player } from "@player";
 import { Router } from "../../ui/GameRoot";
 import { Page } from "../../ui/Router";
+import { CityMap3B } from "../../ui/Maps/CityMap3B";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import { Theme } from "@mui/material/styles";
@@ -149,6 +150,8 @@ function ListCity(props: IProps): React.ReactElement {
 
 export function LocationCity(): React.ReactElement {
   const city = Cities[Player.city];
+  // The transit map renders its own city-name header.
+  if (!Settings.ClassicMaps) return <CityMap3B city={city} toLocation={toLocation} />;
   return (
     <>
       <Typography>{city.name}</Typography>
