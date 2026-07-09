@@ -25,7 +25,7 @@ export const Settings = {
   DisableTextEffects: false,
   /** Whether overview progress bars should be visible. */
   DisableOverviewProgressBars: false,
-  /** Whether the docked HUD panel is collapsed (the floating overview widget is shown instead). */
+  /** Whether the docked HUD panel is collapsed. When true, the panel is hidden and a reopen button appears in the TopBar; there is no floating overview widget. */
   HudCollapsed: false,
   /**
    * Sort mode for the joined-factions list on the Factions screen.

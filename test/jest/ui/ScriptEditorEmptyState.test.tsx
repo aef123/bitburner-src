@@ -37,6 +37,8 @@ import { initGameEnvironment, setupBasicTestingEnvironment } from "../Utilities"
 // The stub provides a minimal editor interface so onMount in ScriptEditorRoot can run without
 // crashing on undefined monaco methods. We use useEffect (like the real Editor) so onMount
 // fires after render — matching the real component's lifecycle.
+//
+// stubEditorInstance is exported alongside Editor so tests can inspect mock call counts.
 jest.mock("../../../src/ScriptEditor/ui/Editor", () => {
   // jest.mock factory cannot close over top-level imports; require inside.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -55,6 +57,7 @@ jest.mock("../../../src/ScriptEditor/ui/Editor", () => {
     onDidBlurEditorWidget: jest.fn(() => ({ dispose: () => {} })),
   };
   return {
+    stubEditorInstance: stubEditor,
     Editor: ({
       onMount,
       onUnmount,
@@ -185,6 +188,7 @@ describe("W4 — editor empty state (no open files)", () => {
   });
 });
 
+
 describe("W4 — opening a file from the explorer in the empty state", () => {
   it("adds a tab and removes the placeholder", () => {
     // Write a file to home so the explorer can open it.
@@ -215,3 +219,4 @@ describe("W4 — opening a file from the explorer in the empty state", () => {
     expect(root.querySelector("[data-mock-editor]")).not.toBeNull();
   });
 });
+

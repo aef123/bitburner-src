@@ -711,14 +711,20 @@ function Root(props: IProps): React.ReactElement {
   }
 
   function onUnmountEditor() {
-    if (!currentScript) {
-      return;
+    // Save the current cursor position before disposing — only meaningful when there is
+    // an active script and the editor still holds a valid position.
+    if (currentScript) {
+      const currentPosition = editorRef.current?.getPosition();
+      if (currentPosition) {
+        currentScript.lastPosition = currentPosition;
+      }
     }
-    // Save the current position of the cursor.
-    const currentPosition = editorRef.current?.getPosition();
-    if (currentPosition) {
-      currentScript.lastPosition = currentPosition;
-    }
+    // Always null the ref: the Monaco instance is disposed after this callback returns.
+    // Downstream callers (openFileFromExplorer, revealPosition) guard on
+    // editorRef.current !== null; without this they would call setModel/focus on the
+    // disposed instance. The remount-recovery branch in onMount re-populates the ref
+    // when the Editor remounts. This must come AFTER the position save above.
+    editorRef.current = null;
   }
 
   const { statusBarRef } = useVimEditor({
