@@ -133,14 +133,21 @@ describe("WorldMap3A info diet", () => {
     }
   });
 
-  it("keeps the legend to current / invitation / nothing states", () => {
+  it("renders no legend (wave-2 feedback: the node states explain themselves)", () => {
     const root = renderMap();
     const text = root.textContent ?? "";
-    expect(text).toContain("current city");
-    expect(text).toContain("faction invitation waiting");
-    expect(text).toContain("nothing new");
+    expect(text).not.toContain("current city");
+    expect(text).not.toContain("nothing new");
     expect(text).not.toContain("has something for you now");
     expect(text).not.toContain("arcs show ticket routes");
+  });
+
+  it("draws the vectorized ASCII coastline as many rounded line strokes", () => {
+    const root = renderMap();
+    const lines = root.querySelectorAll('svg line[stroke-linecap="round"]');
+    expect(lines.length).toBeGreaterThan(300);
+    // The old hand-traced closed outlines are gone.
+    expect(root.querySelectorAll("svg path[d$='Z']")).toHaveLength(0);
   });
 
   it("shows a pending invitation on the node, popover, and index column", () => {

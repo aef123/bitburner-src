@@ -1,19 +1,20 @@
 /**
  * World Map (3A) — the redesigned Travel Agency view. City nodes sit at the
- * ORIGINAL ASCII world map's positions and the coastlines are traced from the
- * same art (see worldMapData.ts). Deliberately information-light: a node is
- * cyan only when a pending faction invitation requires that city (cityIntel.ts);
- * the popover shows the ticket price, pending invitations, and reputation for
- * factions already joined — nothing derived, no comparisons.
+ * ORIGINAL ASCII world map's positions and the continents are the original
+ * art itself, vectorized glyph-by-glyph (see COASTLINE_STROKES in
+ * worldMapData.ts). Deliberately information-light: a node is cyan only when
+ * a pending faction invitation requires that city (cityIntel.ts); the popover
+ * shows the ticket price, pending invitations, and reputation for factions
+ * already joined — nothing derived, no comparisons, no legend.
  *
  * Token mapping for mock hexes without a 1:1 token (documented derivations):
  *   canvas radial gradient #0c1420 → bgPanelDeep, #070a0e → bgApp (nearest tokens)
  *   node fill #0d141c → bgPanelDeep; slate node/label #9fb1c1 → textSecondary
  *   current-node rim #bfeaf5 → lighten(accentCyan, 0.55)
  *   popover bg #101823 → bgPanel; popover border #2a4152 = borderFocus (exact)
- *   CTA text-on-cyan #06131a → bgApp; legend bg rgba(10,14,19,.85) → alpha(bgApp, 0.85)
+ *   CTA text-on-cyan #06131a → bgApp
  *   graticule/arc rgba(76,201,232,α) → alpha(accentCyan, α)
- *   coastline stroke/tint → borderDefault (+ alpha fill)
+ *   coastline strokes → borderDefault at per-glyph opacity (faint, but clearly the map)
  */
 import React, { useState } from "react";
 import { alpha, lighten, type Theme } from "@mui/material/styles";
@@ -31,10 +32,10 @@ import { useCycleRerender } from "../React/hooks";
 import { getAllCityIntel } from "./cityIntel";
 import { CityIndexColumn } from "./CityIndexColumn";
 import {
+  COASTLINE_STROKES,
   getFlightArc,
   GRATICULE_ELLIPSES,
   GRATICULE_LINES,
-  LANDMASS_OUTLINES,
   MAP_HEIGHT,
   MAP_WIDTH,
   worldMapCities,
@@ -229,55 +230,6 @@ const useStyles = makeStyles()((theme: Theme) => {
         cursor: "default",
       },
     },
-    legend: {
-      position: "absolute",
-      left: "22px",
-      bottom: "18px",
-      display: "flex",
-      gap: "16px",
-      alignItems: "center",
-      backgroundColor: alpha(bgApp, 0.85),
-      border: `1px solid ${theme.colors.borderDefault as string}`,
-      borderRadius: "10px",
-      padding: "10px 14px",
-      fontSize: typeScale.caption, // mock: 10.5px
-      fontWeight: 500,
-      color: theme.colors.textSecondary,
-      zIndex: 3,
-      pointerEvents: "none",
-    },
-    legendItem: {
-      display: "flex",
-      alignItems: "center",
-      gap: "6px",
-      whiteSpace: "nowrap",
-    },
-    // Filled cyan, like the current-city node.
-    legendDotCurrent: {
-      width: "8px",
-      height: "8px",
-      borderRadius: "50%",
-      backgroundColor: accentCyan,
-      flex: "none",
-    },
-    // Cyan ring on dark, like an invitation node.
-    legendDotInvite: {
-      width: "8px",
-      height: "8px",
-      borderRadius: "50%",
-      boxSizing: "border-box",
-      backgroundColor: theme.colors.bgPanelDeep,
-      border: `2px solid ${accentCyan}`,
-      flex: "none",
-    },
-    // Matches the slate node stroke (textTertiary) so the legend swatch is honest about node color.
-    legendDotQuiet: {
-      width: "8px",
-      height: "8px",
-      borderRadius: "50%",
-      backgroundColor: textTertiary,
-      flex: "none",
-    },
   };
 });
 
@@ -306,7 +258,11 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
   // Popover sits above the selected node, clamped to the canvas.
   const popoverPosition = selectedIntel
     ? {
-        left: clamp(worldMapCities[selectedIntel.city].center.x - POPOVER_WIDTH / 2, 12, MAP_WIDTH - POPOVER_WIDTH - 12),
+        left: clamp(
+          worldMapCities[selectedIntel.city].center.x - POPOVER_WIDTH / 2,
+          12,
+          MAP_WIDTH - POPOVER_WIDTH - 12,
+        ),
         top: clamp(worldMapCities[selectedIntel.city].center.y - 150, 12, MAP_HEIGHT - 170),
       }
     : null;
@@ -327,14 +283,17 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
           viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
           aria-hidden="true"
         >
-          {LANDMASS_OUTLINES.map((d, i) => (
-            <path
+          {COASTLINE_STROKES.map((s, i) => (
+            <line
               key={i}
-              d={d}
-              fill={alpha(borderDefault, 0.08)}
+              x1={s.x1}
+              y1={s.y1}
+              x2={s.x2}
+              y2={s.y2}
               stroke={borderDefault}
-              strokeWidth={1}
-              strokeLinejoin="round"
+              strokeOpacity={s.opacity}
+              strokeWidth={1.25}
+              strokeLinecap="round"
             />
           ))}
           {GRATICULE_ELLIPSES.map((e, i) => (
@@ -458,17 +417,6 @@ export function WorldMap3A({ onTravel }: { onTravel: (city: CityName) => void })
             </button>
           </div>
         )}
-        <div className={classes.legend}>
-          <span className={classes.legendItem}>
-            <span className={classes.legendDotCurrent} /> current city
-          </span>
-          <span className={classes.legendItem}>
-            <span className={classes.legendDotInvite} /> faction invitation waiting
-          </span>
-          <span className={classes.legendItem}>
-            <span className={classes.legendDotQuiet} /> nothing new
-          </span>
-        </div>
       </div>
       <CityIndexColumn
         intel={cities.map((city) => intel[city])}

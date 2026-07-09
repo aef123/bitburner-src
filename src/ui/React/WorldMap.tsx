@@ -5,6 +5,8 @@ import { Theme } from "@mui/material/styles";
 
 import { CityName } from "@enums";
 
+import { CITY_LETTER_TO_NAME, WORLD_MAP_ART } from "./worldMapArt";
+
 interface ICityProps {
   currentCity: CityName;
   city: CityName;
@@ -44,32 +46,35 @@ interface IProps {
   onTravel: (city: CityName) => void;
 }
 
+/**
+ * The classic ASCII world map, rendered from the shared art source
+ * (worldMapArt.ts). Each city letter in the art becomes a clickable <City/>
+ * element; everything else renders as plain text, character-for-character
+ * identical to the original hand-written JSX.
+ */
 export function WorldMap(props: IProps): React.ReactElement {
-  // prettier-ignore
   return (
     <>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>               ,_   .  ._. _.  .</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>           , _-\','|~\~      ~/      ;-'_   _-'     ,;_;_,    ~~-</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>  /~~-\_/-'~'--' \~~| ',    ,'      /  / ~|-_\_/~/~      ~~--~~~~'--_</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>  /              ,/'-/~ '\ ,' _  , '<City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.Volhaven} />,'|~                   ._/-, /~</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>  ~/-'~\_,       '-,| '|. '   ~  ,\ /'~                /    /_  /~</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>.-~      '|        '',\~|\       _\~     ,_  ,     <City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.Chongqing} />         /,</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>          '\     <City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.Sector12} />  /'~          |_/~\\,-,~  \ "         ,_,/ |</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>           |       /            ._-~'\_ _~|              \ ) <City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.NewTokyo} /></Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>            \   __-\           '/      ~ |\  \_          /  ~</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>  .,         '\ |,  ~-_      - |          \\_' ~|  /\  \~ ,</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>               ~-_'  _;       '\           '-,   \,' /\/  |</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                 '\_,~'\_       \_ _,       /'    '  |, /|'</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                   /     \_       ~ |      /         \  ~'; -,_.</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                   |       ~\        |    |  ,        '-_, ,; ~ ~\</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    \,   <City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.Aevum} />  /        \    / /|            ,-, ,   -,</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                     |    ,/          |  |' |/          ,-   ~ \   '.</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    ,|   ,/           \ ,/              \   <City onTravel={props.onTravel} currentCity={props.currentCity} city={CityName.Ishima} />   |</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    /    |             ~                 -~~-, /   _</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    | ,-'                                    ~    /</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    / ,'                                      ~</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                    ',|  ~</Typography>
-        <Typography sx={{lineHeight: '1em',whiteSpace: 'pre'}}>                      ~'</Typography>
+      {WORLD_MAP_ART.map((line, row) => {
+        const children: React.ReactNode[] = [];
+        let text = "";
+        for (const char of line) {
+          const city = CITY_LETTER_TO_NAME[char];
+          if (!city) {
+            text += char;
+            continue;
+          }
+          if (text) children.push(text);
+          text = "";
+          children.push(<City key={city} onTravel={props.onTravel} currentCity={props.currentCity} city={city} />);
+        }
+        if (text) children.push(text);
+        return (
+          <Typography key={row} sx={{ lineHeight: "1em", whiteSpace: "pre" }}>
+            {children}
+          </Typography>
+        );
+      })}
     </>
   );
 }
