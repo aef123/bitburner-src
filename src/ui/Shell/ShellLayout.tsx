@@ -1,27 +1,36 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
+import { Settings } from "../../Settings/Settings";
 import { Page } from "../Router";
 import { IconRail } from "./IconRail";
 import { TopBar } from "./TopBar";
+import { Hud } from "./Hud";
+import { HudToggleEvents } from "./hudEvents";
 import { useNavigationHotkeys, useHotkeySuppression } from "./useNavigationHotkeys";
 import { PalettePortal, usePaletteState } from "./CommandPalette";
 
 const useStyles = makeStyles()((theme: Theme) => ({
   /**
-   * Shell grid per design notes 1A: 60px icon rail spanning the full height, 52px top bar, content below.
-   * The docked HUD adds a third column in a later task.
+   * Shell grid per design notes 1A: 60px icon rail spanning the full height, 52px top bar spanning
+   * the content and HUD columns, content + 272px docked HUD below. When the HUD is collapsed the
+   * third column animates to 0 (160ms per the global interaction rules) and the floating Overview
+   * takes over (GameRoot owns that switch).
    */
   shell: {
     display: "grid",
-    gridTemplateColumns: "60px 1fr",
+    gridTemplateColumns: "60px 1fr 272px",
     gridTemplateRows: "52px 1fr",
-    gridTemplateAreas: `"rail topbar" "rail content"`,
+    gridTemplateAreas: `"rail topbar topbar" "rail content hud"`,
+    transition: "grid-template-columns 160ms ease-out",
     width: "100%",
     height: "100vh",
     overflow: "hidden",
     backgroundColor: theme.colors.bgApp,
+  },
+  shellHudCollapsed: {
+    gridTemplateColumns: "60px 1fr 0px",
   },
   rail: {
     gridArea: "rail",
@@ -45,14 +54,34 @@ const useStyles = makeStyles()((theme: Theme) => ({
       display: "none",
     },
   },
+  // The HUD cell clips its fixed-width panel while the column width animates closed/open.
+  hudCell: {
+    gridArea: "hud",
+    overflow: "hidden",
+    minHeight: 0,
+    backgroundColor: theme.colors.bgSidebar,
+  },
 }));
 
-export function ShellLayout({ page, children }: { page: Page; children: React.ReactNode }): React.ReactElement {
+interface ShellLayoutProps {
+  page: Page;
+  /** Save-game handler for the HUD's Save button (provided by GameRoot). */
+  save: () => void;
+  /** Kill-all-scripts handler for the HUD's KillScriptsModal (provided by GameRoot). */
+  killScripts: () => void;
+  children: React.ReactNode;
+}
+
+export function ShellLayout({ page, save, killScripts, children }: ShellLayoutProps): React.ReactElement {
   useNavigationHotkeys();
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
   const contentRef = useRef<HTMLElement>(null);
   const paletteState = usePaletteState();
   const { isSuppressed } = useHotkeySuppression();
+  const [hudCollapsed, setHudCollapsedState] = useState(Settings.HudCollapsed);
+
+  // Track HUD collapse/restore (chevron in the HUD header, reopen button in the TopBar).
+  useEffect(() => HudToggleEvents.subscribe(() => setHudCollapsedState(Settings.HudCollapsed)), []);
 
   // Global Ctrl/⌘+K shortcut — same suppression rules as Alt+X hotkeys.
   // Yields to any in-app consumer (e.g. terminal Ctrl+K / clear-after-cursor) that called
@@ -86,12 +115,14 @@ export function ShellLayout({ page, children }: { page: Page; children: React.Re
   }, [page]);
 
   return (
-    <div className={classes.shell}>
+    <div className={cx(classes.shell, hudCollapsed && classes.shellHudCollapsed)}>
       <IconRail page={page} className={classes.rail} />
-      <TopBar page={page} className={classes.topBar} paletteState={paletteState} />
+      <TopBar page={page} className={classes.topBar} paletteState={paletteState} hudCollapsed={hudCollapsed} />
       <main ref={contentRef} className={classes.content}>
         {children}
       </main>
+      {/* The Hud unmounts while collapsed so its script-hook DOM ids never duplicate the floating overview's. */}
+      <div className={classes.hudCell}>{!hudCollapsed && <Hud save={save} killScripts={killScripts} />}</div>
       <PalettePortal state={paletteState} />
     </div>
   );

@@ -12,6 +12,7 @@ import { InteractiveTutorialRoot } from "./InteractiveTutorial/InteractiveTutori
 import { ITutorialEvents } from "./InteractiveTutorial/ITutorialEvents";
 
 import { prestigeWorkerScripts } from "../NetscriptWorker";
+import { Settings } from "../Settings/Settings";
 import { dialogBoxCreate } from "./React/DialogBox";
 import { GetAllServers } from "../Server/AllServers";
 import { StockMarket } from "../StockMarket/StockMarket";
@@ -20,6 +21,7 @@ import type { IRouter, PageContext, PageWithContext } from "./Router";
 import { isSimplePage, Page } from "./Router";
 import { Overview } from "./React/Overview";
 import { ShellLayout } from "./Shell/ShellLayout";
+import { HudToggleEvents } from "./Shell/hudEvents";
 import { AugmentationsRoot } from "../Augmentation/ui/AugmentationsRoot";
 import { DevMenuRoot } from "../DevMenu";
 import { BladeburnerRoot } from "../Bladeburner/ui/BladeburnerRoot";
@@ -216,6 +218,11 @@ export function GameRoot(): React.ReactElement {
     return ITutorialEvents.subscribe(rerender);
   }, [rerender]);
 
+  // Rerender when the docked HUD collapses/restores, so the floating Overview switch below stays in sync.
+  useEffect(() => {
+    return HudToggleEvents.subscribe(rerender);
+  }, [rerender]);
+
   function killAllScripts(): void {
     for (const server of GetAllServers(true)) {
       server.runningScriptMap.clear();
@@ -227,6 +234,10 @@ export function GameRoot(): React.ReactElement {
       .catch((error) => {
         exceptionAlert(error);
       });
+  }
+
+  function saveGameHandler(): void {
+    saveGame().catch((error) => exceptionAlert(error));
   }
 
   function attemptedForbiddenRouting(name: string) {
@@ -532,23 +543,28 @@ export function GameRoot(): React.ReactElement {
         <BypassWrapper content={bypassGame ? mainPage : null}>
           <HistoryProvider>
             <SnackbarProvider>
-              <Overview mode={ITutorial.isRunning ? "tutorial" : "overview"}>
-                {(parentOpen) =>
-                  !ITutorial.isRunning ? (
-                    <CharacterOverview
-                      parentOpen={parentOpen}
-                      save={() => {
-                        saveGame().catch((error) => exceptionAlert(error));
-                      }}
-                      killScripts={killAllScripts}
-                    />
-                  ) : (
-                    <InteractiveTutorialRoot />
-                  )
-                }
-              </Overview>
+              {/*
+               * The floating Overview widget renders only when the docked HUD can't stand in for it:
+               * shell-less pages (e.g. focused work), a collapsed HUD, or the interactive tutorial
+               * (whose content lives inside the Overview frame in both modes). Otherwise the docked
+               * HUD in ShellLayout owns the overview content — never both at once, so the
+               * script-injection hook ids stay unique.
+               */}
+              {(ITutorial.isRunning || Settings.HudCollapsed || !withSidebar) && (
+                <Overview mode={ITutorial.isRunning ? "tutorial" : "overview"}>
+                  {(parentOpen) =>
+                    !ITutorial.isRunning ? (
+                      <CharacterOverview parentOpen={parentOpen} save={saveGameHandler} killScripts={killAllScripts} />
+                    ) : (
+                      <InteractiveTutorialRoot />
+                    )
+                  }
+                </Overview>
+              )}
               {withSidebar ? (
-                <ShellLayout page={pageWithContext.page}>{mainPage}</ShellLayout>
+                <ShellLayout page={pageWithContext.page} save={saveGameHandler} killScripts={killAllScripts}>
+                  {mainPage}
+                </ShellLayout>
               ) : (
                 <Box className={classes.root}>{mainPage}</Box>
               )}

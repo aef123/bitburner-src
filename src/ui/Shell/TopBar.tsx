@@ -2,6 +2,9 @@ import React from "react";
 import { alpha, type Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
+import Tooltip from "@mui/material/Tooltip";
+import VerticalSplitIcon from "@mui/icons-material/VerticalSplit";
+
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
 import type { Page } from "../Router";
@@ -9,6 +12,7 @@ import { getNavigationSectionForPage } from "../../Sidebar/navigationItems";
 import { formatHp, formatMoney } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 import type { PaletteState } from "./CommandPalette";
+import { setHudCollapsed } from "./hudEvents";
 
 const useStyles = makeStyles()((theme: Theme) => {
   // All UI-refresh tokens are required ITheme keys, so they are always defined.
@@ -116,6 +120,26 @@ const useStyles = makeStyles()((theme: Theme) => {
   hpMax: {
     color: alpha(accentGreen, 0.45),
   },
+  // Reopen affordance for the docked HUD; only rendered while the HUD is collapsed.
+  hudReopen: {
+    flex: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "28px",
+    height: "28px",
+    padding: 0,
+    background: "none",
+    border: `1px solid ${theme.colors.borderCard ?? ""}`,
+    borderRadius: "6px",
+    color: theme.colors.textSecondary,
+    cursor: "pointer",
+    transition: "border-color 120ms ease-out, color 120ms ease-out",
+    "&:hover": {
+      borderColor: theme.colors.borderFocus,
+      color: theme.colors.textBody,
+    },
+  },
   };
 });
 
@@ -128,10 +152,13 @@ export function TopBar({
   page,
   className,
   paletteState,
+  hudCollapsed,
 }: {
   page: Page;
   className?: string;
   paletteState?: PaletteState;
+  /** When true, show the reopen affordance for the docked HUD. */
+  hudCollapsed?: boolean;
 }): React.ReactElement {
   useCycleRerender();
   const { classes, cx } = useStyles();
@@ -166,6 +193,18 @@ export function TopBar({
         HP {formatHp(Player.hp.current)}
         <span className={classes.hpMax}>/{formatHp(Player.hp.max)}</span>
       </span>
+      {hudCollapsed && (
+        <Tooltip title="Show overview panel">
+          <button
+            type="button"
+            className={classes.hudReopen}
+            aria-label="Show overview panel"
+            onClick={() => setHudCollapsed(false)}
+          >
+            <VerticalSplitIcon fontSize="small" color="inherit" />
+          </button>
+        </Tooltip>
+      )}
     </header>
   );
 }

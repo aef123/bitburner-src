@@ -23,6 +23,8 @@ export const Settings = {
   DisableTextEffects: false,
   /** Whether overview progress bars should be visible. */
   DisableOverviewProgressBars: false,
+  /** Whether the docked HUD panel is collapsed (the floating overview widget is shown instead). */
+  HudCollapsed: false,
   /** Whether to enable bash hotkeys */
   EnableBashHotkeys: false,
   /** Whether to enable terminal history search */
