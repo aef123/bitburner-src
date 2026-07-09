@@ -1,11 +1,16 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
+import { Player } from "@player";
+import { Router } from "../GameRoot";
 import { Page } from "../Router";
+import { Settings } from "../../Settings/Settings";
 import { IconRail } from "./IconRail";
 import { TopBar } from "./TopBar";
 import { useNavigationHotkeys } from "./useNavigationHotkeys";
+import { PalettePortal, usePaletteState } from "./CommandPalette";
+import { KeyBindingEvents, KeyBindingEventType } from "../../utils/KeyBindingUtils";
 
 const useStyles = makeStyles()((theme: Theme) => ({
   /**
@@ -50,6 +55,40 @@ export function ShellLayout({ page, children }: { page: Page; children: React.Re
   useNavigationHotkeys();
   const { classes } = useStyles();
   const contentRef = useRef<HTMLElement>(null);
+  const paletteState = usePaletteState();
+  const isSettingUpKeyBindings = useRef(false);
+
+  // Track key-binding-setup events so Ctrl+K is also suppressed during rebinding.
+  useEffect(() => {
+    const clear = KeyBindingEvents.subscribe((eventType) => {
+      if (eventType === KeyBindingEventType.StartSettingUp) isSettingUpKeyBindings.current = true;
+      if (eventType === KeyBindingEventType.StopSettingUp) isSettingUpKeyBindings.current = false;
+    });
+    return clear;
+  }, []);
+
+  // Global Ctrl/⌘+K shortcut — same suppression rules as Alt+X hotkeys.
+  const handlePaletteShortcut = useCallback(
+    (event: KeyboardEvent) => {
+      if (Settings.DisableHotkeys) return;
+      if (event.getModifierState(event.key)) return;
+      if (isSettingUpKeyBindings.current) return;
+      if ((Player.currentWork && Player.focus) || Router.page() === Page.BitVerse) return;
+
+      const isK = event.key === "k" || event.key === "K";
+      const hasCtrlOrMeta = event.ctrlKey || event.metaKey;
+      if (!isK || !hasCtrlOrMeta) return;
+
+      event.preventDefault();
+      paletteState.open();
+    },
+    [paletteState],
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handlePaletteShortcut);
+    return () => document.removeEventListener("keydown", handlePaletteShortcut);
+  }, [handlePaletteShortcut]);
 
   // The content area owns scrolling now (the window no longer scrolls); mirror GameRoot's scroll-to-top on page
   // change, with the same Terminal exception.
@@ -62,10 +101,11 @@ export function ShellLayout({ page, children }: { page: Page; children: React.Re
   return (
     <div className={classes.shell}>
       <IconRail page={page} className={classes.rail} />
-      <TopBar page={page} className={classes.topBar} />
+      <TopBar page={page} className={classes.topBar} paletteState={paletteState} />
       <main ref={contentRef} className={classes.content}>
         {children}
       </main>
+      <PalettePortal state={paletteState} />
     </div>
   );
 }

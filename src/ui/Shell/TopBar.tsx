@@ -8,6 +8,7 @@ import type { Page } from "../Router";
 import { getNavigationSectionForPage } from "../../Sidebar/navigationItems";
 import { formatHp, formatMoney } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
+import type { PaletteState } from "./CommandPalette";
 
 const useStyles = makeStyles()((theme: Theme) => {
   // All UI-refresh tokens are required ITheme keys, so they are always defined.
@@ -123,7 +124,15 @@ function isMacPlatform(): boolean {
   return typeof navigator !== "undefined" && /mac/i.test(navigator.platform ?? "");
 }
 
-export function TopBar({ page, className }: { page: Page; className?: string }): React.ReactElement {
+export function TopBar({
+  page,
+  className,
+  paletteState,
+}: {
+  page: Page;
+  className?: string;
+  paletteState?: PaletteState;
+}): React.ReactElement {
   useCycleRerender();
   const { classes, cx } = useStyles();
   const section = getNavigationSectionForPage(page);
@@ -144,9 +153,7 @@ export function TopBar({ page, className }: { page: Page; className?: string }):
         type="button"
         className={classes.search}
         aria-label="Jump to anything"
-        onClick={() => {
-          // Command palette is wired up in a later task.
-        }}
+        onClick={() => paletteState?.open()}
       >
         <span className={classes.searchIcon} aria-hidden="true">
           ⌕
