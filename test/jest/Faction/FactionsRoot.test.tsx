@@ -16,7 +16,7 @@ import { act } from "react-dom/test-utils";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 
 import { Player } from "@player";
-import { FactionName } from "@enums";
+import { FactionDiscovery, FactionName } from "@enums";
 
 import { Factions } from "../../../src/Faction/Factions";
 import { FactionsRoot } from "../../../src/Faction/ui/FactionsRoot";
@@ -198,6 +198,9 @@ describe("invitation rows", () => {
     Player.factionInvitations.push(FactionName.CyberSec);
     Factions[FactionName.CyberSec].alreadyInvited = true;
     Factions[FactionName.CyberSec].isMember = false;
+    // The game always sets discovery = known when inviting; without it the no-chip assertion
+    // passes vacuously (the known-gated name/tooltip path never renders).
+    Factions[FactionName.CyberSec].discovery = FactionDiscovery.known;
   });
 
   afterEach(() => {
