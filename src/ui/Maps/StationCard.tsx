@@ -1,20 +1,20 @@
 /**
- * Station card for the City Transit Map (3B): right-top popover (262px per the
- * mock) with the station name, line-membership chips, contextual content and
- * an "Enter" CTA colored by the station's primary category.
+ * Station card for the City Transit Map (3B): right-top popover (262px) with
+ * the station name, its location types, contextual content and an "Enter" CTA.
  *
- * Contextual content:
+ * Contextual content ("clunky is a feature": only what the in-location screen
+ * itself shows):
  *  - Slums: crime list — same data SlumsLocation shows (crime.type, success %,
- *    payout). Success-rate color coding mirrors the mock (48% green / 31% gold
- *    / 12% red): ≥40% accentGreen, ≥20% accentGold, else accentRed.
- *  - Gym/University: public costMult/expMult lines.
- *  - Everything else: the location's types line.
+ *    payout). Success-rate coloring: ≥40% accentGreen, ≥20% accentGold, else
+ *    accentRed.
+ *  - Everything else: nothing beyond the types line. Gym/university
+ *    multipliers and other derived previews are deliberately NOT shown.
  *
- * Mock hex → token mapping (per the plan's token table):
- *   card bg #101823 → bgPanel; border #2a4152 = borderFocus (exact)
- *   name #f0f6fb = textPrimary; type line #7d8fa1 = textSecondary
- *   crime names #9fb1c1 → textSecondary; values green/gold/red = accent tokens (exact)
- *   CTA text #0a0518 → bgApp
+ * The CTA is the neutral primary (accentCyan, like other primary buttons) —
+ * no category coloring, no line-membership chips.
+ *
+ * Token mapping: card bg → bgPanel; border → borderFocus; name → textPrimary;
+ * types line → textSecondary; CTA bg → accentCyan, CTA text → bgApp.
  */
 import React from "react";
 import { lighten, type Theme } from "@mui/material/styles";
@@ -28,120 +28,90 @@ import { Settings } from "../../Settings/Settings";
 import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatMoney, formatPercent } from "../formatNumber";
 
-import { categoriesOf, isInterchange, primaryCategoryOf, type TransitCategory } from "./cityMapLayouts";
-
 export const STATION_CARD_WIDTH = 262;
 
-/** Success-rate color thresholds (reproduce the mock's 48% green / 31% gold / 12% red). */
+/** Success-rate color thresholds (48% green / 31% gold / 12% red in the mock). */
 const SUCCESS_GOOD = 0.4;
 const SUCCESS_MID = 0.2;
 
 const useStyles = makeStyles()((theme: Theme) => {
   const typeScale = getTypeScale();
   return {
-  card: {
-    position: "absolute",
-    right: "24px",
-    top: "20px",
-    width: `${STATION_CARD_WIDTH}px`,
-    boxSizing: "border-box",
-    backgroundColor: theme.colors.bgPanel,
-    border: `1px solid ${theme.colors.borderFocus as string}`,
-    borderRadius: "12px",
-    padding: "14px 16px",
-    boxShadow: "0 16px 40px rgba(0, 0, 0, 0.55)",
-    zIndex: 4,
-  },
-  name: {
-    fontSize: typeScale.cardTitle, // mock: 13px
-    fontWeight: 600,
-    color: theme.colors.textPrimary,
-    marginBottom: "2px",
-  },
-  typeLine: {
-    fontSize: typeScale.caption, // mock: 10.5px
-    fontWeight: 500,
-    color: theme.colors.textSecondary,
-    marginBottom: "8px",
-  },
-  chips: {
-    display: "flex",
-    gap: "6px",
-    marginBottom: "10px",
-  },
-  chip: {
-    fontSize: typeScale.caption, // mock: 10px
-    fontWeight: 600,
-    borderRadius: "4px",
-    padding: "1px 7px",
-    border: "1px solid",
-  },
-  infoList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "5px",
-    fontSize: typeScale.body, // mock: 11px
-    marginBottom: "12px",
-  },
-  infoRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "8px",
-  },
-  infoLeft: {
-    color: theme.colors.textSecondary,
-  },
-  infoValue: {
-    fontFamily: Settings.styles.monoFontFamily,
-    fontWeight: 500, // weight floor: small mono values never render at 400
-    whiteSpace: "nowrap",
-  },
-  successGood: {
-    color: theme.colors.accentGreen,
-  },
-  successMid: {
-    color: theme.colors.accentGold,
-  },
-  successLow: {
-    color: theme.colors.accentRed,
-  },
-  cta: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    height: "30px",
-    borderRadius: "8px",
-    border: "none",
-    color: theme.colors.bgApp,
-    font: "inherit",
-    fontSize: typeScale.body, // mock: 12px
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background-color 120ms ease-out",
-  },
-  ctaCommerce: {
-    backgroundColor: theme.colors.accentGold,
-    "&:hover": { backgroundColor: lighten(theme.colors.accentGold as string, 0.15) },
-  },
-  ctaTraining: {
-    backgroundColor: theme.colors.accentGreen,
-    "&:hover": { backgroundColor: lighten(theme.colors.accentGreen as string, 0.15) },
-  },
-  ctaStreet: {
-    backgroundColor: theme.colors.accentViolet,
-    "&:hover": { backgroundColor: lighten(theme.colors.accentViolet as string, 0.15) },
-  },
+    card: {
+      position: "absolute",
+      right: "24px",
+      top: "20px",
+      width: `${STATION_CARD_WIDTH}px`,
+      boxSizing: "border-box",
+      backgroundColor: theme.colors.bgPanel,
+      border: `1px solid ${theme.colors.borderFocus as string}`,
+      borderRadius: "12px",
+      padding: "14px 16px",
+      boxShadow: "0 16px 40px rgba(0, 0, 0, 0.55)",
+      zIndex: 4,
+    },
+    name: {
+      fontSize: typeScale.cardTitle,
+      fontWeight: 600,
+      color: theme.colors.textPrimary,
+      marginBottom: "2px",
+    },
+    typeLine: {
+      fontSize: typeScale.caption,
+      fontWeight: 500,
+      color: theme.colors.textSecondary,
+      marginBottom: "10px",
+    },
+    infoList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+      fontSize: typeScale.body,
+      marginBottom: "12px",
+    },
+    infoRow: {
+      display: "flex",
+      justifyContent: "space-between",
+      gap: "8px",
+    },
+    infoLeft: {
+      color: theme.colors.textSecondary,
+    },
+    infoValue: {
+      fontFamily: Settings.styles.monoFontFamily,
+      fontWeight: 500, // weight floor: small mono values never render at 400
+      whiteSpace: "nowrap",
+    },
+    successGood: {
+      color: theme.colors.accentGreen,
+    },
+    successMid: {
+      color: theme.colors.accentGold,
+    },
+    successLow: {
+      color: theme.colors.accentRed,
+    },
+    cta: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      height: "30px",
+      borderRadius: "8px",
+      border: "none",
+      backgroundColor: theme.colors.accentCyan,
+      color: theme.colors.bgApp,
+      font: "inherit",
+      fontSize: typeScale.body,
+      fontWeight: 600,
+      cursor: "pointer",
+      transition: "background-color 120ms ease-out",
+      "&:hover": {
+        backgroundColor: lighten(theme.colors.accentCyan as string, 0.15),
+      },
+    },
   };
 });
-
-function categoryColors(theme: Theme): Record<TransitCategory, string> {
-  return {
-    commerce: theme.colors.accentGold as string,
-    training: theme.colors.accentGreen as string,
-    street: theme.colors.accentViolet as string,
-  };
-}
 
 function SlumsContent({
   classes,
@@ -180,60 +150,15 @@ export function StationCard({
   location: Location;
   toLocation: (location: Location) => void;
 }): React.ReactElement {
-  const { classes, cx, theme } = useStyles();
-  const colors = categoryColors(theme);
-  const categories = categoriesOf(location.types);
-  const primary = primaryCategoryOf(location.types);
-  const interchange = isInterchange(location.types);
-
+  const { classes, cx } = useStyles();
   const isSlums = location.types.includes(LocationType.Slums);
-  const isTraining = location.types.includes(LocationType.Gym) || location.types.includes(LocationType.University);
-
-  const typeLine = interchange
-    ? `Interchange · ${categories.map((category) => `${category} line`).join(" ✕ ")}`
-    : `${primary.charAt(0).toUpperCase()}${primary.slice(1)} line`;
 
   return (
     <div className={classes.card} data-station-card={location.name}>
       <div className={classes.name}>{location.name}</div>
-      <div className={classes.typeLine}>{typeLine}</div>
-      <div className={classes.chips}>
-        {categories.map((category) => (
-          <span key={category} className={classes.chip} style={{ borderColor: colors[category], color: colors[category] }}>
-            {category}
-          </span>
-        ))}
-      </div>
-      {isSlums ? (
-        <SlumsContent classes={classes} cx={cx} />
-      ) : isTraining ? (
-        <div className={classes.infoList}>
-          <div className={classes.infoRow}>
-            <span className={classes.infoLeft}>training exp</span>
-            <span className={cx(classes.infoValue, classes.successGood)}>×{location.expMult}</span>
-          </div>
-          <div className={classes.infoRow}>
-            <span className={classes.infoLeft}>cost</span>
-            <span className={cx(classes.infoValue, classes.successMid)}>×{location.costMult}</span>
-          </div>
-        </div>
-      ) : (
-        <div className={classes.infoList}>
-          <div className={classes.infoRow}>
-            <span className={classes.infoLeft}>{location.types.join(" · ")}</span>
-          </div>
-        </div>
-      )}
-      <button
-        type="button"
-        className={cx(
-          classes.cta,
-          primary === "commerce" && classes.ctaCommerce,
-          primary === "training" && classes.ctaTraining,
-          primary === "street" && classes.ctaStreet,
-        )}
-        onClick={() => toLocation(location)}
-      >
+      <div className={classes.typeLine}>{location.types.join(" · ")}</div>
+      {isSlums && <SlumsContent classes={classes} cx={cx} />}
+      <button type="button" className={classes.cta} onClick={() => toLocation(location)}>
         Enter {location.name}
       </button>
     </div>
