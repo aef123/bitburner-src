@@ -7,6 +7,7 @@ import { DarknetServer } from "../../Server/DarknetServer";
 import { formatMoney, formatPercent, formatRam, formatSecurity } from "../../ui/formatNumber";
 import { calculateHackingChance, calculateHackingTime } from "../../Hacking";
 import { convertTimeMsToTimeElapsedString } from "../../utils/StringHelperFunctions";
+import { recordServerSnapshot } from "../serverSnapshots";
 
 export function analyze(args: (string | number | boolean)[]): undefined | TerminalAction {
   if (args.length !== 0) {
@@ -54,5 +55,7 @@ export function analyze(args: (string | number | boolean)[]): undefined | Termin
       Terminal.print("HTTP port: " + (server.httpPortOpen ? "Open" : "Closed"));
       Terminal.print("SQL port: " + (server.sqlPortOpen ? "Open" : "Closed"));
     }
+    // UI-only: snapshot the stats this analyze just printed, for the terminal's target panel.
+    if (server instanceof Server) recordServerSnapshot(server);
   });
 }

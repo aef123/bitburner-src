@@ -15,6 +15,7 @@ import { Settings } from "../../Settings/Settings";
 import { groupOutputHistory } from "./groupOutputHistory";
 import { CommandBlock } from "./CommandBlock";
 import { CommandHistoryPanel } from "./CommandHistoryPanel";
+import { TargetPanel } from "./TargetPanel";
 import { TerminalOutputItem } from "./TerminalOutputItem";
 
 /**
@@ -25,8 +26,7 @@ import { TerminalOutputItem } from "./TerminalOutputItem";
 const collapsedBlocks = new WeakSet<CommandBlockStart>();
 
 const useStyles = makeStyles()(() => ({
-  // Two columns: history panel (250px) | terminal. The target panel (Task 9) will slot in as a
-  // third column after the terminal column.
+  // Three columns per 2A notes: history panel (250px) | terminal (flex 1) | target panel (280px).
   root: {
     display: "flex",
     height: "100%",
@@ -151,6 +151,9 @@ export function TerminalRoot(): React.ReactElement {
         </ul>
         <TerminalInput registerPaste={registerPaste} />
       </div>
+      {/* Rerenders with this component's 25ms-debounced TerminalEvents subscription (deliberately
+          not memoized): analyze completion prints (→ emit) and connect calls setcwd (→ emit). */}
+      <TargetPanel />
       <BitFlumeModal />
       <CodingContractModal />
     </div>

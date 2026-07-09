@@ -1,5 +1,6 @@
 import { Output, RawOutput, type TerminalHistoryItem } from "./OutputTypes";
 import { recordSessionCommand } from "./sessionHistory";
+import { clearServerSnapshots } from "./serverSnapshots";
 import { Player } from "@player";
 import type { BaseServer } from "../Server/BaseServer";
 import { TerminalEvents, TerminalClearEvents } from "./TerminalEvents";
@@ -335,6 +336,9 @@ export class Terminal {
   prestige(): void {
     this.action?.cancel();
     this.action = null;
+    // Servers reset on prestige, so keeping pre-prestige analyze snapshots would let the target
+    // panel show stats the player hasn't re-discovered in the new run.
+    clearServerSnapshots();
     this.clear();
   }
 

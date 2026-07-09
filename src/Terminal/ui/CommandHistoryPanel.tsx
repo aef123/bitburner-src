@@ -6,8 +6,8 @@ import { makeStyles } from "tss-react/mui";
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
 import { Terminal } from "../../Terminal";
-import { CommandBlockStart } from "../OutputTypes";
 import { getSessionCommands } from "../sessionHistory";
+import { reRunCommand } from "./reRunCommand";
 import { useRerender } from "../../ui/React/hooks";
 
 /** Pin or unpin a command in Settings.PinnedTerminalCommands (persists with the save). */
@@ -199,13 +199,6 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
 }));
 
-/** Echo the command as a block start, then execute it — the same shape a typed command produces. */
-function reRunCommand(command: string): void {
-  if (Terminal.action !== null) return;
-  Terminal.append(new CommandBlockStart(command, Player.getCurrentServer().hostname, Terminal.cwd()));
-  void Terminal.executeCommands(command); // Async function, errors will hit the uncaught handler
-}
-
 interface RowProps {
   command: string;
   pinned: boolean;
@@ -308,16 +301,21 @@ export function CommandHistoryPanel({ onPaste }: CommandHistoryPanelProps): Reac
   const matches = (command: string): boolean => command.toLowerCase().includes(query.toLowerCase());
 
   const pinned = Settings.PinnedTerminalCommands.filter(matches);
+  const allSession = getSessionCommands();
   // Newest first for display.
-  const session = [...getSessionCommands()].reverse().filter((entry) => matches(entry.command));
-  const sessionSet = new Set(getSessionCommands().map((entry) => entry.command));
-  const earlier = [...Player.terminalCommandHistory]
-    .reverse()
-    .filter((command) => !sessionSet.has(command) && matches(command));
+  const session = [...allSession].reverse().filter((entry) => matches(entry.command));
+  const sessionSet = new Set(allSession.map((entry) => entry.command));
+  // Dedupe: Player.terminalCommandHistory only dedupes consecutive repeats, so a command can
+  // appear multiple times; EARLIER rows are keyed by command, which needs unique entries anyway.
+  const earlier = [...new Set([...Player.terminalCommandHistory].reverse())].filter(
+    (command) => !sessionSet.has(command) && matches(command),
+  );
 
   const pinnedSet = new Set(Settings.PinnedTerminalCommands);
   // Highlight the newest session entry while its command is running (mock's ACTIVE row).
-  const runningCommand = actionActive && session.length > 0 ? session[0].command : null;
+  // Derived from the UNFILTERED session list by entry identity: search must not shift the
+  // highlight onto whatever older entry happens to match the query.
+  const runningEntry = actionActive && allSession.length > 0 ? allSession[allSession.length - 1] : null;
 
   return (
     <div className={classes.panel} data-history-panel>
@@ -358,7 +356,7 @@ export function CommandHistoryPanel({ onPaste }: CommandHistoryPanelProps): Reac
             key={`${entry.command}-${entry.timestamp}`}
             command={entry.command}
             pinned={pinnedSet.has(entry.command)}
-            active={entry.command === runningCommand}
+            active={entry === runningEntry}
             timestamp={entry.timestamp}
             actionActive={actionActive}
             onPaste={onPaste}

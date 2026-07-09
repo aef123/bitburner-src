@@ -9,6 +9,7 @@ import { GetServer } from "../../Server/AllServers";
 import { SpecialServers } from "../../Server/data/SpecialServers";
 import { formatRam } from "../../ui/formatNumber";
 import { Link } from "../OutputTypes";
+import { recordServerSnapshot } from "../serverSnapshots";
 
 export function scananalyze(args: (string | number | boolean)[]): undefined {
   if (args.length === 0) {
@@ -87,6 +88,9 @@ function executeScanAnalyzeCommand(depth: number, all: boolean): void {
 
     const server = GetServer(node.hostname);
     if (!server) return;
+    // UI-only: snapshot each real Server this scan prints, for the terminal's target panel.
+    // Non-Server entities (hacknet/darknet) have no stats to snapshot.
+    if (server instanceof Server) recordServerSnapshot(server);
     const hasRoot = server.hasAdminRights ? "YES" : "NO";
     if (server instanceof Server) {
       Terminal.print(
