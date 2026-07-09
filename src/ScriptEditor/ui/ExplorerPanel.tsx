@@ -11,6 +11,7 @@ import React, { useMemo, useState } from "react";
 import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
+import { Player } from "@player";
 import { GetAllServers, GetServer } from "../../Server/AllServers";
 import { Settings } from "../../Settings/Settings";
 import { getTypeScale } from "../../Themes/tokens/typeScale";
@@ -138,7 +139,7 @@ export function ExplorerPanel({ currentScript, onOpenFile, onReveal }: ExplorerP
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
 
-  const hostname = currentScript?.hostname ?? "home";
+  const hostname = currentScript?.hostname ?? Player.getCurrentServer().hostname;
   // Memo keyed on the actual path list (not just the hostname): scripts can create/delete files
   // while the editor is open (ns.write etc.), and re-renders are frequent (every keystroke via the
   // Root's rerender). Paths can't contain "\n" so the joined key is collision-free.

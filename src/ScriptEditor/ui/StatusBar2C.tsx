@@ -173,16 +173,19 @@ export function StatusBar2C({
         setProblems(0);
         return;
       }
-      const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-      setProblems(markers.filter((marker) => marker.severity >= monaco.MarkerSeverity.Warning).length);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      const markers = monaco.editor?.getModelMarkers({ resource: model.uri }) ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      setProblems(markers.filter((marker) => marker.severity >= (monaco.MarkerSeverity?.Warning ?? 4)).length);
     };
     recount();
-    const markerSub = monaco.editor.onDidChangeMarkers((uris) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const markerSub = monaco.editor?.onDidChangeMarkers((uris) => {
       const model = editor.getModel();
       if (model && !model.isDisposed() && uris.some((uri) => uri.toString() === model.uri.toString())) {
         recount();
       }
-    });
+    }) ?? { dispose: () => {} };
     const modelSub = editor.onDidChangeModel(recount);
     return () => {
       markerSub.dispose();
@@ -213,32 +216,53 @@ export function StatusBar2C({
             isUpdatingRAM && classes.ramUpdating,
           )}
           data-status-ram
+          disabled={currentScript === null}
           onClick={onOpenRAMModal}
         >
-          <span>{ram}</span>
-          {ramFit.clause !== "" && <span className={classes.ramClause}>{ramFit.clause}</span>}
+          <span>{currentScript !== null ? ram : "—"}</span>
+          {currentScript !== null && ramFit.clause !== "" && <span className={classes.ramClause}>{ramFit.clause}</span>}
         </button>
       </Tooltip>
-      {currentScript !== null && (
+      {currentScript !== null ? (
         <span data-status-file>
           {currentScript.path} · {languageLabel(currentScript.path)}
+        </span>
+      ) : (
+        <span data-status-file style={{ opacity: 0.4 }}>
+          —
         </span>
       )}
       <div className={classes.vimSegment} data-status-vim>
         {vimStatus}
       </div>
-      <span data-status-cursor>{`Ln ${cursor.line}, Col ${cursor.column}`}</span>
+      <span data-status-cursor>{currentScript !== null ? `Ln ${cursor.line}, Col ${cursor.column}` : "—"}</span>
       <span data-status-indent>{indentLabel}</span>
-      <button className={classes.ghostButton} data-status-beautify onClick={onBeautify}>
-        Beautify
-      </button>
-      <Tooltip title={parseKeyCombinationsToString(CurrentKeyBindings[ScriptEditorAction.Save])}>
-        <button className={classes.ghostButton} data-status-save onClick={onSave}>
-          Save
+      {/* span keeps the tooltip working while the button might be disabled */}
+      <span>
+        <button
+          className={classes.ghostButton}
+          data-status-beautify
+          disabled={currentScript === null}
+          onClick={onBeautify}
+        >
+          Beautify
         </button>
+      </span>
+      <Tooltip title={parseKeyCombinationsToString(CurrentKeyBindings[ScriptEditorAction.Save])}>
+        {/* span keeps the tooltip working while the button is disabled */}
+        <span>
+          <button
+            className={classes.ghostButton}
+            data-status-save
+            disabled={currentScript === null}
+            onClick={onSave}
+          >
+            Save
+          </button>
+        </span>
       </Tooltip>
       <Tooltip title={parseKeyCombinationsToString(CurrentKeyBindings[ScriptEditorAction.Run])}>
-        {/* span keeps the tooltip working while the button is disabled for text files */}
+        {/* span keeps the tooltip working while the button is disabled */}
         <span>
           <button className={classes.runButton} data-status-run disabled={!isScript} onClick={onRun}>
             Run ▸ {currentScript?.hostname ?? ""}

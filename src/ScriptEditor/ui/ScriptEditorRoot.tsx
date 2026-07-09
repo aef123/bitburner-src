@@ -3,6 +3,8 @@ import type { ContentFilePath } from "../../Paths/ContentFile";
 import React, { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 
+import { Player } from "@player";
+
 import type * as acorn from "acorn";
 import * as walk from "acorn-walk";
 import { extendAcornWalkForTypeScriptNodes } from "../../ThirdParty/acorn-typescript-walk";
@@ -426,13 +428,15 @@ function Root(props: IProps): React.ReactElement {
     editor.addAction({
       id: "bitburner.quick-open",
       label: "Quick Open File (all accessible servers)",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP],
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      keybindings: [(monaco.KeyMod?.CtrlCmd ?? 0) | (monaco.KeyCode?.KeyP ?? 0)],
       run: () => setQuickOpenOpen(true),
     });
     editor.addAction({
       id: "bitburner.search-all-servers",
       label: "Search All Servers",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      keybindings: [(monaco.KeyMod?.CtrlCmd ?? 0) | (monaco.KeyMod?.Shift ?? 0) | (monaco.KeyCode?.KeyF ?? 0)],
       run: () => {
         setSidePanel("search");
         setSearchFocusToken((token) => token + 1);
@@ -471,7 +475,8 @@ function Root(props: IProps): React.ReactElement {
           filename,
           code,
           props.hostname,
-          new monaco.Position(0, 0),
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          monaco.Position ? new monaco.Position(0, 0) : ({ lineNumber: 0, column: 0 } as monaco.Position),
           makeModel(props.hostname, filename, code),
           props.vim,
         );
@@ -556,7 +561,7 @@ function Root(props: IProps): React.ReactElement {
     openScripts.splice(index, 1);
     if (openScripts.length === 0) {
       currentScript = null;
-      Router.toPage(Page.Terminal);
+      rerender();
       return;
     }
 
@@ -669,7 +674,8 @@ function Root(props: IProps): React.ReactElement {
       filePath,
       content,
       hostname,
-      new monaco.Position(0, 0),
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      monaco.Position ? new monaco.Position(0, 0) : ({ lineNumber: 0, column: 0 } as monaco.Position),
       makeModel(hostname, filePath, content),
       currentScript !== null ? currentScript.vimMode : props.vim,
     );
@@ -737,13 +743,16 @@ function Root(props: IProps): React.ReactElement {
     <>
       {/* Layout per design-notes-2C: tab strip (46px spacer over the activity bar, then tabs),
           main row = activity bar | explorer-or-search | editor column, bottom panel, status bar.
-          Sized by the shell pane via height:100% — no 100vh (global constraint). The Editor stays
-          mounted (display:none when no script) exactly as before: its unmount disposes all models.
+          Sized by the shell pane via height:100% — no 100vh (global constraint).
+          W4: the chrome (activity bar / explorer / status bar) is ALWAYS rendered regardless of
+          whether a file is open. The Editor surface is only mounted when currentScript !== null;
+          when no file is open <NoOpenScripts> is shown in its place. This avoids mounting Monaco
+          with no model (which historically caused issues) while keeping the shell chrome visible.
           position:relative hosts the quick-open overlay; the bottom panel squeezing the editor is
           handled by monaco's automaticLayout (same height mechanism Task 11 established). */}
       <div
         style={{
-          display: currentScript !== null ? "flex" : "none",
+          display: "flex",
           height: "100%",
           width: "100%",
           flexDirection: "column",
@@ -788,13 +797,21 @@ function Root(props: IProps): React.ReactElement {
           )}
           {sidePanel === "search" && (
             <SearchPanel
-              currentHostname={currentScript?.hostname ?? "home"}
+              currentHostname={currentScript?.hostname ?? Player.getCurrentServer().hostname}
               focusToken={searchFocusToken}
               onOpenAt={openFileAt}
             />
           )}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-            <Editor onMount={onMount} onChange={updateCode} onUnmount={onUnmountEditor} />
+            {/* W4: mount Monaco only when a file is open; show a quiet placeholder otherwise.
+                Ctrl+P (quick-open) is registered as an editor addAction — it won't fire when
+                Monaco is not mounted (no editor has focus), which is acceptable: the hint line
+                in the placeholder names it for when files are open. */}
+            {currentScript !== null ? (
+              <Editor onMount={onMount} onChange={updateCode} onUnmount={onUnmountEditor} />
+            ) : (
+              <NoOpenScripts />
+            )}
           </div>
         </div>
 
@@ -833,7 +850,7 @@ function Root(props: IProps): React.ReactElement {
             editor per the design notes. */}
         <QuickOpen
           open={quickOpenOpen}
-          currentHostname={currentScript?.hostname ?? "home"}
+          currentHostname={currentScript?.hostname ?? Player.getCurrentServer().hostname}
           onOpenFile={openFileFromExplorer}
           onClose={() => {
             setQuickOpenOpen(false);
@@ -841,7 +858,6 @@ function Root(props: IProps): React.ReactElement {
           }}
         />
       </div>
-      {!currentScript && <NoOpenScripts />}
 
       {/* Editor options round-trip (was the Toolbar's Options button; now the activity bar ⚙). */}
       <OptionsModal
