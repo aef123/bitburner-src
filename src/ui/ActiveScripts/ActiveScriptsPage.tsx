@@ -1,24 +1,151 @@
+/**
+ * The Active Scripts page (1F redesign): page header + kill-all, Network RAM header
+ * card (stacked bar + totals), filter/pagination controls (kept — load-bearing for
+ * 1000s of scripts, mock omits them), and collapsible per-server groups.
+ *
+ * Token mapping (Stage 1 derivation precedent): the header stats strip's #9fb1c1 →
+ * textSecondary (WorldMap3A call); kill-all border #4a2530 → alpha(accentRed, 0.3)
+ * (same derivation as ScriptRow's kill button).
+ */
 import type { WorkerScript } from "../../Netscript/WorkerScript";
 import type { BaseServer } from "../../Server/BaseServer";
 
 import React, { useState } from "react";
+import { alpha, type Theme } from "@mui/material/styles";
+import { makeStyles } from "tss-react/mui";
 
-import { MenuItem, Typography, Select, SelectChangeEvent, TextField, IconButton, List } from "@mui/material";
+import { MenuItem, Select, SelectChangeEvent, TextField, IconButton, Typography } from "@mui/material";
 import { FirstPage, KeyboardArrowLeft, KeyboardArrowRight, LastPage, Search } from "@mui/icons-material";
 
-import { ScriptProduction } from "./ScriptProduction";
-import { ServerAccordion } from "./ServerAccordion";
-
+import { Player } from "@player";
+import { killAllScripts } from "../../Netscript/killWorkerScript";
 import { workerScripts } from "../../Netscript/WorkerScripts";
+import { GetAllServers } from "../../Server/AllServers";
+import { SpecialServers } from "../../Server/data/SpecialServers";
 import { Settings } from "../../Settings/Settings";
 import { isPositiveInteger } from "../../types";
-import { SpecialServers } from "../../Server/data/SpecialServers";
+import { formatExp, formatMoney, formatRam } from "../formatNumber";
+import { aggregateNetworkRam, totalExpRate } from "./networkRam";
+import { NetworkRamBar } from "./NetworkRamBar";
+import { ServerGroup } from "./ServerGroup";
+
+const useStyles = makeStyles()((theme: Theme) => ({
+  headerRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "12px",
+    margin: "14px 0 18px",
+  },
+  title: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "20px",
+    fontWeight: 700,
+    color: theme.colors.textPrimary,
+  },
+  subtitle: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "12px",
+    color: theme.colors.textSecondary,
+  },
+  spacer: {
+    flex: 1,
+  },
+  killAll: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "11.5px",
+    fontWeight: 500,
+    color: theme.colors.accentRed,
+    border: `1px solid ${alpha(theme.colors.accentRed as string, 0.3)}`,
+    borderRadius: "8px",
+    padding: "6px 14px",
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    transition: "border-color 120ms ease-out",
+    "&:hover": {
+      borderColor: alpha(theme.colors.accentRed as string, 0.55),
+    },
+  },
+  ramCard: {
+    backgroundColor: theme.colors.bgPanel,
+    border: `1px solid ${theme.colors.borderCard as string}`,
+    borderRadius: "12px",
+    padding: "16px 18px",
+    marginBottom: "18px",
+  },
+  ramCardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: "9px",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+  ramCardLabel: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "12px",
+    fontWeight: 500,
+    color: theme.colors.textBody,
+  },
+  ramCardStats: {
+    display: "flex",
+    gap: "22px",
+    fontFamily: Settings.styles.monoFontFamily,
+    fontSize: "11px",
+    fontWeight: 500,
+    flexWrap: "wrap",
+  },
+  statUsed: {
+    color: theme.colors.textSecondary,
+  },
+  statIncome: {
+    color: theme.colors.accentGold,
+  },
+  statExp: {
+    color: theme.colors.accentCyan,
+  },
+  // Preserves the old ScriptProduction "total since last augmentation" figure.
+  sinceAug: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "10px",
+    color: theme.colors.textTertiary,
+    marginTop: "7px",
+    textAlign: "right",
+  },
+  controlsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginBottom: "14px",
+    flexWrap: "wrap",
+  },
+  controlsLabel: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "11px",
+    color: theme.colors.textTertiary,
+    marginLeft: "8px",
+  },
+  pageIndicator: {
+    fontFamily: Settings.styles.monoFontFamily,
+    fontSize: "10.5px",
+    color: theme.colors.textTertiary,
+    marginLeft: "auto",
+    marginRight: "4px",
+  },
+  emptyState: {
+    fontFamily: Settings.styles.fontFamily,
+    fontSize: "12px",
+    color: theme.colors.textTertiary,
+    padding: "24px 0",
+    textAlign: "center",
+  },
+}));
 
 interface IProps {
   serverName?: string;
 }
 
 export function ActiveScriptsPage(props: IProps): React.ReactElement {
+  const { classes } = useStyles();
   const [scriptsPerPage, setScriptsPerPage] = useState(Settings.ActiveScriptsScriptPageSize);
   const [serversPerPage, setServersPerPage] = useState(Settings.ActiveScriptsServerPageSize);
   const [filter, setFilter] = useState(props.serverName ?? "");
@@ -100,59 +227,103 @@ export function ActiveScriptsPage(props: IProps): React.ReactElement {
   const firstServerNumber = serverData.length === 0 ? 0 : adjustedIndex + 1;
   const lastServerNumber = serverData.length === 0 ? 0 : adjustedIndex + dataToShow.length;
 
+  // Header stats reflect the whole network, not the filtered view.
+  const ramTotals = aggregateNetworkRam(GetAllServers());
+  let hostCount = 0;
+  {
+    const hosts = new Set<string>();
+    for (const ws of workerScripts.values()) hosts.add(ws.hostname);
+    hostCount = hosts.size;
+  }
+  const expRate = totalExpRate([...workerScripts.values()].map((ws) => ws.scriptRef));
+  // Existing whole-game money rate (same figure the old ScriptProduction card showed).
+  let moneyRate = Player.scriptProdSinceLastAug / (Player.playtimeSinceLastAug / 1000);
+  if (!Number.isFinite(moneyRate)) moneyRate = 0;
+
   return (
     <>
-      <Typography>
-        This page displays a list of all of your scripts that are currently running across every machine. It also
-        provides information about each script's production. The scripts are categorized by the hostname of the servers
-        on which they are running.
-      </Typography>
+      <div className={classes.headerRow}>
+        <span className={classes.title}>Active scripts</span>
+        <span className={classes.subtitle}>
+          {workerScripts.size} {workerScripts.size === 1 ? "process" : "processes"} on {hostCount}{" "}
+          {hostCount === 1 ? "server" : "servers"}
+        </span>
+        <span className={classes.spacer} />
+        {/* Same behavior as before the redesign: no confirmation prompt. */}
+        <button className={classes.killAll} data-kill-all onClick={killAllScripts}>
+          Kill all scripts
+        </button>
+      </div>
 
-      <ScriptProduction />
-      <div style={{ width: "100%", display: "flex", alignItems: "center" }}>
+      <div className={classes.ramCard} data-network-ram-card>
+        <div className={classes.ramCardHeader}>
+          <span className={classes.ramCardLabel}>Network RAM</span>
+          <span className={classes.ramCardStats}>
+            <span className={classes.statUsed}>
+              {formatRam(ramTotals.totalUsed)} / {formatRam(ramTotals.totalMax)} used
+            </span>
+            <span className={classes.statIncome}>income {formatMoney(moneyRate)}/s</span>
+            <span className={classes.statExp}>hack exp {formatExp(expRate)}/s</span>
+          </span>
+        </div>
+        <NetworkRamBar totals={ramTotals} />
+        <div className={classes.sinceAug}>
+          total {formatMoney(Player.scriptProdSinceLastAug)} earned since last augmentation
+        </div>
+      </div>
+
+      <div className={classes.controlsRow}>
         <TextField
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           autoFocus
+          placeholder="Filter by server or script…"
           InputProps={{ startAdornment: <Search />, spellCheck: false }}
           size="small"
         />
-        <Typography marginLeft="1em">Servers/page:</Typography>
-        <Select value={serversPerPage} onChange={changeServersPerPage}>
+        <Typography component="span" className={classes.controlsLabel}>
+          Servers/page
+        </Typography>
+        <Select size="small" value={serversPerPage} onChange={changeServersPerPage}>
           <MenuItem value={10}>10</MenuItem>
           <MenuItem value={15}>15</MenuItem>
           <MenuItem value={20}>20</MenuItem>
           <MenuItem value={100}>100</MenuItem>
         </Select>
-        <Typography marginLeft="1em">Scripts/page:</Typography>
-        <Select value={scriptsPerPage} onChange={changeScriptsPerPage}>
+        <Typography component="span" className={classes.controlsLabel}>
+          Scripts/page
+        </Typography>
+        <Select size="small" value={scriptsPerPage} onChange={changeScriptsPerPage}>
           <MenuItem value={10}>10</MenuItem>
           <MenuItem value={15}>15</MenuItem>
           <MenuItem value={20}>20</MenuItem>
           <MenuItem value={100}>100</MenuItem>
         </Select>
-        <Typography
-          marginLeft="auto"
-          marginRight="1em"
-        >{`${firstServerNumber}-${lastServerNumber} of ${serverData.length}`}</Typography>
-        <IconButton onClick={() => changePage(0)} disabled={page === 0}>
-          <FirstPage />
+        <span className={classes.pageIndicator}>
+          {firstServerNumber}-{lastServerNumber} of {serverData.length}
+        </span>
+        <IconButton size="small" onClick={() => changePage(0)} disabled={page === 0}>
+          <FirstPage fontSize="small" />
         </IconButton>
-        <IconButton onClick={() => changePage(page - 1)} disabled={page === 0}>
-          <KeyboardArrowLeft />
+        <IconButton size="small" onClick={() => changePage(page - 1)} disabled={page === 0}>
+          <KeyboardArrowLeft fontSize="small" />
         </IconButton>
-        <IconButton onClick={() => changePage(page + 1)} disabled={page === lastPage}>
-          <KeyboardArrowRight />
+        <IconButton size="small" onClick={() => changePage(page + 1)} disabled={page === lastPage}>
+          <KeyboardArrowRight fontSize="small" />
         </IconButton>
-        <IconButton onClick={() => changePage(lastPage)} disabled={page === lastPage}>
-          <LastPage />
+        <IconButton size="small" onClick={() => changePage(lastPage)} disabled={page === lastPage}>
+          <LastPage fontSize="small" />
         </IconButton>
       </div>
-      <List dense={true}>
-        {dataToShow.map(([server, scripts]) => (
-          <ServerAccordion key={server.hostname} server={server} scripts={scripts} startOpen={!!props.serverName} />
-        ))}
-      </List>
+
+      {dataToShow.length === 0 && (
+        <div className={classes.emptyState}>
+          {filter ? "No running scripts match the filter." : "No scripts are running."}
+        </div>
+      )}
+      {dataToShow.map(([server, scripts]) => (
+        <ServerGroup key={server.hostname} server={server} scripts={scripts} startOpen={!!props.serverName} />
+      ))}
     </>
   );
 }

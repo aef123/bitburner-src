@@ -3,7 +3,7 @@
  * and provides information about all of the player's scripts that are currently running
  */
 import React, { useEffect, useState } from "react";
-import { Button, Tab, Tabs } from "@mui/material";
+import { Tab, Tabs } from "@mui/material";
 
 import { ActiveScriptsPage } from "./ActiveScriptsPage";
 import { RecentScriptsPage } from "./RecentScriptsPage";
@@ -11,7 +11,6 @@ import { RecentErrorsPage } from "../../ErrorHandling/RecentErrorsPage";
 import { useRerender } from "../React/hooks";
 import { errorModalsAreSuppressed, ErrorState, toggleSuppressErrorModals } from "../../ErrorHandling/ErrorState";
 import { OptionSwitch } from "../React/OptionSwitch";
-import { killAllScripts } from "../../Netscript/killWorkerScript";
 import { ComplexPage, SimplePage } from "@enums";
 import { Router } from "../GameRoot";
 import { Settings } from "../../Settings/Settings";
@@ -88,9 +87,7 @@ export function ActiveScriptsRoot({ page, serverName }: ComponentProps): React.R
             wrapperStyles={{ marginLeft: "20px" }}
           />
         )}
-        <Button color="error" onClick={killAllScripts} sx={{ margin: 0 }}>
-          Kill All Scripts
-        </Button>
+        {/* The kill-all button lives in the Active page's header row (1F redesign). */}
       </div>
 
       {tab === ComplexPage.ActiveScripts && <ActiveScriptsPage serverName={serverName} />}
