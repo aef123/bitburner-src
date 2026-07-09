@@ -20,7 +20,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   container: {
     display: "flex",
     flexDirection: "column",
-    height: "calc(100vh - 16px)",
+    height: "100%",
     fontFamily: Settings.styles.monoFontFamily,
   },
   entries: {

@@ -38,7 +38,7 @@ export function RecentErrorsPage(): React.ReactElement {
 
   return (
     <div>
-      <Typography component="div" sx={{ height: "100vh", overflowY: "auto", scrollbarWidth: "thin" }}>
+      <Typography component="div" sx={{ height: "100%", overflowY: "auto", scrollbarWidth: "thin" }}>
         <table className={classes.errorTable}>
           <thead>
             <tr>
