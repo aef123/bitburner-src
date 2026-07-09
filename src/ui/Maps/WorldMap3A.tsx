@@ -21,6 +21,7 @@ import { Player } from "@player";
 import { CONSTANTS } from "../../Constants";
 import { Factions } from "../../Faction/Factions";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatMoney, formatReputation } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 
@@ -45,6 +46,7 @@ const useStyles = makeStyles()((theme: Theme) => {
   const accentCyan = theme.colors.accentCyan as string;
   const textTertiary = theme.colors.textTertiary as string;
   const bgApp = theme.colors.bgApp as string;
+  const typeScale = getTypeScale();
   return {
     root: {
       display: "flex",
@@ -83,12 +85,12 @@ const useStyles = makeStyles()((theme: Theme) => {
       pointerEvents: "none",
     },
     headerTitle: {
-      fontSize: "18px",
+      fontSize: typeScale.heading, // mock: 18px
       fontWeight: 700,
       color: theme.colors.textPrimary,
     },
     headerSubtitle: {
-      fontSize: "11.5px",
+      fontSize: typeScale.body, // mock: 11.5px
       fontWeight: 400,
       color: theme.colors.textSecondary,
       marginTop: "2px",
@@ -141,7 +143,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     label: {
       position: "absolute",
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10.5px",
+      fontSize: typeScale.caption, // mock: 10.5px
       fontWeight: 500,
       color: theme.colors.textSecondary,
       whiteSpace: "nowrap",
@@ -170,18 +172,18 @@ const useStyles = makeStyles()((theme: Theme) => {
       marginBottom: "3px",
     },
     popoverName: {
-      fontSize: "14px",
+      fontSize: typeScale.cardTitle, // mock: 14px
       fontWeight: 600,
       color: theme.colors.textPrimary,
     },
     popoverPrice: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10px",
+      fontSize: typeScale.caption, // mock: 10px
       fontWeight: 500,
       color: theme.colors.accentGold,
     },
     popoverDescription: {
-      fontSize: "10.5px",
+      fontSize: typeScale.body, // mock: 10.5px
       color: theme.colors.textSecondary,
       marginBottom: "11px",
     },
@@ -189,7 +191,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       display: "flex",
       flexDirection: "column",
       gap: "6px",
-      fontSize: "11px",
+      fontSize: typeScale.body, // mock: 11px
       marginBottom: "13px",
     },
     infoRow: {
@@ -210,6 +212,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     infoMono: {
       fontFamily: Settings.styles.monoFontFamily,
+      fontWeight: 500, // weight floor: small mono values never render at 400
     },
     cta: {
       display: "flex",
@@ -222,7 +225,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       backgroundColor: accentCyan,
       color: bgApp,
       font: "inherit",
-      fontSize: "12px",
+      fontSize: typeScale.body, // mock: 12px
       fontWeight: 600,
       cursor: "pointer",
       transition: "background-color 120ms ease-out",
@@ -246,7 +249,8 @@ const useStyles = makeStyles()((theme: Theme) => {
       border: `1px solid ${theme.colors.borderDefault as string}`,
       borderRadius: "10px",
       padding: "10px 14px",
-      fontSize: "10.5px",
+      fontSize: typeScale.caption, // mock: 10.5px
+      fontWeight: 500,
       color: theme.colors.textSecondary,
       zIndex: 3,
       pointerEvents: "none",

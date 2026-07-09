@@ -18,6 +18,7 @@ import { makeStyles } from "tss-react/mui";
 import { killWorkerScriptByPid } from "../../Netscript/killWorkerScript";
 import type { WorkerScript } from "../../Netscript/WorkerScript";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { convertTimeMsToTimeElapsedString } from "../../utils/StringHelperFunctions";
 import { arrayToString } from "../../utils/helpers/ArrayHelpers";
 import { formatExp, formatMoney, formatRam, formatThreads } from "../formatNumber";
@@ -27,7 +28,9 @@ import { LogBoxEvents } from "../React/LogBoxManager";
 /** Mock grid: 1fr 200px 90px 90px 120px 110px 120px (minmax so long names ellipsize). */
 export const SCRIPT_GRID_COLUMNS = "minmax(0, 1fr) 200px 90px 90px 120px 110px 120px";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   row: {
     display: "grid",
     gridTemplateColumns: SCRIPT_GRID_COLUMNS,
@@ -41,7 +44,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   name: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12px",
+    fontSize: typeScale.body, // mock: 12px
     fontWeight: 500,
     color: theme.colors.textBody,
     overflow: "hidden",
@@ -51,7 +54,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   args: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -60,7 +64,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   numCell: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.value, // mock: 11px
     fontWeight: 500,
     color: theme.colors.textSecondary,
     textAlign: "right",
@@ -74,7 +78,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     color: theme.colors.accentCyan,
   },
   na: {
-    fontWeight: 400,
+    fontWeight: 500, // weight floor: never below 500 in small cells
     color: theme.colors.textTertiary,
   },
   actions: {
@@ -84,7 +88,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   actionButton: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
     fontWeight: 500,
     borderRadius: "6px",
     padding: "3px 9px",
@@ -118,12 +122,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   detailLabel: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
   },
   detailValue: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     overflowWrap: "anywhere",
   },
@@ -133,7 +139,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   detailExp: {
     color: theme.colors.accentCyan,
   },
-}));
+  };
+});
 
 interface ScriptRowProps {
   workerScript: WorkerScript;

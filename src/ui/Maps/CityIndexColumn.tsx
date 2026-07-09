@@ -16,12 +16,15 @@ import { makeStyles } from "tss-react/mui";
 import type { CityName } from "@enums";
 import { Factions } from "../../Faction/Factions";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatReputation } from "../formatNumber";
 
 import type { CityIntel } from "./cityIntel";
 import { worldMapCities } from "./worldMapData";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   column: {
     width: "330px",
     flex: "none",
@@ -35,7 +38,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   header: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9.5px",
+    fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: "0.16em",
@@ -70,7 +73,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     justifyContent: "space-between",
     alignItems: "baseline",
     gap: "8px",
-    fontSize: "12.5px",
+    fontSize: typeScale.cardTitle, // mock: 12.5px
     fontWeight: 600,
     color: theme.colors.textPrimary,
   },
@@ -79,8 +82,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   badge: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9.5px",
-    fontWeight: 500,
+    fontSize: typeScale.caption, // mock: 9.5px
+    fontWeight: 600,
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
   },
@@ -88,7 +91,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     color: theme.colors.accentGreen,
   },
   description: {
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     marginTop: "3px",
     display: "-webkit-box",
@@ -100,11 +104,13 @@ const useStyles = makeStyles()((theme: Theme) => ({
     flex: 1,
   },
   footer: {
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     lineHeight: 1.6,
     color: theme.colors.textTertiary,
   },
-}));
+  };
+});
 
 /** Badge on a city card: current > actionable factions > better training > static neutral. */
 function badgeFor(intel: CityIntel): { text: string; good: boolean } {

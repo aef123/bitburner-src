@@ -9,6 +9,7 @@ import SyncIcon from "@mui/icons-material/Sync";
 import CloseIcon from "@mui/icons-material/Close";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { EditorEvents } from "../EditorData";
 import { useRerender } from "../../ui/React/hooks";
 import { getTabId } from "./utils";
@@ -133,7 +134,7 @@ export function Tab({ provided, tabId, isActive, isExternal, isUnsaved, onClick,
             overflow: "hidden",
             textTransform: "none",
             fontFamily: Settings.styles.monoFontFamily,
-            fontSize: "11.5px",
+            fontSize: getTypeScale().body, // mock: 11.5px
             ...colorProps,
           }}
         >

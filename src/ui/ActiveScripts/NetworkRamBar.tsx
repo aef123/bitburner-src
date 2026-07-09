@@ -14,6 +14,7 @@ import { type Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import {
   buildRamBarSegments,
   RAM_SEGMENT_HEXES,
@@ -35,7 +36,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     gap: "16px",
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10px",
+    fontSize: getTypeScale().caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     marginTop: "7px",
   },

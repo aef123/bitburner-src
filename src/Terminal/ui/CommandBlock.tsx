@@ -8,6 +8,7 @@ import type { CommandBlockStart } from "../OutputTypes";
 import type { CommandBlockGroup } from "./groupOutputHistory";
 import { Terminal } from "../../Terminal";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { TerminalOutputItem } from "./TerminalOutputItem";
 import { useRerender } from "../../ui/React/hooks";
 import { formatPercent } from "../../ui/formatNumber";
@@ -18,6 +19,7 @@ const COLLAPSE_MS = 160; // collapse animation per 2A design notes
 const useStyles = makeStyles()((theme: Theme) => {
   const accentCyan = theme.colors.accentCyan as string;
   const accentGreen = theme.colors.accentGreen as string;
+  const typeScale = getTypeScale();
   return {
     blockItem: {
       listStyleType: "none",
@@ -43,7 +45,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       padding: "8px 12px",
       borderBottom: `1px solid ${alpha(theme.colors.borderDefault as string, 0.55)}`,
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "11.5px",
+      fontSize: typeScale.value, // mock: 11.5px
       cursor: "pointer",
       userSelect: "none",
     },
@@ -64,7 +66,8 @@ const useStyles = makeStyles()((theme: Theme) => {
     // RUNNING badge per 2A notes. Badge bg #10202b has no token; derived as accentCyan at 8%
     // alpha over the dark card background.
     runningTag: {
-      fontSize: "9.5px",
+      fontSize: typeScale.caption, // mock: 9.5px
+      fontWeight: 600,
       color: accentCyan,
       backgroundColor: alpha(accentCyan, 0.08),
       borderRadius: "4px",
@@ -74,12 +77,13 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     timestamp: {
       color: theme.colors.textFaint,
-      fontSize: "10px",
+      fontSize: typeScale.caption, // mock: 10px
+      fontWeight: 500,
       flexShrink: 0,
     },
     chevron: {
       color: theme.colors.textFaint,
-      fontSize: "11px",
+      fontSize: typeScale.caption, // mock: 11px
       flexShrink: 0,
       display: "inline-block",
       transition: `transform ${COLLAPSE_MS}ms ease-out`,
@@ -97,7 +101,8 @@ const useStyles = makeStyles()((theme: Theme) => {
       display: "flex",
       justifyContent: "space-between",
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10.5px",
+      fontSize: typeScale.caption, // mock: 10.5px
+      fontWeight: 500,
       marginBottom: "6px",
       color: theme.colors.textSecondary,
     },
@@ -117,7 +122,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     progressText: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "11px",
+      fontSize: typeScale.value, // mock: 11px
       color: theme.colors.textSecondary,
       whiteSpace: "pre-wrap",
       overflowWrap: "anywhere",

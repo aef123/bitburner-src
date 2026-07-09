@@ -6,6 +6,7 @@ import { makeStyles } from "tss-react/mui";
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
 import { Terminal } from "../../Terminal";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { getSessionCommands } from "../sessionHistory";
 import { reRunCommand } from "./reRunCommand";
 import { useRerender } from "../../ui/React/hooks";
@@ -21,7 +22,9 @@ export function togglePinnedCommand(command: string): void {
   }
 }
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Panel geometry per 2A notes: 250px left column, right hairline, own scroll.
   // Mock panel bg #0a0e13 has no token; bgApp (#0a0d12) is the nearest.
   panel: {
@@ -39,7 +42,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   panelHeader: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9.5px",
+    fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".16em",
@@ -63,7 +66,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   searchIcon: {
     color: theme.colors.textTertiary,
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
     flexShrink: 0,
   },
   searchInput: {
@@ -73,7 +76,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     outline: "none",
     background: "transparent",
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     color: theme.colors.textBody,
     "&::placeholder": {
       color: theme.colors.textTertiary,
@@ -81,7 +84,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   sectionHeader: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9px",
+    fontSize: typeScale.eyebrow, // mock: 9px
     fontWeight: 600,
     color: theme.colors.textFaint,
     letterSpacing: ".14em",
@@ -96,7 +99,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     flexDirection: "column",
     gap: "2px",
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     flexShrink: 0,
   },
   pinnedList: {
@@ -149,7 +152,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   rowTimestamp: {
     color: theme.colors.textFaint,
-    fontSize: "9.5px",
+    fontSize: typeScale.caption, // mock: 9.5px
+    fontWeight: 500,
     flexShrink: 0,
   },
   iconButton: {
@@ -166,17 +170,18 @@ const useStyles = makeStyles()((theme: Theme) => ({
       opacity: 0.4,
     },
   },
+  // Star/rerun glyphs follow the caption size so the click targets stay usable.
   starPinned: {
     color: theme.colors.accentGold,
-    fontSize: "9px",
+    fontSize: typeScale.caption, // mock: 9px
   },
   starUnpinned: {
     color: theme.colors.textFaint,
-    fontSize: "9px",
+    fontSize: typeScale.caption, // mock: 9px
   },
   rerun: {
     color: theme.colors.accentCyan,
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
   },
   footer: {
     marginTop: "auto",
@@ -185,7 +190,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   footerText: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "9.5px",
+    fontSize: typeScale.caption, // mock: 9.5px
+    fontWeight: 500,
     lineHeight: 1.5,
     color: theme.colors.textFaint,
     padding: "0 6px",
@@ -193,11 +199,13 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   empty: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textFaint,
     padding: "0 8px 4px",
   },
-}));
+  };
+});
 
 interface RowProps {
   command: string;

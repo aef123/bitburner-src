@@ -32,6 +32,7 @@ import type { Location } from "../../Locations/Location";
 import { Locations } from "../../Locations/Locations";
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { useCycleRerender } from "../React/hooks";
 
 import {
@@ -61,6 +62,7 @@ const useStyles = makeStyles()((theme: Theme) => {
   const accentViolet = theme.colors.accentViolet as string;
   const textPrimary = theme.colors.textPrimary as string;
   const bgApp = theme.colors.bgApp as string;
+  const typeScale = getTypeScale();
   return {
     canvas: {
       position: "relative",
@@ -89,12 +91,12 @@ const useStyles = makeStyles()((theme: Theme) => {
       pointerEvents: "none",
     },
     headerTitle: {
-      fontSize: "18px",
+      fontSize: typeScale.heading, // mock: 18px
       fontWeight: 700,
       color: textPrimary,
     },
     headerSubtitle: {
-      fontSize: "11.5px",
+      fontSize: typeScale.body, // mock: 11.5px
       fontWeight: 400,
       color: theme.colors.textSecondary,
       marginTop: "2px",
@@ -144,9 +146,11 @@ const useStyles = makeStyles()((theme: Theme) => {
       },
     },
     label: {
+      // Caption (not body) on purpose: station labels sit on fixed mock coordinates and
+      // going any larger makes dense rows collide.
       position: "absolute",
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "11px",
+      fontSize: typeScale.caption, // mock: 11px
       fontWeight: 500,
       color: theme.colors.textBody,
       whiteSpace: "nowrap",
@@ -158,7 +162,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     // Interchange / faction-flag stations read as "important" per the mock.
     labelImportant: {
-      fontSize: "11.5px",
+      fontSize: typeScale.body, // mock: 11.5px
       fontWeight: 600,
       color: textPrimary,
     },
@@ -170,7 +174,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     // The Slums: violet glow.
     labelSlums: {
-      fontSize: "11.5px",
+      fontSize: typeScale.body, // mock: 11.5px
       fontWeight: 600,
       color: accentViolet,
       textShadow: `0 0 12px ${alpha(accentViolet, 0.5)}`,
@@ -186,7 +190,8 @@ const useStyles = makeStyles()((theme: Theme) => {
       border: `1px solid ${theme.colors.borderDefault as string}`,
       borderRadius: "10px",
       padding: "10px 14px",
-      fontSize: "10.5px",
+      fontSize: typeScale.caption, // mock: 10.5px
+      fontWeight: 500,
       color: theme.colors.textSecondary,
       zIndex: 3,
       pointerEvents: "none",

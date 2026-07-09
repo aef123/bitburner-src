@@ -4,6 +4,7 @@ import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
 import { getBadgeCount, type NavigationItem } from "../../Sidebar/navigationItems";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { navigateToPage } from "./useNavigationHotkeys";
 
 const useStyles = makeStyles()((theme: Theme) => ({
@@ -46,18 +47,19 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   badge: {
     position: "absolute",
-    top: "2px",
-    right: "2px",
-    minWidth: "14px",
-    height: "14px",
-    borderRadius: "7px",
+    top: "1px",
+    right: "1px",
+    // Pill grown 14px → 16px alongside the readability pass so the floored badge text still fits.
+    minWidth: "16px",
+    height: "16px",
+    borderRadius: "8px",
     padding: "0 3px",
     boxSizing: "border-box",
     backgroundColor: theme.colors.accentRed,
     color: theme.colors.white,
-    fontSize: "9px",
+    fontSize: getTypeScale().eyebrow, // mock: 9px
     fontWeight: 700,
-    lineHeight: "14px",
+    lineHeight: "16px",
     textAlign: "center",
     pointerEvents: "none",
   },

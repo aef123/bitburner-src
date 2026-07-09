@@ -8,12 +8,15 @@ import { Terminal } from "../../Terminal";
 import { Player } from "@player";
 import { extractCurrentText, getTabCompletionPossibilities } from "../getTabCompletionPossibilities";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { longestCommonStart } from "../../utils/StringHelperFunctions";
 import { exceptionAlert } from "../../utils/helpers/exceptionAlert";
 import { CommandBlockStart } from "../OutputTypes";
 
 // Input line + hint row per 2A design notes: bordered mono field, green prompt, honest hints.
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   root: {
     flexShrink: 0,
     padding: "0 18px 12px",
@@ -29,7 +32,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     backgroundColor: theme.colors.bgPanel,
     padding: "11px 14px",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12.5px",
+    fontSize: typeScale.value, // mock: 12.5px
     "& input": {
       padding: 0,
     },
@@ -44,7 +47,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   prompt: {
     margin: theme.spacing(0),
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12.5px",
+    fontSize: typeScale.value, // mock: 12.5px (must match `input` for baseline alignment)
     color: theme.colors.accentGreen,
   },
   promptDisabled: {
@@ -55,7 +58,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   absolute: {
     margin: theme.spacing(0),
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12.5px",
+    fontSize: typeScale.value, // mock: 12.5px (must match `input` so the ghost overlay tracks it)
     position: "absolute",
     top: 0,
     bottom: 0,
@@ -73,12 +76,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     gap: "16px",
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textFaint,
     padding: "6px 4px 0",
     userSelect: "none",
   },
-}));
+  };
+});
 
 // Save command in case we de-load this screen.
 let command = "";

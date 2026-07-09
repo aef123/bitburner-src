@@ -11,13 +11,16 @@ import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { extractOutline, type OutlineKind } from "./outline";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Section header per 2C notes: 9px mono 600, letter-spacing .14em, #55677a = textTertiary.
   header: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9px",
+    fontSize: typeScale.eyebrow, // mock: 9px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".14em",
@@ -29,7 +32,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     whiteSpace: "nowrap",
   },
   list: {
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     display: "flex",
     flexDirection: "column",
     paddingBottom: "4px",
@@ -46,7 +49,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textAlign: "left",
     cursor: "pointer",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -65,7 +68,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   glyphClass: {
     color: theme.colors.accentCyan,
   },
-}));
+  };
+});
 
 const GLYPHS: Record<OutlineKind, string> = {
   function: "ƒ",

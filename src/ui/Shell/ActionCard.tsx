@@ -18,6 +18,7 @@ import { makeStyles } from "tss-react/mui";
 import { Player } from "@player";
 import { CONSTANTS } from "../../Constants";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { isClassWork } from "../../Work/ClassWork";
 import { isCompanyWork } from "../../Work/CompanyWork";
 import { isCreateProgramWork } from "../../Work/CreateProgramWork";
@@ -32,6 +33,7 @@ import { Page } from "../Router";
 const useStyles = makeStyles()((theme: Theme) => {
   const accentCyan = theme.colors.accentCyan as string;
   const track = theme.colors.track as string;
+  const typeScale = getTypeScale();
   return {
     // Card geometry per design notes. Mock card bg #0e161f has no token; bgPanel is the nearest.
     card: {
@@ -63,8 +65,9 @@ const useStyles = makeStyles()((theme: Theme) => {
       justifyContent: "center",
     },
     ringLabel: {
+      // Smallest role on purpose: the label sits inside the 34px hollow ring center.
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "9px",
+      fontSize: typeScale.eyebrow, // mock: 9px
       fontWeight: 600,
       color: accentCyan,
     },
@@ -73,7 +76,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       flex: 1,
     },
     title: {
-      fontSize: "11.5px",
+      fontSize: typeScale.body, // mock: 11.5px
       fontWeight: 600,
       color: theme.colors.textPrimary,
       overflow: "hidden",
@@ -81,8 +84,8 @@ const useStyles = makeStyles()((theme: Theme) => {
       whiteSpace: "nowrap",
     },
     subline: {
-      fontSize: "10px",
-      fontWeight: 400,
+      fontSize: typeScale.caption, // mock: 10px
+      fontWeight: 500,
       color: theme.colors.textSecondary,
       marginTop: "1px",
       overflow: "hidden",
@@ -91,7 +94,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     focusLink: {
       display: "inline-block",
-      fontSize: "10.5px",
+      fontSize: typeScale.caption, // mock: 10.5px
       fontWeight: 600,
       color: accentCyan,
       marginTop: "5px",

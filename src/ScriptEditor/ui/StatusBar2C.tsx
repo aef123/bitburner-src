@@ -16,6 +16,7 @@ import Tooltip from "@mui/material/Tooltip";
 
 import { GetServer } from "../../Server/AllServers";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { hasScriptExtension } from "../../Paths/ScriptFilePath";
 import { CurrentKeyBindings, parseKeyCombinationsToString, ScriptEditorAction } from "../../utils/KeyBindingUtils";
 import { useScriptEditorContext } from "./ScriptEditorContext";
@@ -36,7 +37,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     backgroundColor: theme.colors.bgRail,
     borderTop: `1px solid ${theme.colors.borderDefault as string}`,
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10px",
+    fontSize: getTypeScale().caption, // mock: 10px (every segment inherits this)
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     overflow: "hidden",
     whiteSpace: "nowrap",

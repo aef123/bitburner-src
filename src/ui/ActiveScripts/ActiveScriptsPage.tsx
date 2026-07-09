@@ -23,13 +23,16 @@ import { workerScripts } from "../../Netscript/WorkerScripts";
 import { GetAllServers } from "../../Server/AllServers";
 import { SpecialServers } from "../../Server/data/SpecialServers";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { isPositiveInteger } from "../../types";
 import { formatExp, formatMoney, formatRam } from "../formatNumber";
 import { aggregateNetworkRam, totalExpRate } from "./networkRam";
 import { NetworkRamBar } from "./NetworkRamBar";
 import { ServerGroup } from "./ServerGroup";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   headerRow: {
     display: "flex",
     alignItems: "baseline",
@@ -38,13 +41,13 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   title: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "20px",
+    fontSize: typeScale.title, // mock: 20px
     fontWeight: 700,
     color: theme.colors.textPrimary,
   },
   subtitle: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "12px",
+    fontSize: typeScale.body, // mock: 12px
     color: theme.colors.textSecondary,
   },
   spacer: {
@@ -52,7 +55,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   killAll: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     fontWeight: 500,
     color: theme.colors.accentRed,
     border: `1px solid ${alpha(theme.colors.accentRed as string, 0.3)}`,
@@ -82,7 +85,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   ramCardLabel: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "12px",
+    fontSize: typeScale.body, // mock: 12px
     fontWeight: 500,
     color: theme.colors.textBody,
   },
@@ -90,7 +93,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     gap: "22px",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.value, // mock: 11px
     fontWeight: 500,
     flexWrap: "wrap",
   },
@@ -106,7 +109,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   // Preserves the old ScriptProduction "total since last augmentation" figure.
   sinceAug: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     marginTop: "7px",
     textAlign: "right",
@@ -120,25 +124,28 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   controlsLabel: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     marginLeft: "8px",
   },
   pageIndicator: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     marginLeft: "auto",
     marginRight: "4px",
   },
   emptyState: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "12px",
+    fontSize: typeScale.body, // mock: 12px
     color: theme.colors.textTertiary,
     padding: "24px 0",
     textAlign: "center",
   },
-}));
+  };
+});
 
 interface IProps {
   serverName?: string;

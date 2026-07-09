@@ -17,13 +17,16 @@ import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { rankResults } from "../../ui/Shell/CommandPalette";
 import { getLiveSearchableFiles, quickOpenEntries, type QuickOpenEntry } from "./editorSearch";
 
 /** Rows rendered at once; ranking already puts the best matches first. */
 const MAX_VISIBLE_RESULTS = 12;
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Invisible backdrop over the editor area: click-away closes, like the palette's Dialog.
   backdrop: {
     position: "absolute",
@@ -60,7 +63,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   searchIcon: {
     color: theme.colors.textTertiary,
-    fontSize: "12.5px",
+    fontSize: typeScale.body, // mock: 12.5px
     lineHeight: 1,
     flexShrink: 0,
   },
@@ -70,7 +73,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     outline: "none",
     background: "transparent",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12.5px",
+    fontSize: typeScale.body, // mock: 12.5px
     color: theme.colors.textPrimary,
     "::placeholder": {
       color: theme.colors.textTertiary,
@@ -94,7 +97,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     cursor: "pointer",
     textAlign: "left",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     color: theme.colors.textSecondary,
   },
   rowSelected: {
@@ -113,7 +116,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   // Server badge per notes: 10px; current server dim, other servers gold.
   server: {
     flexShrink: 0,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
   },
   serverRemote: {
@@ -121,7 +125,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   empty: {
     padding: "10px",
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     color: theme.colors.textFaint,
     fontFamily: Settings.styles.monoFontFamily,
   },
@@ -130,10 +134,12 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     gap: "14px",
     padding: "8px 10px 4px",
-    fontSize: "9.5px",
+    fontSize: typeScale.caption, // mock: 9.5px
+    fontWeight: 500,
     color: theme.colors.textFaint,
   },
-}));
+  };
+});
 
 interface QuickOpenProps {
   open: boolean;

@@ -22,6 +22,7 @@ import dice from "fast-dice-coefficient";
 
 import { Page } from "../Router";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { navigationSections, isItemVisible } from "../../Sidebar/navigationItems";
 import { navigateToPage } from "./useNavigationHotkeys";
 
@@ -114,7 +115,9 @@ export function rankResults<T extends { label: string; navIndex: number }>(items
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // MUI Dialog paper override: top-anchored palette look.
   paper: {
     margin: "64px auto 0",
@@ -141,7 +144,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   searchIcon: {
     color: theme.colors.textTertiary,
-    fontSize: "16px",
+    fontSize: typeScale.subheading, // mock: 16px
     lineHeight: 1,
     flexShrink: 0,
   },
@@ -150,7 +153,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     border: "none",
     outline: "none",
     background: "transparent",
-    fontSize: "14px",
+    fontSize: typeScale.cardTitle, // mock: 14px
     fontWeight: 400,
     color: theme.colors.textBody,
     fontFamily: "inherit",
@@ -183,7 +186,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   resultLabel: {
     flex: 1,
-    fontSize: "13px",
+    fontSize: typeScale.body, // mock: 13px
     fontWeight: 500,
     color: theme.colors.textBody,
     whiteSpace: "nowrap",
@@ -191,8 +194,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textOverflow: "ellipsis",
   },
   resultSection: {
-    fontSize: "11px",
-    fontWeight: 400,
+    fontSize: typeScale.caption, // mock: 11px
+    fontWeight: 600,
     color: theme.colors.textSecondary,
     flexShrink: 0,
     padding: "2px 7px",
@@ -202,7 +205,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   emptyMessage: {
     padding: "20px 14px",
-    fontSize: "13px",
+    fontSize: typeScale.body, // mock: 13px
     color: theme.colors.textFaint,
     textAlign: "center",
   },
@@ -219,12 +222,13 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     alignItems: "center",
     gap: "5px",
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
+    fontWeight: 500,
     color: theme.colors.textFaint,
   },
   kbd: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
     fontWeight: 500,
     color: theme.colors.textTertiary,
     border: `1px solid ${theme.colors.borderCard as string}`,
@@ -232,7 +236,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     padding: "1px 5px",
     lineHeight: "1.4",
   },
-}));
+  };
+});
 
 // ─── Component ────────────────────────────────────────────────────────────
 

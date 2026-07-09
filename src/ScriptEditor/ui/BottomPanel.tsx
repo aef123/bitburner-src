@@ -23,6 +23,7 @@ import { makeStyles } from "tss-react/mui";
 import Typography from "@mui/material/Typography";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { workerScripts } from "../../Netscript/WorkerScripts";
 import { LogBoxEvents } from "../../ui/React/LogBoxManager";
 import { useRerender } from "../../ui/React/hooks";
@@ -36,7 +37,9 @@ type IStandaloneCodeEditor = monaco.editor.IStandaloneCodeEditor;
 
 export type BottomPanelTab = "problems" | "nsapi" | "logs";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Geometry per 2C notes: 130px, top hairline, bg #0b0f14 → bgPanelDeep (nearest token, same
   // call as the explorer panel).
   panel: {
@@ -63,7 +66,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     borderBottom: "2px solid transparent",
     background: "none",
     cursor: "pointer",
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
     fontWeight: 500,
     color: theme.colors.textSecondary,
   },
@@ -83,7 +86,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     background: "none",
     cursor: "pointer",
     color: theme.colors.textFaint,
-    fontSize: "12px",
+    fontSize: typeScale.caption, // mock: 12px
     padding: "2px 6px",
     "&:hover": {
       color: theme.colors.textSecondary,
@@ -94,13 +97,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
     minHeight: 0,
     overflowY: "auto",
     padding: "6px 16px 8px",
-    fontSize: "10.5px",
+    fontSize: typeScale.body, // mock: 10.5px
     lineHeight: 1.8,
     color: theme.colors.textSecondary,
   },
   emptyState: {
     color: theme.colors.textTertiary,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
   },
   row: {
     display: "flex",
@@ -112,7 +116,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textAlign: "left",
     cursor: "pointer",
     padding: "1px 4px",
-    fontSize: "10.5px",
+    fontSize: typeScale.body, // mock: 10.5px
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -167,9 +171,11 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   nsApiHint: {
     color: theme.colors.textTertiary,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
   },
-}));
+  };
+});
 
 // ─── Presentational lists (exported for direct unit testing) ──────────────
 

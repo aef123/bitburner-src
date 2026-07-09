@@ -22,6 +22,7 @@ import { currentNodeMults } from "../../BitNode/BitNodeMultipliers";
 import { calculateSkillProgress } from "../../PersonObjects/formulas/skill";
 import { RemoteFileApiConnectionStatus } from "../../GameOptions/ui/RemoteFileApiConnectionStatus";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatExp, formatMoney, formatMoneyNoSuffix, formatNumberNoSuffix, formatSkill } from "../formatNumber";
 import { useCycleRerender } from "../React/hooks";
 import { KillScriptsModal } from "../React/KillScriptsModal";
@@ -56,6 +57,7 @@ const hudSkillRows: HudSkillRow[] = [
 const useStyles = makeStyles()((theme: Theme) => {
   const accentGreen = theme.colors.accentGreen as string;
   const accentRed = theme.colors.accentRed as string;
+  const typeScale = getTypeScale();
   return {
     hud: {
       width: "272px",
@@ -81,7 +83,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     },
     headerLabel: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10px",
+      fontSize: typeScale.eyebrow, // mock: 10px
       fontWeight: 600,
       letterSpacing: ".16em",
       color: theme.colors.textTertiary,
@@ -92,7 +94,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       border: "none",
       padding: "0 2px",
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "12px",
+      fontSize: typeScale.caption, // mock: 12px
       color: theme.colors.textTertiary,
       cursor: "pointer",
       lineHeight: 1,
@@ -108,28 +110,28 @@ const useStyles = makeStyles()((theme: Theme) => {
       gap: "10px",
     },
     moneyLabel: {
-      fontSize: "10.5px",
-      fontWeight: 400,
+      fontSize: typeScale.caption, // mock: 10.5px
+      fontWeight: 500,
       color: theme.colors.textSecondary,
       marginBottom: "2px",
     },
     moneyValue: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "18px",
+      fontSize: typeScale.heading, // mock: 18px
       fontWeight: 700,
       color: theme.colors.accentGold,
       whiteSpace: "nowrap",
     },
     moneyRatePositive: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10px",
+      fontSize: typeScale.caption, // mock: 10px
       fontWeight: 500,
       color: accentGreen,
       marginTop: "2px",
     },
     moneyRateNegative: {
       fontFamily: Settings.styles.monoFontFamily,
-      fontSize: "10px",
+      fontSize: typeScale.caption, // mock: 10px
       fontWeight: 500,
       color: accentRed,
       marginTop: "2px",
@@ -148,7 +150,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "baseline",
-      fontSize: "11px",
+      fontSize: typeScale.body, // mock: 11px
       fontWeight: 500,
       marginBottom: "4px",
     },
@@ -177,7 +179,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       flexDirection: "column",
     },
     bladeburner: {
-      fontSize: "11px",
+      fontSize: typeScale.body, // mock: 11px
       color: theme.colors.textBody,
     },
     footer: {
@@ -195,7 +197,7 @@ const useStyles = makeStyles()((theme: Theme) => {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontSize: "11px",
+      fontSize: typeScale.body, // mock: 11px
       fontWeight: 500,
       fontFamily: "inherit",
       color: theme.colors.textSecondary,

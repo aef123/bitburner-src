@@ -22,11 +22,14 @@ import { FirstPage, KeyboardArrowLeft, KeyboardArrowRight, LastPage } from "@mui
 import type { WorkerScript } from "../../Netscript/WorkerScript";
 import type { BaseServer } from "../../Server/BaseServer";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatMoney, formatRam } from "../formatNumber";
 import { classifyServer, RAM_SEGMENT_HEXES, totalMoneyRate } from "./networkRam";
 import { SCRIPT_GRID_COLUMNS, ScriptRow } from "./ScriptRow";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   group: {
     border: `1px solid ${theme.colors.borderDefault as string}`,
     borderRadius: "12px",
@@ -48,14 +51,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
     borderBottom: `1px solid ${theme.colors.borderDefault as string}`,
   },
   chevron: {
-    fontSize: "11px",
+    fontSize: typeScale.caption, // mock: 11px
     color: theme.colors.textTertiary,
     flex: "none",
     width: "12px",
   },
   name: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "12.5px",
+    fontSize: typeScale.cardTitle, // mock: 12.5px
     fontWeight: 600,
     maxWidth: "300px",
     overflow: "hidden",
@@ -81,7 +84,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   ramLabel: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
   },
@@ -90,7 +94,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   summary: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
   },
@@ -104,7 +109,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     padding: "8px 16px",
     borderBottom: `1px solid ${darken(theme.colors.borderDefault as string, 0.3)}`,
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9px",
+    fontSize: typeScale.eyebrow, // mock: 9px
     fontWeight: 600,
     color: theme.colors.textFaint,
     letterSpacing: ".12em",
@@ -121,11 +126,13 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   paginationLabel: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     marginRight: "8px",
   },
-}));
+  };
+});
 
 function groupFillColor(server: BaseServer, theme: Theme): string {
   const category = classifyServer(server);

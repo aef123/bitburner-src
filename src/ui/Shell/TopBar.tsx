@@ -7,6 +7,7 @@ import VerticalSplitIcon from "@mui/icons-material/VerticalSplit";
 
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import type { Page } from "../Router";
 import { getNavigationSectionForPage } from "../../Sidebar/navigationItems";
 import { formatHp, formatMoney, formatMoneyNoSuffix, formatNumberNoSuffix } from "../formatNumber";
@@ -17,6 +18,7 @@ import { setHudCollapsed } from "./hudEvents";
 const useStyles = makeStyles()((theme: Theme) => {
   // All UI-refresh tokens are required ITheme keys, so they are always defined.
   const accentGreen = theme.colors.accentGreen as string;
+  const typeScale = getTypeScale();
   return {
   // Top bar geometry per design notes 1A: 52px, bottom hairline border.
   // Mock bar background #0b0f15 has no token; bgPanelDeep is the nearest.
@@ -33,7 +35,7 @@ const useStyles = makeStyles()((theme: Theme) => {
     minWidth: 0,
   },
   breadcrumb: {
-    fontSize: "12.5px",
+    fontSize: typeScale.body, // mock: 12.5px
     fontWeight: 500,
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
@@ -75,13 +77,13 @@ const useStyles = makeStyles()((theme: Theme) => {
   },
   searchIcon: {
     color: theme.colors.textTertiary,
-    fontSize: "12px",
+    fontSize: typeScale.caption, // mock: 12px
     lineHeight: 1,
   },
   searchPlaceholder: {
     flex: 1,
-    fontSize: "12px",
-    fontWeight: 400,
+    fontSize: typeScale.caption, // mock: 12px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -89,7 +91,7 @@ const useStyles = makeStyles()((theme: Theme) => {
   },
   kbd: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
     fontWeight: 500,
     color: theme.colors.textTertiary,
     border: `1px solid ${theme.colors.borderCard as string}`,
@@ -99,7 +101,7 @@ const useStyles = makeStyles()((theme: Theme) => {
   },
   money: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "13px",
+    fontSize: typeScale.value, // mock: 13px
     fontWeight: 600,
     color: theme.colors.accentGold,
     whiteSpace: "nowrap",
@@ -108,7 +110,7 @@ const useStyles = makeStyles()((theme: Theme) => {
   // accentGreen over the dark bar via alpha().
   hpPill: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.value, // mock: 11px
     fontWeight: 500,
     color: theme.colors.accentGreen,
     backgroundColor: alpha(accentGreen, 0.08),

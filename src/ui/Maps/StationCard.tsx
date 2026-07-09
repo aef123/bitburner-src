@@ -25,6 +25,7 @@ import { Crimes } from "../../Crime/Crimes";
 import type { Location } from "../../Locations/Location";
 import { Player } from "@player";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { formatMoney, formatPercent } from "../formatNumber";
 
 import { categoriesOf, isInterchange, primaryCategoryOf, type TransitCategory } from "./cityMapLayouts";
@@ -35,7 +36,9 @@ export const STATION_CARD_WIDTH = 262;
 const SUCCESS_GOOD = 0.4;
 const SUCCESS_MID = 0.2;
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   card: {
     position: "absolute",
     right: "24px",
@@ -50,14 +53,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
     zIndex: 4,
   },
   name: {
-    fontSize: "13px",
+    fontSize: typeScale.cardTitle, // mock: 13px
     fontWeight: 600,
     color: theme.colors.textPrimary,
     marginBottom: "2px",
   },
   typeLine: {
-    fontSize: "10.5px",
-    fontWeight: 400,
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     marginBottom: "8px",
   },
@@ -67,8 +70,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     marginBottom: "10px",
   },
   chip: {
-    fontSize: "10px",
-    fontWeight: 500,
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 600,
     borderRadius: "4px",
     padding: "1px 7px",
     border: "1px solid",
@@ -77,7 +80,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     flexDirection: "column",
     gap: "5px",
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     marginBottom: "12px",
   },
   infoRow: {
@@ -90,6 +93,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   infoValue: {
     fontFamily: Settings.styles.monoFontFamily,
+    fontWeight: 500, // weight floor: small mono values never render at 400
     whiteSpace: "nowrap",
   },
   successGood: {
@@ -111,7 +115,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     border: "none",
     color: theme.colors.bgApp,
     font: "inherit",
-    fontSize: "12px",
+    fontSize: typeScale.body, // mock: 12px
     fontWeight: 600,
     cursor: "pointer",
     transition: "background-color 120ms ease-out",
@@ -128,7 +132,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     backgroundColor: theme.colors.accentViolet,
     "&:hover": { backgroundColor: lighten(theme.colors.accentViolet as string, 0.15) },
   },
-}));
+  };
+});
 
 function categoryColors(theme: Theme): Record<TransitCategory, string> {
   return {

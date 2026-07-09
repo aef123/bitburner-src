@@ -3,6 +3,7 @@ import type { Theme } from "@mui/material/styles";
 import { makeStyles } from "tss-react/mui";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import type { Page } from "../Router";
 import {
   getTutorialFlashPage,
@@ -44,7 +45,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     color: theme.colors.bgApp,
     fontFamily: Settings.styles.monoFontFamily,
     fontWeight: 700,
-    fontSize: "14px",
+    fontSize: getTypeScale().cardTitle, // mock: 14px
     display: "flex",
     alignItems: "center",
     justifyContent: "center",

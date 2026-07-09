@@ -17,6 +17,7 @@ import Tooltip from "@mui/material/Tooltip";
 import { Router } from "../../ui/GameRoot";
 import { Page } from "../../ui/Router";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { CurrentKeyBindings, parseKeyCombinationsToString, ScriptEditorAction } from "../../utils/KeyBindingUtils";
 
 const useStyles = makeStyles()((theme: Theme) => ({
@@ -45,7 +46,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "13px",
+    fontSize: getTypeScale().body, // mock: 13px (glyph buttons)
     fontFamily: Settings.styles.monoFontFamily,
     cursor: "pointer",
     "&:hover": {

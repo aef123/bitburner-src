@@ -15,9 +15,12 @@ import { makeStyles } from "tss-react/mui";
 import Tooltip from "@mui/material/Tooltip";
 
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { getLiveSearchableFiles, searchFiles, SEARCH_MATCH_CAP, type SearchResults } from "./editorSearch";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Same panel geometry/chrome as ExplorerPanel: 218px, bgPanelDeep, right hairline.
   panel: {
     width: "218px",
@@ -33,7 +36,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   sectionHeader: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9px",
+    fontSize: typeScale.eyebrow, // mock: 9px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".14em",
@@ -59,7 +62,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     outline: "none",
     background: "transparent",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     color: theme.colors.textPrimary,
     "::placeholder": {
       color: theme.colors.textTertiary,
@@ -73,7 +76,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     padding: "1px 4px",
     cursor: "pointer",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
   },
   caseToggleActive: {
@@ -88,12 +92,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
   // Explicit cap notice (accentGold: it is a warning about incomplete results, not an error).
   cappedNotice: {
     padding: "4px 14px 8px",
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.accentGold,
   },
   hint: {
     padding: "4px 14px",
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textFaint,
   },
   fileHeader: {
@@ -102,14 +108,15 @@ const useStyles = makeStyles()((theme: Theme) => ({
     gap: "6px",
     padding: "6px 14px 2px",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11px",
+    fontSize: typeScale.body, // mock: 11px
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   fileServer: {
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     color: theme.colors.textTertiary,
   },
   fileServerRemote: {
@@ -127,7 +134,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textAlign: "left",
     cursor: "pointer",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.body, // mock: 10.5px
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -144,7 +151,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
-}));
+  };
+});
 
 interface SearchPanelProps {
   /** The active script's server (its files are searched first; its badge renders dim). */

@@ -7,11 +7,14 @@ import { Player } from "@player";
 import { Server } from "../../Server/Server";
 import { Settings } from "../../Settings/Settings";
 import { Terminal } from "../../Terminal";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { getServerSnapshot, type FullServerSnapshot } from "../serverSnapshots";
 import { reRunCommand } from "./reRunCommand";
 import { formatMoney, formatRam, formatSecurity } from "../../ui/formatNumber";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Panel geometry per 2A notes: 280px right column, left hairline, own scroll.
   // Mock panel bg #0a0e13 has no token; bgApp (#0a0d12) is the nearest (same call as the history panel).
   panel: {
@@ -29,7 +32,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   sectionLabel: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9.5px",
+    fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".16em",
@@ -37,7 +40,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   hostname: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "15px",
+    fontSize: typeScale.subheading, // mock: 15px
     fontWeight: 700,
     color: theme.colors.accentCyan,
     overflowWrap: "anywhere",
@@ -46,7 +49,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
   // Mock #7d8fa1 = textSecondary; the #9fb1c1 highlight has no token, textBody is the nearest step up.
   stamp: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.caption, // mock: 10.5px
+    fontWeight: 500,
     color: theme.colors.textSecondary,
     marginTop: "2px",
   },
@@ -69,7 +73,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     alignItems: "baseline",
     gap: "8px",
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.body, // mock: 10.5px
     marginBottom: "4px",
   },
   statLabel: {
@@ -78,6 +82,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   statValue: {
     fontFamily: Settings.styles.monoFontFamily,
+    fontWeight: 500, // weight floor: small mono values never render at 400
     color: theme.colors.textBody,
     textAlign: "right",
     overflowWrap: "anywhere",
@@ -113,14 +118,14 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   undiscoveredHeader: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9.5px",
+    fontSize: typeScale.eyebrow, // mock: 9.5px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".16em",
   },
   undiscoveredBody: {
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "10.5px",
+    fontSize: typeScale.body, // mock: 10.5px
     lineHeight: 1.6,
     color: theme.colors.textTertiary,
     margin: 0,
@@ -142,7 +147,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     height: "34px",
     borderRadius: "8px",
     fontFamily: Settings.styles.fontFamily,
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     fontWeight: 600,
     display: "flex",
     alignItems: "center",
@@ -170,7 +175,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
       borderColor: theme.colors.borderFocus,
     },
   },
-}));
+  };
+});
 
 interface QuickActionProps {
   command: "hack" | "weaken" | "grow" | "backdoor";

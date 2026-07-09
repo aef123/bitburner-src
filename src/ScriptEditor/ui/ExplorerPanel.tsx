@@ -13,13 +13,16 @@ import { makeStyles } from "tss-react/mui";
 
 import { GetAllServers, GetServer } from "../../Server/AllServers";
 import { Settings } from "../../Settings/Settings";
+import { getTypeScale } from "../../Themes/tokens/typeScale";
 import { hasTextExtension } from "../../Paths/TextFilePath";
 import { openScripts } from "../EditorData";
 import { isUnsavedFile } from "./utils";
 import { buildFileTree, filterEditorAccessibleServers, type FileTreeFolder } from "./explorerTree";
 import { OutlinePanel } from "./OutlinePanel";
 
-const useStyles = makeStyles()((theme: Theme) => ({
+const useStyles = makeStyles()((theme: Theme) => {
+  const typeScale = getTypeScale();
+  return {
   // Panel geometry per 2C notes: 218px, right hairline #1a232e = borderDefault. Mock bg #0b0f14
   // has no token; bgPanelDeep (#0c1117) is the nearest (same call as the terminal panels).
   panel: {
@@ -40,7 +43,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
   },
   sectionHeader: {
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "9px",
+    fontSize: typeScale.eyebrow, // mock: 9px
     fontWeight: 600,
     color: theme.colors.textTertiary,
     letterSpacing: ".14em",
@@ -63,7 +66,7 @@ const useStyles = makeStyles()((theme: Theme) => ({
     textAlign: "left",
     cursor: "pointer",
     fontFamily: Settings.styles.monoFontFamily,
-    fontSize: "11.5px",
+    fontSize: typeScale.body, // mock: 11.5px
     color: theme.colors.textSecondary,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -82,13 +85,15 @@ const useStyles = makeStyles()((theme: Theme) => ({
   rowDim: {
     color: theme.colors.textTertiary,
   },
+  // Decorative ● glyph: the px size sets the dot diameter, not readable text — stays off the scale.
   dirtyDot: {
     color: theme.colors.accentCyan,
     fontSize: "9px",
   },
   fileCount: {
     color: theme.colors.textFaint,
-    fontSize: "10px",
+    fontSize: typeScale.caption, // mock: 10px
+    fontWeight: 500,
     marginLeft: "auto",
   },
   chevron: {
@@ -98,7 +103,8 @@ const useStyles = makeStyles()((theme: Theme) => ({
     flex: 1,
     minHeight: "10px",
   },
-}));
+  };
+});
 
 interface ExplorerPanelProps {
   /** Identity + live code of the active file; the OpenScript object itself stays in the Root. */
