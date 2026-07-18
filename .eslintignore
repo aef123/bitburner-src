@@ -16,3 +16,5 @@ src/ThirdParty
 src/Arcade/Zork/vendor
 
 webpack.config.js
+
+src/Literature/DiscoverableScriptContent/
