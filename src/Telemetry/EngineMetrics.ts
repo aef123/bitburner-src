@@ -10,13 +10,26 @@ import { GetAllServers } from "../Server/AllServers";
 import { Factions } from "../Faction/Factions";
 import { workerScripts } from "../Netscript/WorkerScripts";
 import { setIncomeRecorder } from "./TelemetryMetrics";
+import { SleeveWorkType } from "../PersonObjects/Sleeve/Work/Work";
 import type { BaseServer } from "../Server/BaseServer";
 import type { Gang } from "../Gang/Gang";
 import type { GangMember } from "../Gang/GangMember";
+import type { Sleeve } from "../PersonObjects/Sleeve/Sleeve";
+import type { SleeveWork } from "../PersonObjects/Sleeve/Work/Work";
 
 function isOwned(server: BaseServer): boolean {
   return server.purchasedByPlayer || server.hostname === "home";
 }
+
+/** Per-sleeve scalar fields, each observed as its own gauge tagged with the sleeve index. */
+const SLEEVE_GAUGES: Array<[string, (sleeve: Sleeve) => number]> = [
+  ["bitburner.sleeve.shock", (s) => s.shock],
+  ["bitburner.sleeve.sync", (s) => s.sync],
+  ["bitburner.sleeve.memory", (s) => s.memory],
+  ["bitburner.sleeve.hp.current", (s) => s.hp.current],
+  ["bitburner.sleeve.hp.max", (s) => s.hp.max],
+  ["bitburner.sleeve.augmentation_count", (s) => s.augmentations.length],
+];
 
 /** Per-member stat fields, mapped to the same names the player-skill metric uses. */
 const GANG_MEMBER_STATS: Array<[string, (member: GangMember) => number]> = [
@@ -64,7 +77,13 @@ export function registerEngineMetrics(meter: Meter, bitNode: number): void {
     }
   });
 
+  meter.createObservableGauge("bitburner.player.augmentation_count").addCallback((r) => {
+    r.observe(Player.augmentations.length, { ...base, state: "installed" });
+    r.observe(Player.queuedAugmentations.length, { ...base, state: "queued" });
+  });
+
   registerGangMetrics(meter, base);
+  registerSleeveMetrics(meter, base);
 
   const income = meter.createCounter("bitburner.player.income");
   setIncomeRecorder((source, amount) => income.add(amount, { ...base, source }));
@@ -112,6 +131,65 @@ function registerGangMetrics(meter: Meter, base: Record<string, string | number>
     for (const member of gang.members) {
       r.observe(member.earnedRespect, { ...base, faction: gang.facName, member: member.name });
     }
+  });
+}
+
+/**
+ * Splits a sleeve's current work into label values. `detail` is what is being worked on and
+ * `subdetail` qualifies it; both are empty for work types that carry neither. The switch is
+ * exhaustive, so a new SleeveWorkType member fails to compile rather than silently reporting
+ * an empty detail.
+ */
+export function sleeveTaskLabels(work: SleeveWork | null): { task: string; detail: string; subdetail: string } {
+  if (!work) return { task: "IDLE", detail: "", subdetail: "" };
+  switch (work.type) {
+    case SleeveWorkType.COMPANY:
+      return { task: work.type, detail: work.companyName, subdetail: "" };
+    case SleeveWorkType.FACTION:
+      return { task: work.type, detail: work.factionName, subdetail: work.factionWorkType };
+    case SleeveWorkType.CRIME:
+      return { task: work.type, detail: work.crimeType, subdetail: "" };
+    case SleeveWorkType.CLASS:
+      return { task: work.type, detail: work.classType, subdetail: work.location };
+    case SleeveWorkType.BLADEBURNER:
+      return { task: work.type, detail: work.actionId.name, subdetail: work.actionId.type };
+    case SleeveWorkType.RECOVERY:
+    case SleeveWorkType.SYNCHRO:
+    case SleeveWorkType.INFILTRATE:
+    case SleeveWorkType.SUPPORT:
+      return { task: work.type, detail: "", subdetail: "" };
+  }
+}
+
+/**
+ * Registers sleeve metrics. Every callback iterates `Player.sleeves`, so a BitNode without
+ * sleeves observes nothing from the empty array. Series are keyed by sleeve index, since
+ * sleeves have no names.
+ */
+function registerSleeveMetrics(meter: Meter, base: Record<string, string | number>): void {
+  meter.createObservableGauge("bitburner.sleeve.count").addCallback((r) => r.observe(Player.sleeves.length, base));
+
+  for (const [name, read] of SLEEVE_GAUGES) {
+    meter.createObservableGauge(name).addCallback((r) => {
+      Player.sleeves.forEach((sleeve, index) => r.observe(read(sleeve), { ...base, sleeve: index }));
+    });
+  }
+
+  meter.createObservableGauge("bitburner.sleeve.skill").addCallback((r) => {
+    Player.sleeves.forEach((sleeve, index) => {
+      for (const [skill, value] of Object.entries(sleeve.skills) as [string, number][]) {
+        r.observe(value, { ...base, sleeve: index, skill });
+      }
+    });
+  });
+
+  // Info gauge: always 1, with the task carried in the labels. Idle sleeves report IDLE rather
+  // than dropping out, so a stopped sleeve doesn't keep serving its last task through the
+  // exporter's staleness window.
+  meter.createObservableGauge("bitburner.sleeve.task").addCallback((r) => {
+    Player.sleeves.forEach((sleeve, index) => {
+      r.observe(1, { ...base, sleeve: index, ...sleeveTaskLabels(sleeve.currentWork), city: sleeve.city });
+    });
   });
 }
 

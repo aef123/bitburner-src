@@ -106,9 +106,13 @@ keeps it off the eager path.
 ## Testing
 
 Extends `test/jest/Telemetry/EngineMetrics.test.ts` using its existing `makeFakeMeter()` harness,
-which captures observable callbacks and replays them through `collect(name)`. Sleeve fakes are
-plain object literals cast with `as never`, the way the gang tests build a fake `Gang` — no real
-`Sleeve` construction, no BitNode-10 setup.
+which captures observable callbacks and replays them through `collect(name)`.
+
+Unlike the gang tests, which fake a `Gang` with an object literal cast `as never`, the sleeve tests
+use real `Sleeve` instances and real `Sleeve*Work` objects. Their constructors are trivial and need
+no BitNode-10 setup, so there is nothing to gain by faking them — and a real work object catches a
+renamed field that a partial literal would not. Note that `new Sleeve()` calls `shockRecovery()`,
+so a fresh sleeve starts on `RECOVERY` work; the idle case must null `currentWork` explicitly.
 
 1. No sleeves → `bitburner.sleeve.count` observes `0`; every other sleeve gauge collects `[]`.
 2. Two sleeves → shock, sync, memory, and augmentation count land on the right `sleeve` index;
