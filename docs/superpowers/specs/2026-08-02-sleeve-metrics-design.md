@@ -24,7 +24,7 @@ NS API, the sinks, the settings UI, or the exporters.
 |---|----------|-----------|
 | 1 | Current task encoded as an **info gauge** (always `1`, task in the labels) | Directly answers "what is sleeve N doing", and it's the only encoding that carries the task detail |
 | 2 | Idle sleeves emit `task="IDLE"`, never nothing | An absent series keeps serving its last value through Prometheus's staleness window, reading as though the sleeve were still working |
-| 3 | One `detail` label, populated by an exhaustive `switch` | Per-type labels (`crime`, `faction`, `company`) would sit empty on most series and complicate queries |
+| 3 | Two generic labels, `detail` and `subdetail`, populated by an exhaustive `switch` | Carries the secondary work detail (faction work type, class location, Bladeburner action type) without per-type labels like `crime`/`faction`/`company`, which would sit empty on most series and complicate queries |
 | 4 | `city` rides on the task gauge | It's another string state; folding it in avoids a second always-`1` series per sleeve |
 | 5 | Player augs split by `state="installed"\|"queued"` | The plain total falls out as a sum, so no second instrument is needed |
 | 6 | Registration lives in `EngineMetrics.ts` beside `registerGangMetrics` | Same shape as the existing subsystem block; keeps the module's single job intact |
@@ -52,7 +52,7 @@ All series carry the existing base attribute `bitnode`. Sleeve series add `sleev
 | `bitburner.sleeve.hp.current` | gauge | `sleeve` | `Person.hp.current` |
 | `bitburner.sleeve.hp.max` | gauge | `sleeve` | `Person.hp.max` |
 | `bitburner.sleeve.augmentation_count` | gauge | `sleeve` | `Person.augmentations.length` |
-| `bitburner.sleeve.task` | gauge, always `1` | `sleeve`, `task`, `detail`, `city` | `Sleeve.currentWork`, `Person.city` |
+| `bitburner.sleeve.task` | gauge, always `1` | `sleeve`, `task`, `detail`, `subdetail`, `city` | `Sleeve.currentWork`, `Person.city` |
 | `bitburner.player.augmentation_count` | gauge | `state` | `Player.augmentations` / `Player.queuedAugmentations` |
 
 Cardinality per scrape is bounded by the sleeve count (single digits) times a fixed set of
@@ -63,27 +63,31 @@ values all come from finite enums, so total series over a long session stays in 
 
 - `Sleeve.storedCycles` — an internal tick buffer, meaningless on a dashboard.
 - `Player.sleevesFromCovenant` — a purchase count, not observable state.
-- `SleeveClassWork.location` and `SleeveFactionWork.factionWorkType` — secondary detail, dropped to
-  keep `detail` a single label.
 
 ## Task encoding
 
-`sleeveTaskLabels(work: SleeveWork | null): { task: string; detail: string }` is exported from
-`EngineMetrics.ts` so it can be tested directly. The `switch` is exhaustive over `SleeveWorkType`,
-so adding a tenth work type is a compile error rather than a silently empty `detail`.
+`sleeveTaskLabels(work: SleeveWork | null): { task: string; detail: string; subdetail: string }` is
+exported from `EngineMetrics.ts` so it can be tested directly. The `switch` is exhaustive over
+`SleeveWorkType`, so adding a tenth work type is a compile error rather than a silently empty
+`detail`.
 
-| `work.type` | `task` | `detail` |
-|---|---|---|
-| `COMPANY` | `"COMPANY"` | `companyName` |
-| `FACTION` | `"FACTION"` | `factionName` |
-| `CRIME` | `"CRIME"` | `crimeType` |
-| `CLASS` | `"CLASS"` | `classType` |
-| `BLADEBURNER` | `"BLADEBURNER"` | `actionId.name` |
-| `RECOVERY` | `"RECOVERY"` | `""` |
-| `SYNCHRO` | `"SYNCHRO"` | `""` |
-| `INFILTRATE` | `"INFILTRATE"` | `""` |
-| `SUPPORT` | `"SUPPORT"` | `""` |
-| `null` | `"IDLE"` | `""` |
+`detail` is the thing being worked on; `subdetail` is the qualifier on it, and is `""` wherever the
+work type has no second field. The names are deliberately generic — the nine work types have no
+shared semantics to name more specifically, and a pair like `target`/`mode` would misdescribe
+`CLASS`, where the qualifier is a location.
+
+| `work.type` | `task` | `detail` | `subdetail` |
+|---|---|---|---|
+| `COMPANY` | `"COMPANY"` | `companyName` | `""` |
+| `FACTION` | `"FACTION"` | `factionName` | `factionWorkType` |
+| `CRIME` | `"CRIME"` | `crimeType` | `""` |
+| `CLASS` | `"CLASS"` | `classType` | `location` |
+| `BLADEBURNER` | `"BLADEBURNER"` | `actionId.name` | `actionId.type` |
+| `RECOVERY` | `"RECOVERY"` | `""` | `""` |
+| `SYNCHRO` | `"SYNCHRO"` | `""` | `""` |
+| `INFILTRATE` | `"INFILTRATE"` | `""` | `""` |
+| `SUPPORT` | `"SUPPORT"` | `""` | `""` |
+| `null` | `"IDLE"` | `""` | `""` |
 
 ## Structure
 
@@ -110,10 +114,10 @@ plain object literals cast with `as never`, the way the gang tests build a fake 
 2. Two sleeves → shock, sync, memory, and augmentation count land on the right `sleeve` index;
    skill series count equals `2 × Object.keys(skills).length`.
 3. A sleeve on `SleeveCrimeWork` → task gauge observes `1` with `task="CRIME"`, the crime in
-   `detail`, and the sleeve's city.
-4. A sleeve with `currentWork === null` → `task="IDLE"`, `detail=""`.
-5. `sleeveTaskLabels` directly, one case per work type, asserting the four detail-free types
-   return `""`.
+   `detail`, an empty `subdetail`, and the sleeve's city.
+4. A sleeve with `currentWork === null` → `task="IDLE"`, `detail=""`, `subdetail=""`.
+5. `sleeveTaskLabels` directly, one case per work type: the four detail-free types return `""` for
+   both labels, and `FACTION`, `CLASS`, and `BLADEBURNER` each return their `subdetail`.
 6. Player augmentations → installed and queued observed as separate `state` series.
 
 ## Verification
